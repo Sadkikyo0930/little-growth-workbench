@@ -146,6 +146,12 @@ body.art-mode .art-screen-fallback{display:none!important}
 .growth-artwork #stat-sc{left:74%!important;top:56.8%!important}
 .growth-artwork .growth-week-inline{left:38%!important;top:67.9%!important;width:16%!important;height:7.7%!important;border-radius:2px!important;background:#a6dff6!important;box-shadow:0 0 0 4px #a6dff6!important;font-size:clamp(9px,2.2vw,14px)!important;line-height:1.55!important}
 </style><style id="v6-inline-growth-display-20261101">
+/* All three top counters have separate artwork-relative anchor points (no grid drift). */
+.growth-artwork .growth-metrics-inline{position:absolute!important;inset:0!important;left:0!important;top:0!important;width:100%!important;height:100%!important;display:block!important;pointer-events:none!important;z-index:3!important}
+.growth-artwork .growth-metrics-inline span{position:absolute!important;display:flex!important;align-items:center!important;justify-content:center!important;width:16%!important;height:3.1%!important;padding:0!important;margin:0!important;background:transparent!important;border:0!important;box-shadow:none!important;color:#fff!important;font-size:clamp(13px,3.45vw,24px)!important;line-height:1!important;text-align:center!important;white-space:nowrap!important}
+.growth-artwork #realDays{left:17.2%!important;top:36.5%!important}
+.growth-artwork #realQuestions{left:47.3%!important;top:36.5%!important}
+.growth-artwork #realAccuracy{left:76.3%!important;top:36.5%!important}
 /* Exact artwork aspect ratio: uploaded V6 background is 852 x 1250 pixels. */
 body.art-mode #growth .illustrated-screen.growth-artwork{aspect-ratio:852/1250!important;background-size:100% 100%!important}
 .growth-artwork .growth-subjects-inline,.growth-artwork .growth-week-inline{position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;display:block!important;pointer-events:none!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
