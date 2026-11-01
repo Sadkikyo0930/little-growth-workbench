@@ -295,8 +295,9 @@ function growth(){
    Consonant initials are demonstrated with their customary support vowels. */
 const PINYIN_AUDIO={a:'a1',e:'e1',i:'yi1',u:'wu1','ü':'yu1',b:'bo1',p:'po1',m:'mo1',f:'fo1',d:'de1',t:'te1',n:'ne1',g:'ge1',k:'ke1',h:'he1'};
 let pinyinPlayer=null;
+const PINYIN_TONE_AUDIO={'mā':'ma1','má':'ma2','mǎ':'ma3','mà':'ma4','bā':'ba1','bá':'ba2','bǎ':'ba3','bà':'ba4','dā':'da1','dá':'da2','dǎ':'da3','dà':'da4'};
 function playPinyin(letter){
- const sound=PINYIN_AUDIO[String(letter).toLowerCase()]||PINYIN_SOUND_EXAMPLES[String(letter).toLowerCase()]||PINYIN_SOUND_EXAMPLES[String(letter).replace(/[āáǎà]/g,'a').replace(/[ēéěè]/g,'e').toLowerCase()];
+ const sound=PINYIN_TONE_AUDIO[letter]||PINYIN_AUDIO[String(letter).toLowerCase()]||PINYIN_SOUND_EXAMPLES[String(letter).toLowerCase()];
  if(pinyinPlayer){pinyinPlayer.pause();pinyinPlayer.currentTime=0;}
  if(!sound){if(letter==='o'){speak('喔','zh-CN');return;}alert('这个拼音的发音素材尚未配置');return;}
  if('speechSynthesis' in window)window.speechSynthesis.cancel();
