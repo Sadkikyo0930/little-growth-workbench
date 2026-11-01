@@ -233,7 +233,7 @@ function growth(){
  const from=start.getFullYear()+'-'+String(start.getMonth()+1).padStart(2,'0')+'-'+String(start.getDate()).padStart(2,'0');
  const week=records.filter(r=>r.date&&r.date>=from);
  const weekDays=new Set(week.map(r=>r.date)).size;
- $('growthWeekNote').textContent=week.length?'学习 '+weekDays+' 天\n答题 '+week.length+' 题':'本周暂无记录';
+ // Weekly value spans must remain mounted for live updates.
  const rows=[...Object.keys(tracks).map(k=>'cn_'+k),'ma','en','sc'];
  $('growthDone').textContent=rows.filter(k=>state.finished[k]).length;
  $('growthAnswered').textContent=records.length;
