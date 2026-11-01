@@ -210,6 +210,15 @@ sc:{name:'科学岛',items:[
 ['植物叶片常利用阳光制造？',['养分','石头','塑料'],0,'植物',3],['月亮自己会发光吗？',['会','不会，反射太阳光','只在白天会'],1,'天文',3],['蒸发是水变成？',['水蒸气','冰块','沙子'],0,'物质',3],['声音在真空中能传播吗？',['能','不能','只在晚上能'],1,'声音',3],['食物链中植物通常是？',['生产者','捕食者','分解者'],0,'生态',3],['哪种做法更能节约水？',['刷牙时关水龙头','一直开水','反复冲空杯'],0,'环保',3]]}};
 const $=id=>document.getElementById(id),KEY='growth-workbench-v6-adaptive-2';
 let state={records:[],finished:{},sessions:{},started:null};try{let v=JSON.parse(localStorage.getItem(KEY)||'null');if(v&&Array.isArray(v.records))state=v}catch(e){}
+/* Explicit one-time reset URL. Only clears V6 assessment state on this browser. */
+if(new URLSearchParams(window.location.search).get('resetV6Assessment')==='yes'){
+ state={records:[],finished:{},sessions:{},started:null};
+ try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}
+ const cleanUrl=new URL(window.location.href);cleanUrl.searchParams.delete('resetV6Assessment');
+ history.replaceState(null,'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
+ alert('V6 测评记录已清空，可以让孩子重新开始测评。');
+}
+
 let subject=null,track=null,question=null,answered=false;
 /* Expanded pinyin readiness assessment: 23 initials, 24 finals, 16 whole-syllable forms and tone contrasts.
    Each question remains in the existing V6 record format; saved attempts are preserved. */
