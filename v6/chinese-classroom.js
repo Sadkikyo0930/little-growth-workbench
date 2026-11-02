@@ -15,8 +15,9 @@ const imgPath=n=>'./'+encodeURIComponent(n)+'.jpg';
 function audio(s,next){if(!Object.prototype.hasOwnProperty.call(PINYIN_FIXED_AUDIO,s))return;serial++;let t=serial;if(player)player.pause();window.speechSynthesis?.cancel();player=new Audio(PINYIN_FIXED_AUDIO[s]);let status=$('lionAudioState');if(status)status.textContent='正在播放 '+s;player.onended=()=>{if(serial===t&&next)setTimeout(()=>{if(serial===t)next()},280)};player.onerror=()=>{if(serial===t&&status)status.textContent=s+' 音频未能载入，请检查网络。不会使用其他拼音代替。'};player.play().catch(()=>{if(status)status.textContent='请再次点击播放'})}
 function say(s){if(player)player.pause();window.speechSynthesis?.cancel();let u=new SpeechSynthesisUtterance(s);u.lang='zh-CN';u.rate=.8;window.speechSynthesis?.speak(u)}
 function today(){let d=new Date();return d.getFullYear()===2026&&d.getMonth()===10?d.getDate():1}
-function topic(){let p=(typeof NOV_PLAN!=='undefined'?NOV_PLAN:null)?.[today()-1];return p}
-function currentStory(){let p=topic();let stories=[0,1,2,3,4,5,6];let i=p?([2,6,9,13,16,20,23,27,30].indexOf(today())):0;return lessons[Math.max(0,i)%7]}
+function lessonDay(){return (typeof novSelected==='number'&&novSelected>=1&&novSelected<=30)?novSelected:today()}
+function topic(){return (typeof NOV_PLAN!=='undefined'?NOV_PLAN:null)?.[lessonDay()-1]}
+function currentStory(){let p=topic();let stories=[0,1,2,3,4,5,6];let i=p?([2,6,9,13,16,20,23,27,30].indexOf(lessonDay())):0;return lessons[Math.max(0,i)%7]}
 function card(){let p=topic();if(!p||p.type==='rest'){return '<div class="lion-box"><h2>🌿 今天没有语文新课</h2><p>请完成当天安排的其他两科学习。</p></div>'}let l=currentStory();return '<div class="lion-shell"><img class="lion-hero-img" src="'+imgPath('拼音小课堂欢乐学习时光')+'" alt="拼音课堂小狮子和伙伴们"><div class="lion-heading"><span>🦁</span><div><small>语文探险 · 今天的课程</small><h2>'+l[0]+'</h2><p>先听再看 · 图文认读 · 动手描红</p></div></div><div class="lion-tabs">'+[['read','图文认读'],['trace','手指描红'],['audio','听音挑战'],['story','看图听故事']].map(([k,t])=>'<button data-pane="'+k+'" class="'+(k===pane?'sel':'')+'">'+t+'</button>').join('')+'</div><div id="lionBody"></div><button id="lionComplete" class="lion-complete">✅ 完成今日语文</button></div>'}
 function show(){let host=$('novLesson');if(!host)return;
 const selected=(typeof novSelected==='number'?novSelected:today());
