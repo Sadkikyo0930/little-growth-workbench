@@ -6,3 +6,17 @@
 .lion-answers,.lion-story-answers{display:grid;grid-template-columns:1fr 1fr;gap:11px}.lion-answers button,.lion-story-answers button{border:2px solid #a9e4dc;border-radius:15px;padding:19px 8px;background:white;font-weight:850;color:#1689be;font-size:25px}.lion-story-answers button{font-size:17px}.lion-story-answers button span{display:block;font-size:32px}.lion-answers button:disabled,.lion-story-answers button:disabled{opacity:.7}
 .lion-scene{background:linear-gradient(160deg,#7edcff,#d5f5fe 50%,#b5e7a6);min-height:225px;border:5px solid white;box-shadow:0 4px 17px #6cbbbb44;border-radius:21px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;text-align:center}.lion-scene>div{font-size:38px}.lion-scene strong{font-size:clamp(38px,10vw,62px);line-height:1.3}.lion-scene h3{font-size:22px;color:#176b72}.lion-words{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}.lion-words button{border:0;padding:10px 12px;background:#fff0c8;border-radius:13px;color:#825b2b;font-weight:850}#lionQuestion{margin-top:15px}#lionQuestion details, #lionBody details{background:#f2faf9;border-radius:12px;padding:12px;margin-top:18px;line-height:1.8}
 @media(max-width:380px){.lion-heading>span{font-size:40px}.lion-shell{padding:8px}.lion-grid{gap:4px}.lion-grid button{border-width:2px}}
+.lion-hero-img{display:block;width:100%;height:auto;border-radius:21px;margin:0 0 12px;box-shadow:0 5px 19px #62a6aa38}
+.lion-image-map{position:relative;width:100%;overflow:hidden;border-radius:20px;background:#d8f7f4}
+.lion-image-map>img,.lion-story-image>img{display:block;width:100%;height:auto}
+.lion-image-hotspots{position:absolute;inset:0;pointer-events:none}
+.lion-hotspot{position:absolute;pointer-events:auto;background:transparent;border:0;cursor:pointer;touch-action:manipulation;border-radius:16px}
+.lion-hotspot:active,.lion-hotspot:focus-visible{outline:4px solid #ffb522;outline-offset:-4px;background:#fff5a033}
+.lion-hotspot.h0{left:2%;top:33%;width:22.5%;height:40%}
+.lion-hotspot.h1{left:26%;top:33%;width:22.5%;height:40%}
+.lion-hotspot.h2{left:50%;top:33%;width:22.5%;height:40%}
+.lion-hotspot.h3{left:74%;top:33%;width:24%;height:40%}
+.lion-hotspot.h4{left:7%;top:75%;width:27%;height:24%}
+.lion-hotspot.h5{left:37%;top:75%;width:27%;height:24%}
+.lion-hotspot.h6{left:67%;top:75%;width:27%;height:24%}
+.lion-story-image{border-radius:22px;overflow:hidden;box-shadow:0 5px 20px #51a4ae35;margin-bottom:14px}
