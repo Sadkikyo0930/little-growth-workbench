@@ -471,4 +471,4 @@ document.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>start(b.datas
  setTimeout(()=>URL.revokeObjectURL(url),30000);
 };
 $('reset').onclick=()=>{if(confirm('清空 V6 摸底记录？')){state={records:[],finished:{},sessions:{},started:null};save();home()}};refreshHomeMode();document.querySelectorAll('.illustrated-screen').forEach(el=>{let img=new Image();img.onload=()=>{};img.onerror=()=>el.classList.add('asset-missing');img.src=getComputedStyle(el).backgroundImage.slice(5,-2)});openScreen('home');
-</script><script src="./chinese-classroom.js?v=3"></script></body></html>
+</script><script src="./chinese-classroom.js?v=4"></script></body></html>
