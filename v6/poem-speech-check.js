@@ -13,7 +13,7 @@ const poemData={
 25:[["赠汪伦","桃花潭水深千尺","不及汪伦送我情"]],
 30:[["画","远看山有色","近听水无声"],["池上","不解藏踪迹","浮萍一道开"],["悯农","谁知盘中餐","粒粒皆辛苦"]]
 };
-if(!poemData[day])return;
+if(!poemData[day]||(day===4&&location.hash==='#day3'))return;
 if(window.__v6PoemPracticeLoaded)return;window.__v6PoemPracticeLoaded=true;
 function normalize(t){return String(t||"").replace(/[\s，。！？、；：“”‘’·,.!?;:'"（）()\-]/g,"").replace(/臺/g,"台").replace(/裏/g,"里").replace(/聽/g,"听").replace(/來/g,"来").replace(/聲/g,"声").replace(/驚/g,"惊").replace(/蓮/g,"莲").replace(/蹤/g,"踪").replace(/跡/g,"迹").replace(/農/g,"农").replace(/誰/g,"谁").replace(/盤/g,"盘").replace(/倫/g,"伦").replace(/書/g,"书").replace(/畫/g,"画").replace(/雲/g,"云").replace(/飛/g,"飞").replace(/時/g,"时").replace(/開/g,"开")}
 function distance(a,b){let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const n=[i];for(let j=1;j<=b.length;j++)n[j]=Math.min(n[j-1]+1,p[j]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=n}return p[b.length]}
