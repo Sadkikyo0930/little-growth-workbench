@@ -1,0 +1,72 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>小小赛车 · 英语冒险岛</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(#c7eaff,#f2fbff);color:#23486b;font-family:system-ui,-apple-system,"PingFang SC",sans-serif}main{max-width:680px;margin:auto;padding:12px 12px 48px}.hero{background:linear-gradient(115deg,#365cc7,#43b6d3);color:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 16px #32659d25}.hero h1{font-size:26px;margin:6px 0}.hero p{margin:5px 0;font-size:14px}.panel{background:#fff;border-radius:22px;padding:18px;margin-top:12px;box-shadow:0 5px 20px #245e8415}.nav{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.nav button{background:#f2f8ff;border:1px solid #9cc9e4;border-radius:12px;padding:9px;color:#265575}.nav button.active{background:#245cbb;color:#fff}.pill{display:inline-block;background:#e7f1ff;color:#2458a4;border-radius:18px;padding:6px 12px;font-size:13px;font-weight:750}.big{font-size:58px;text-align:center;margin:15px 0;line-height:1.5}.q{font-size:23px;line-height:1.5;font-weight:850}.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}.choice{border:2px solid #a9d2e9;border-radius:17px;min-height:103px;background:#f6fbff;color:#23516f;font-size:18px;font-weight:800;padding:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px}.choice .pic{font-size:43px}.choice.selected{background:#d9f4e6;border-color:#48ac83}.choice.wrong{background:#ffe8e2;border-color:#d87f6f}.choice:disabled{opacity:.8}.primary,.secondary{width:100%;padding:15px;border-radius:14px;border:0;font-size:17px;font-weight:800;margin:7px 0;background:#256abf;color:white}.secondary{background:#ecf5ff;color:#265b89;border:1px solid #9dcae3}.primary:disabled{opacity:.55}.muted{font-size:14px;color:#607b95;line-height:1.6}.feedback{font-weight:800;line-height:1.6;min-height:20px}.hide{display:none}.progress{height:12px;border-radius:20px;background:#e0edf8;overflow:hidden;margin:13px 0}.progress i{display:block;height:100%;background:#3bb79b;transition:width .2s}.road{position:relative;height:210px;border-radius:20px;background:#b6e9b0;overflow:hidden;border:3px solid #8ad49a}.street{position:absolute;left:31%;top:-15%;width:38%;height:140%;background:#657889;transform:rotate(0deg)}.street:after{content:"";position:absolute;left:49%;width:4px;height:100%;background:repeating-linear-gradient(to bottom,#f3f3c5 0 18px,transparent 18px 35px)}.car{position:absolute;left:45%;bottom:22px;font-size:53px;transition:transform .4s}.road .left,.road .right{position:absolute;top:50px;font-size:35px}.road .left{left:9%}.road .right{right:9%}.sentence{display:flex;flex-wrap:wrap;gap:8px;min-height:55px;padding:12px;background:#eaf5ff;border-radius:13px;margin:12px 0}.word{border:2px solid #a7c5e0;background:white;padding:12px;border-radius:12px;font-size:19px;color:#234c7a;font-weight:800}.word.chosen{opacity:.25}.wordline{display:flex;gap:9px;flex-wrap:wrap}.voice{display:flex;gap:8px}.voice button{flex:1}.status{font-size:12px;color:#627d90}.done{font-size:48px;text-align:center}@media(max-width:400px){.choices{gap:7px}.choice{font-size:15px;min-height:94px;padding:6px}.big{font-size:47px}.hero h1{font-size:23px}}
+</style></head><body><main><header class="hero"><span>🏎️ LITTLE RACER · ENGLISH</span><h1>🌈 小小赛车英语冒险岛</h1><p id="courseInfo">听一听 · 看一看 · 玩一玩 · 说一说</p></header><section class="panel" id="intro"><span id="topic" class="pill"></span><div class="big" id="cover"></div><p id="goal"></p><div class="voice"><button class="secondary" id="teacher">🔊 听老师介绍</button><button class="secondary" id="sample">🇬🇧 听本课英语</button></div><p class="muted">英语录音使用浏览器语音朗读。首次请点击喇叭开启声音；不需要打字。</p><button class="primary" id="start">🚗 开始英语冒险</button></section><section class="panel hide" id="game"><span class="pill" id="chapter"></span><div class="progress"><i id="progress"></i></div><p class="muted" id="count"></p><div class="q" id="prompt"></div><div id="gameBody"></div><p class="feedback" id="feedback" aria-live="polite"></p><button class="primary hide" id="next">下一关 →</button></section><section class="panel hide" id="result"></section><p class="muted">每天只需完成安排的英语课。正式学习从 2026 年 11 月 9 日起，预览不会计入学习进度。建议家长陪伴 8～12 分钟。</p></main><script>
+(()=>{'use strict';
+const curriculum=[
+['Hello! 打招呼','👋','hello|你好|👋;hi|嗨|😊;bye|再见|👋;thank you|谢谢|💝','Hello!','👋'],
+['Colors 颜色赛车','🎨','red|红色|🔴;blue|蓝色|🔵;yellow|黄色|🟡;green|绿色|🟢','I see red.','🔴'],
+['Numbers 数字加油站','🔢','one|一|1️⃣;two|二|2️⃣;three|三|3️⃣;four|四|4️⃣','I see two cars.','2️⃣'],
+['Animals 动物朋友','🐶','cat|猫|🐱;dog|狗|🐶;bird|鸟|🐦;fish|鱼|🐟','I see a cat.','🐱'],
+['Family 我的家人','🏡','mom|妈妈|👩;dad|爸爸|👨;baby|宝宝|👶;family|家庭|👨‍👩‍👧','This is my mom.','👩'],
+['Toys 玩具车库','🧸','car|汽车|🏎️;ball|球|⚽;doll|娃娃|🪆;train|火车|🚆','I have a car.','🏎️'],
+['Body 身体动作','🙌','head|头|🙂;hand|手|✋;eye|眼睛|👀;foot|脚|🦶','Touch your head.','🙂'],
+['Food 美食车站','🍎','apple|苹果|🍎;banana|香蕉|🍌;milk|牛奶|🥛;bread|面包|🍞','I like apples.','🍎'],
+['Directions 赛车导航','🗺️','left|左|⬅️;right|右|➡️;straight|直行|⬆️;stop|停止|🛑','Turn right.','➡️'],
+['Actions 动作乐园','🏃','run|跑|🏃;jump|跳|🤾;swim|游泳|🏊;sleep|睡觉|😴','I can run.','🏃'],
+['Weather 天气出发','☀️','sunny|晴天|☀️;rainy|雨天|🌧️;cloudy|多云|☁️;windy|刮风|🌬️','It is sunny.','☀️'],
+['Clothes 穿衣助手','🧥','hat|帽子|🧢;coat|外套|🧥;shoes|鞋子|👟;shirt|衬衫|👕','He is putting on a coat.','🧥'],
+['Places 城市探险','🏫','home|家|🏠;school|学校|🏫;park|公园|🌳;shop|商店|🏪','Go to the park.','🌳'],
+['Feelings 心情表情','😁','happy|开心|😄;sad|难过|😢;tired|累|😴;angry|生气|😠','I am happy.','😄'],
+['Opposites 大小发现','📏','big|大|🐘;small|小|🐭;hot|热|🔥;cold|冷|🧊','It is big.','🐘'],
+['Daily Life 日常行动','🪥','eat|吃|🍽️;drink|喝|🥤;read|读书|📖;wash|洗|🧼','I am reading.','📖'],
+['English 赛车终极挑战','🏆','car|汽车|🏎️;apple|苹果|🍎;right|右|➡️;happy|开心|😄','I can do it!','🏆']
+];
+const qs=new URLSearchParams(location.search),lesson=Math.min(17,Math.max(1,Number(qs.get('lesson'))||1));
+const item=curriculum[lesson-1],words=item[2].split(';').map(s=>s.split('|'));const $=id=>document.getElementById(id);
+let task=0,score=0,answers=[],locked=false,utter=null,started=false;
+const tasks=[{mode:'listen',index:0},{mode:'listen',index:1},{mode:'listen',index:2},{mode:'listen',index:3},{mode:lesson===9?'drive':'phrase',index:0},{mode:'sentence',index:0}];
+function speak(t,lang='en-US'){if(!('speechSynthesis'in window)){alert('此设备暂不支持语音朗读');return;}try{speechSynthesis.cancel();utter=new SpeechSynthesisUtterance(t);utter.lang=lang;utter.rate=lang==='en-US'?.76:.9;const vs=speechSynthesis.getVoices();utter.voice=vs.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||vs.find(v=>v.lang.toLowerCase().startsWith(lang.slice(0,2)))||null;speechSynthesis.speak(utter);}catch(e){alert('语音暂时不可用，请重新点击喇叭')}}
+function clear(id){$(id).replaceChildren()}function el(tag,cls,txt){const a=document.createElement(tag);if(cls)a.className=cls;if(txt!==undefined)a.textContent=txt;return a}
+$('topic').textContent='英语第 '+lesson+' / 17 课 · '+item[0];$('cover').textContent=item[1];$('goal').textContent='本课认识 '+words.map(x=>x[0]).join('、')+'，最后学会说：'+item[3];
+$('courseInfo').textContent='学习计划第 '+[1,3,4,7,8,10,11,14,15,17,18,21,22,24,25,28,29][lesson-1]+' 天 · 每节 6 个小任务';
+$('teacher').onclick=()=>speak('今天我们用英语认识'+item[0].split(' ')[0]+'。先听单词找图片，再跟小赛车一起完成小游戏。','zh-CN');
+$('sample').onclick=()=>speak(words.map(w=>w[0]).join('. ')+'. '+item[3]);
+$('start').onclick=()=>{$('intro').classList.add('hide');$('game').classList.remove('hide');started=true;render()};
+function record(ok,chosen,expected){score+=ok?1:0;answers.push({mode:tasks[task].mode,question:tasks[task].index,selected:chosen,expected,correct:ok});locked=true;$('feedback').textContent=ok?'🌟 恭喜你回答正确！':'💡 哦哦，正确答案是：'+expected;speak(ok?'恭喜你回答正确':'哦哦，正确答案是','zh-CN');$('next').classList.remove('hide');$('next').textContent=task===5?'🏆 领取英语奖章':'下一关 →'}
+$('next').onclick=()=>{task++;if(task>=tasks.length)finish();else render()};
+function render(){
+locked=false;$('feedback').textContent='';$('next').classList.add('hide');clear('gameBody');
+$('chapter').textContent=['👂 听音找图','👂 听音找图','👂 听音找图','👂 听音找图','🏎️ 英语互动','🧩 拼出句子'][task];
+$('count').textContent='第 '+(task+1)+' / 6 关 · 当前答对 '+score+' 题';$('progress').style.width=(task/6*100)+'%';
+const t=tasks[task],body=$('gameBody');
+if(t.mode==='listen'||t.mode==='phrase'){
+ const target=words[t.index],p=el('p','q',t.mode==='listen'?'听一听，找出正确的图片':'找到与单词相符的图案');$('prompt').textContent='';body.append(p);
+ const hear=el('button','secondary','🔊 播放英语 '+(t.mode==='phrase'?'单词':'题目'));hear.onclick=()=>speak(target[0]);body.append(hear);
+ const grid=el('div','choices');words.forEach((w,i)=>{const b=el('button','choice');b.append(el('span','pic',w[2]),el('span','',t.mode==='listen'?'图片 '+(i+1):w[1]));b.onclick=()=>{if(locked)return;const ok=i===t.index;b.classList.add(ok?'selected':'wrong');grid.querySelectorAll('button').forEach(x=>x.disabled=true);record(ok,i,target[0])};grid.append(b)});body.append(grid);body.append(el('p','muted','听不清楚可以重复点喇叭。'));return;
+}
+if(t.mode==='drive'){
+ $('prompt').textContent='听导航，让小赛车转向正确方向！';
+ const road=el('div','road');road.innerHTML='<div class="street"></div><span class="left">🌳</span><span class="right">🏠</span><span class="car" id="raceCar">🏎️</span>';body.append(road);
+ const target=words[1][0];const hear=el('button','secondary','🔊 听赛车导航');hear.onclick=()=>speak('Turn right');body.append(hear);
+ const grid=el('div','choices');[['⬅️','left'],['➡️','right'],['⬆️','straight'],['🛑','stop']].forEach(([icon,label])=>{const b=el('button','choice',icon+' '+label);b.onclick=()=>{if(locked)return;const ok=label===target;b.classList.add(ok?'selected':'wrong');$('raceCar').style.transform=label==='right'?'translate(65px,-42px) rotate(-25deg)':label==='left'?'translate(-65px,-42px) rotate(25deg)':label==='straight'?'translateY(-55px)':'scale(.8)';grid.querySelectorAll('button').forEach(x=>x.disabled=true);record(ok,label,'Turn right')};grid.append(b)});body.append(grid);return;
+}
+$('prompt').textContent='听一句英语，按顺序把词语拼起来！';const phrase=item[3].replace(/[.!?]/g,'').split(' ');
+const hear=el('button','secondary','🔊 听完整句子');hear.onclick=()=>speak(item[3]);body.append(hear);
+const picked=el('div','sentence'),pool=el('div','wordline');body.append(picked,pool);
+const order=phrase.map((_,i)=>i).sort((a,b)=>(a*7+3)%phrase.length-(b*7+3)%phrase.length);
+if(order.every((v,i)=>v===i))order.reverse();
+const chosen=[];order.forEach(i=>{const b=el('button','word',phrase[i]);b.onclick=()=>{if(locked||b.disabled)return;b.disabled=true;b.classList.add('chosen');chosen.push(i);const tag=el('button','word',phrase[i]);tag.onclick=()=>{if(locked)return;chosen.splice(chosen.indexOf(i),1);tag.remove();b.disabled=false;b.classList.remove('chosen')};picked.append(tag);check.disabled=chosen.length!==phrase.length};pool.append(b)});
+const check=el('button','primary','✅ 检查英语句子');check.disabled=true;check.onclick=()=>{if(locked)return;const ok=chosen.every((v,i)=>v===i);pool.querySelectorAll('button').forEach(x=>x.disabled=true);picked.querySelectorAll('button').forEach(x=>x.disabled=true);record(ok,chosen.map(i=>phrase[i]).join(' '),item[3]);if(!ok)speak(item[3]);};body.append(check);
+}
+function finish(){
+$('game').classList.add('hide');$('result').classList.remove('hide');clear('result');
+$('result').append(el('div','done','🏆'),el('h2','','英语冒险完成！'),el('p','','完成 6 关，答对 '+score+' / 6 题。'),el('p','','今天的英语句子：'+item[3]));
+const hear=el('button','secondary','🔊 再听一次今天的句子');hear.onclick=()=>speak(item[3]);$('result').append(hear);
+const again=el('button','primary','🔁 再玩一次');again.onclick=()=>{task=0;score=0;answers=[];$('result').classList.add('hide');$('game').classList.remove('hide');render()};$('result').append(again);
+try{const key=qs.get('cohort')==='20261109'?'v6_english_course_20261109_progress_v1':'v6_english_preview_progress_v1';const saved=JSON.parse(localStorage.getItem(key)||'{}');saved[lesson]={score,total:6,answers,at:new Date().toISOString()};localStorage.setItem(key,JSON.stringify(saved))}catch(e){}
+if(qs.get('cohort')==='20261109'&&window.parent!==window)window.parent.postMessage({type:'v6-english-lesson-complete',cohort:'20261109',lesson,total:6,answers,score},location.origin);
+speak('英语冒险完成啦！今天答对了'+score+'道题。','zh-CN')
+}
+})();
+</script></body></html>
