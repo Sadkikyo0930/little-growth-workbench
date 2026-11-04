@@ -11,22 +11,24 @@ const start=$('voiceReadStart'),status=$('voiceReadStatus');
 const key='v6_phonics_v4_voice_read_v1';
 const ratings={};
 try{Object.assign(ratings,JSON.parse(localStorage.getItem(key)||'{}'))}catch(e){}
-let active=null,session=0,listening=false,finishing=false,heard=[],targetWord='';
+let active=null,session=0,listening=false,finishing=false,heard=[],targetWord='',autoEnded=false;
 function current(){return TRANSFER[transferIndex]?.word||''}
 function normalize(x){return String(x||'').toLowerCase().trim().replace(/[^a-z\s'-]/g,'').replace(/\s+/g,' ')}
 function setStart(){start.disabled=false;start.textContent='🎤 点一下开始读'}
 function setStop(){start.disabled=false;start.textContent='⏹️ 点一下结束读并判断'}
-function cancel(){session++;listening=false;finishing=false;heard=[];targetWord='';if(active){try{active.abort()}catch(e){}active=null}setStart()}
+function cancel(){session++;listening=false;finishing=false;autoEnded=false;heard=[];targetWord='';if(active){try{active.abort()}catch(e){}active=null}setStart()}
 function save(word,result,transcript){ratings[word]={result,heard:transcript,at:new Date().toISOString()};try{localStorage.setItem(key,JSON.stringify(ratings))}catch(e){}}
 function show(msg){status.textContent=msg}
 function reset(){cancel();show('点一下开始读，再点一下结束读，我来判断。')}
-function matchTranscript(text,target){return normalize(text)===normalize(target)}
+const homophones={sight:['site','cite'],might:['mite'],wing:['wing'],bring:['bring'],bath:['bath'],moth:['moth'],can:['can'],sat:['sat'],ran:['ran'],bake:['bake'],rake:['rake'],shell:['shell'],wish:['wish'],rag:['rag'],sag:['sag'],pat:['pat']};
+function matchTranscript(text,target){const t=normalize(text),w=normalize(target);return t===w||t.split(' ').includes(w)||((homophones[w]||[]).includes(t))}
+function hasHeard(){return heard.some(x=>normalize(x))}
 function judge(){
  if(!finishing)return;
  finishing=false;listening=false;active=null;setStart();
  const target=targetWord,alts=[...new Set(heard.map(normalize).filter(Boolean))];
  if(alts.some(x=>matchTranscript(x,target))){
-  save(target,'matched',alts[0]);show('🌟 我听到了「'+alts[0]+'」，目标词是「'+target+'」，识别正确！');
+  save(target,'matched',alts[0]);show('🌟 我听到了「'+alts[0]+'」，和目标词「'+target+'」匹配！注意同音词仅能确认读音接近，不能判断拼写。');
   const yes=$('selfYes');if(yes)yes.click();
  }else if(alts.length){
   save(target,'uncertain',alts[0]);show('🔎 我听到的是「'+alts[0]+'」，还不能确认读的是「'+target+'」。可以再读一次，或听示范核对；这不代表发音错误。');
@@ -41,9 +43,9 @@ start.onclick=()=>{
  }
  const target=current();
  if(!Speech){show('当前浏览器不支持语音识别，请在 iPhone Safari 的 HTTPS 网页尝试。也可以播放原版示范。');return}
- cancel();const seq=session;targetWord=target;listening=true;finishing=false;heard=[];
+ cancel();const seq=session;targetWord=target;listening=true;finishing=false;autoEnded=false;heard=[];
  let recog;try{recog=new Speech()}catch(e){cancel();show('语音识别无法启动，请稍后再试。');return}
- active=recog;recog.lang='en-US';recog.interimResults=true;recog.maxAlternatives=5;recog.continuous=true;
+ active=recog;recog.lang='en-US';recog.interimResults=true;recog.maxAlternatives=5;recog.continuous=false;
  setStop();show('🎙️ 正在听你读「'+target+'」。读完请再点一次按钮结束并判断。');
  recog.onresult=e=>{
   if(seq!==session||current()!==target)return;
@@ -51,10 +53,11 @@ start.onclick=()=>{
    const options=Array.from(e.results[i]||[]).map(x=>x.transcript).filter(Boolean);
    for(const t of options){if(!heard.includes(t))heard.push(t)}
   }
-  if(listening)show('🎙️ 正在收听… 读完请点「结束读并判断」。');
+  if(listening)show('🎙️ 已听到声音，读完请点「结束读并判断」。');
  };
  recog.onerror=e=>{
   if(seq!==session)return;
+  if(e.error==='no-speech'&&hasHeard()){if(finishing)judge();else{autoEnded=true;active=null;show('已听到部分读音，请点「结束读并判断」。')}return}
   const map={'not-allowed':'没有麦克风权限，请在 Safari 中允许麦克风。','service-not-allowed':'设备不允许使用语音识别服务。','network':'语音识别网络不可用，请稍后重试。','no-speech':'没有听到声音，请靠近麦克风再读一次。','audio-capture':'无法访问麦克风，请检查权限。','language-not-supported':'设备不支持英语语音识别。'};
   cancel();show(map[e.error]||'识别出错：'+e.error+'。请重试。');
  };
@@ -62,7 +65,7 @@ start.onclick=()=>{
   if(seq!==session)return;
   active=null;
   if(finishing){judge();return}
-  if(listening){listening=false;setStart();show('浏览器提前结束了收听，尚未评分。请再次点击开始读；部分 iPhone 浏览器会自动停止语音识别。')}
+  if(listening){autoEnded=true;setStop();show(hasHeard()?'🎙️ 浏览器已自动结束收听，识别结果已暂存。请点「结束读并判断」。':'🎙️ 浏览器已自动停止收听，暂时没有识别到词。点「结束读并判断」查看结果，或重新开始。')}
  };
  try{recog.start()}catch(e){cancel();show('无法启动麦克风：'+(e.message||'请检查权限'))}
 };
