@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>11月21日语文 · 一封寄给爷爷的信</title>
+<style>
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(#e8f6ff,#f4fff5);margin:0;color:#234b5b}main{width:min(100%,760px);padding:10px;margin:auto}.panel{background:white;margin-bottom:14px;border-radius:17px;overflow:hidden;padding:10px;box-shadow:0 5px 20px #6ba6b32b}h2{font-size:20px;margin:7px 7px 12px}.image-wrap{position:relative;overflow:hidden;border-radius:13px}.image-wrap img{width:100%;height:auto;display:block}.overlay{position:absolute;inset:0}.overlay button{position:absolute;cursor:pointer;background:transparent;border:0;touch-action:manipulation}.overlay button:focus-visible{outline:3px solid #ffb940;background:#ffd86450}.hint{color:#56818c;font-size:13px;padding:0 6px;line-height:1.6}.big{width:100%;background:#1c9fc4;border:0;color:#fff;border-radius:14px;padding:14px;font-weight:700;font-size:16px;margin:4px 0 10px;cursor:pointer}.dialogBack{position:fixed;inset:0;background:#1b374ccc;display:none;align-items:center;justify-content:center;padding:12px;z-index:500}.dialogBack.open{display:flex}.dialog{max-width:540px;width:100%;max-height:92dvh;overflow:auto;background:white;border-radius:20px;padding:18px}.exit{float:right;border:0;border-radius:50%;height:43px;width:43px;font-size:25px;background:#e9f6fa}.dialog h2{margin:8px 0 20px}.bodyText{font-size:17px;line-height:1.9}.option{display:block;width:100%;padding:14px;margin:10px 0;border-radius:13px;background:#effbff;border:2px solid #9ad8e5;text-align:left;font-size:16px;cursor:pointer}.option:disabled{opacity:.7}.answerRow{display:flex;gap:8px;align-items:stretch;margin:10px 0}.answerRow .option{flex:1;margin:0;min-width:0}.speakOption{flex:0 0 58px;border:2px solid #89ccdc;background:#e9faff;border-radius:13px;font-size:23px;cursor:pointer;touch-action:manipulation}.speakOption:focus-visible{outline:3px solid #ffb940}.feedback{font-size:16px;font-weight:700;color:#108d6a}.traceArea{position:relative;height:260px;border:2px solid #9cdae4;border-radius:15px;background:linear-gradient(0deg,transparent 49.7%,#b8dce2 50%,transparent 50.3%),linear-gradient(90deg,transparent 49.7%,#b8dce2 50%,transparent 50.3%)}.traceArea span{position:absolute;inset:0;display:grid;place-items:center;font-size:150px;color:#d2e1e6;pointer-events:none}.traceArea canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+</style></head><body><main><section class="panel"><h2>一、拼音小课堂</h2><div class="image-wrap"><img src="./11-21_01_pinyin.jpg?v=1" alt="一、拼音小课堂"><div class="overlay"><button type="button" style="left:5%;top:45%;width:29%;height:45%" aria-label="信" onclick="learn('信')"></button><button type="button" style="left:36%;top:45%;width:28%;height:45%" aria-label="寄" onclick="learn('寄')"></button><button type="button" style="left:67%;top:45%;width:28%;height:45%" aria-label="收" onclick="learn('收')"></button></div></div><p class="hint">点击三个生字或词语，听读信、寄、收。</p></section><section class="panel"><h2>二、绘本故事</h2><div class="image-wrap"><img src="./11-21_02_story.jpg?v=1" alt="二、绘本故事"><div class="overlay"><button type="button" style="left:0%;top:0%;width:100%;height:100%" aria-label="story" onclick="listenStory()"></button></div></div><p class="hint">点击绘本图片，收听完整故事。</p></section><section class="panel"><h2>三、阅读理解</h2><div class="image-wrap"><img src="./11-21_03_quiz.jpg?v=1" alt="三、阅读理解"><div class="overlay"><button type="button" style="inset:0;width:100%;height:100%" aria-label="打开阅读理解答题框" onclick="startQuiz()"></button></div></div><p class="hint">点击整张图片，弹出阅读理解第一题；听题目与每个选项后，再选择答案。</p></section><section class="panel"><h2>四、识字描红</h2><div class="image-wrap"><img src="./11-21_04_trace.jpg?v=1" alt="四、识字描红"><div class="overlay"><button type="button" style="left:5%;top:23%;width:30%;height:17%" aria-label="描红信" onclick="trace('信')"></button><button type="button" style="left:5%;top:41%;width:30%;height:17%" aria-label="描红寄" onclick="trace('寄')"></button><button type="button" style="left:5%;top:59%;width:30%;height:17%" aria-label="描红收" onclick="trace('收')"></button></div></div><p class="hint">点击图片左侧对应的田字格，练习信、寄、收三个字。</p></section></main><div id="back" class="dialogBack"><div class="dialog"><button class="exit" onclick="closeDialog()" aria-label="关闭">×</button><div id="body"></div></div></div>
+<script>
+"use strict";
+const story="星期六早晨，小宇坐在书桌前，为爷爷画了一幅画。画上有一棵大树、一座小房子，还有小宇和爷爷手拉手的样子。下星期是爷爷的生日，小宇想把这幅画送给他。妈妈拿出信封，说：爷爷住得远，我们可以把画寄给他。小宇在画的背面写下：爷爷，生日快乐，我想您了。随后他和妈妈来到邮局，把画装进信封，贴上邮票，寄了出去。第二天，小宇问妈妈：爷爷收到信了吗？妈妈说：信要经过运输和投递，需要一些时间。又过了几天，爷爷打来电话，说还没有收到信。小宇有一点失望，爷爷安慰他说：听到你的声音，我已经很开心了。几天后，爷爷终于收到了信。他把小宇画的画放进相框，还拍了照片给小宇看。爷爷笑得特别开心。小宇明白了：一份礼物最珍贵的，不只是它有多漂亮，而是里面藏着真诚的心意。";
+const questions=[["小宇想把什么送给爷爷？",["一幅画","一个蛋糕","一个玩具"],0],["为什么爷爷一开始没有收到信？",["因为信需要运输和投递","因为爷爷出门了","因为小宇忘记寄了"],0],["这个故事告诉我们什么？",["礼物越贵越好","写信很麻烦","真诚的心意最珍贵"],2]];
+const vocab={"信":["xìn","写信、信封"],"寄":["jì","寄信、邮寄"],"收":["shōu","收到、收信"]};
+const $=id=>document.getElementById(id);
+let qi=0,score=0,locked=false,answered=[null,null,null],voice=null;
+function say(t){if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(t);utter.lang="zh-CN";utter.rate=.8;window.speechSynthesis.speak(utter)}
+function modal(h){$("body").innerHTML=h;$("back").classList.add("open")}
+function closeDialog(){if("speechSynthesis" in window)window.speechSynthesis.cancel();$("back").classList.remove("open")}
+$("back").addEventListener("click",e=>{if(e.target===$("back"))closeDialog()});
+function learn(w){modal('<h2>'+w+' · '+vocab[w][0]+'</h2><p class="bodyText">'+vocab[w][1]+'</p><button class="big" onclick="say(\''+w+'。'+vocab[w][1]+'\')">🔊 再听一遍</button>');say(w+"。"+vocab[w][1])}
+function listenStory(){modal('<h2>📖 一封寄给爷爷的信</h2><p class="bodyText">'+story+'</p><button class="big" onclick="say(story)">🔊 再听故事</button>');say(story)}
+function startQuiz(){qi=0;score=0;answered=[null,null,null];showQuestion()}
+function readQuestionAndOptions(){const q=questions[qi];say(q[0]+"。"+q[1].map((v,j)=>String.fromCharCode(65+j)+"，"+v).join("。"))}
+function readOption(j){const q=questions[qi];say(String.fromCharCode(65+j)+"，"+q[1][j])}
+function showQuestion(){
+ if(qi>=3){finishQuiz();return}
+ locked=answered[qi]!==null;
+ const q=questions[qi];
+ modal('<h2>阅读闯关 · 第'+(qi+1)+'题</h2><p class="bodyText">'+q[0]+'</p><button class="big" onclick="readQuestionAndOptions()">🔊 朗读题目和全部选项</button>'+
+ q[1].map((x,j)=>'<div class="answerRow"><button class="option" data-opt="'+j+'" '+(locked?'disabled':'')+'>'+String.fromCharCode(65+j)+'．'+x+'</button><button type="button" class="speakOption" data-speak="'+j+'" aria-label="朗读'+String.fromCharCode(65+j)+'选项">🔊</button></div>').join('')+
+ '<p class="feedback" id="response"></p><button class="big" id="nextQ" style="display:'+(locked?'block':'none')+'" onclick="nextQuestion()">下一题 →</button>');
+ $("body").querySelectorAll("[data-opt]").forEach(el=>el.onclick=()=>choose(Number(el.dataset.opt)));
+ $("body").querySelectorAll("[data-speak]").forEach(el=>el.onclick=()=>readOption(Number(el.dataset.speak)));
+ if(locked)$("response").textContent=answered[qi]===q[2]?"恭喜你回答正确！":"正确答案："+q[1][q[2]];
+}
+function choose(j){
+ if(answered[qi]!==null)return;
+ const q=questions[qi];answered[qi]=j;const ok=j===q[2];
+ if(ok)score++;
+ showQuestion();
+ const answer=q[1][q[2]];
+ $("response").textContent=ok?"恭喜你回答正确！":"哦哦，正确答案是："+answer;
+ say(ok?"恭喜你回答正确！":"哦哦，正确答案是"+answer);
+}
+function nextQuestion(){qi++;showQuestion()}
+function finishQuiz(){const msg="本次阅读闯关完成，答对"+score+"题，共三题。";modal('<h2>🌟 阅读闯关完成</h2><p class="bodyText">'+msg+'</p><button class="big" onclick="closeDialog()">完成</button>');try{sessionStorage.setItem("letterDay12Quiz",JSON.stringify({score,total:3,at:new Date().toISOString()}))}catch(e){}if(new URLSearchParams(location.search).get("embed")==="1"&&window.parent!==window)window.parent.postMessage({type:"v6-letter-quiz-complete",lessonDay:21,score,total:3},location.origin);say(msg)}
+function trace(w){modal('<h2>✍️ '+w+' · 手指描红</h2><p>在田字格里跟着范字描写，完成后点击「完成描红」。</p><div class="traceArea"><span>'+w+'</span><canvas id="pad"></canvas></div><button class="big" onclick="trace(\''+w+'\')">清除重写</button><button class="big" onclick="say(\''+w+'\')">🔊 听读</button><button class="big" onclick="closeDialog()">完成描红</button>');const c=$("pad"),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);const ctx=c.getContext("2d");ctx.scale(d,d);ctx.strokeStyle="#ed5147";ctx.lineWidth=8;ctx.lineCap="round";ctx.lineJoin="round";let down=false;c.onpointerdown=e=>{down=true;c.setPointerCapture(e.pointerId);const rr=c.getBoundingClientRect();ctx.beginPath();ctx.moveTo(e.clientX-rr.left,e.clientY-rr.top)};c.onpointermove=e=>{if(!down)return;const rr=c.getBoundingClientRect();ctx.lineTo(e.clientX-rr.left,e.clientY-rr.top);ctx.stroke()};c.onpointerup=()=>down=false;c.onpointercancel=()=>down=false}
+</script></body></html>
