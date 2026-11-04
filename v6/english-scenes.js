@@ -32,7 +32,7 @@ function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=
 if(task.type==='picture'||task.type==='listen'){
  if(task.type==='picture')art(host,task.emoji,task.caption);
  else host.append(button('🔊 听英语指令',()=>say(task.say),'button soft'));
- const choices=add(host,'div');task.options.forEach((item,i)=>{const label=Array.isArray(item)?item[0]+' '+item[1]:item;const b=button(label,()=>{if(resolved)return;choices.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)});choices.append(b)});
+ const choices=add(host,'div');task.options.forEach((item,i)=>{const label=Array.isArray(item)?item[0]+' '+item[1]:item;const b=button(label,()=>{if(resolved)return;choices.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)});choices.append(b);if(Array.isArray(item)){const hear=button('🔊 听选项',()=>say(item[1],'zh-CN'),'button soft');hear.style.fontSize='14px';hear.style.padding='8px';choices.append(hear)}});
  if(task.type==='listen')say(task.say);
 }else if(task.type==='order'){
  const tokens=task.tokens,chosen=[],chosenBox=add(host,'div',undefined,'steps'),pool=add(host,'div',undefined,'steps');add(host,'p','点词块组成句子，再点击检查。','muted');
