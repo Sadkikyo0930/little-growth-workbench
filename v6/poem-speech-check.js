@@ -24,7 +24,7 @@ s.textContent=".v6PoemPractice{margin:18px auto;padding:14px;max-width:760px;bac
 document.head.appendChild(s);
 const panel=document.createElement("section");panel.className="v6PoemPractice";panel.setAttribute("aria-label","古诗朗读接句练习");
 panel.innerHTML='<h2>🎤 古诗朗读接句挑战</h2><p class="poemNote">先听上句，再自己念出下句。语音识别成功时会自动对照诗句判断；文字识别有时不准确，可以重试。</p><label for="poemSpeechChoose">选择本课诗句</label><select id="poemSpeechChoose"></select><div id="poemSpeechPrompt" class="poemLine"></div><div class="poemControls"><button type="button" id="poemSpeechHear" class="secondary">🔊 听上句</button><button type="button" id="poemSpeechStart">🎤 开始朗读下句</button><button type="button" id="poemSpeechStop" class="secondary" disabled>⏹ 停止识别</button><button type="button" id="poemSpeechRecord" class="replay">🎙️ 录音回放（备用）</button></div><p id="poemSpeechState" role="status" aria-live="polite">选择诗句后点击麦克风朗读。</p><p id="poemSpeechTranscript"></p><div id="poemSpeechReplay"></div><details><summary>查看标准下句（练习后使用）</summary><p id="poemSpeechAnswer"></p></details><p class="poemScore" id="poemSpeechScore"></p>';
-const host=document.querySelector("main")||document.body;host.appendChild(panel);
+const host=document.querySelector("main")||document.body;const poemSection=Array.from(host.querySelectorAll("section")).find(x=>{const h=x.querySelector("h2");return h&&/古诗|诗词/.test(h.textContent)});if(poemSection&&poemSection.parentElement===host)poemSection.insertAdjacentElement("afterend",panel);else host.appendChild(panel);
 const $=id=>panel.querySelector("#"+id);
 const select=$("poemSpeechChoose"),state=$("poemSpeechState"),result=$("poemSpeechTranscript");
 const verses=poemData[day];
@@ -43,5 +43,9 @@ select.addEventListener("change",()=>{stopRecognition();stopRecord();display()})
 $("poemSpeechHear").onclick=()=>say(verses[Number(select.value)||0][1]);
 $("poemSpeechStart").onclick=beginRecognition;$("poemSpeechStop").onclick=stopRecognition;$("poemSpeechRecord").onclick=record;
 window.addEventListener("pagehide",()=>{stopRecognition();stopRecord();if(audioUrl)URL.revokeObjectURL(audioUrl)});
+function jumpToPractice(index){if(Number.isInteger(index)&&index>=0&&index<verses.length){select.value=String(index);display()}panel.scrollIntoView({behavior:"smooth",block:"start"});state.textContent="请听上句，然后点击「开始朗读下句」让系统判断。"}
+if([25,27,28].includes(day)){document.querySelectorAll("[data-review]").forEach(b=>{b.textContent="🎤 录音背下句（自动判断）";b.onclick=()=>jumpToPractice(0)})}
+if(day===30){document.querySelectorAll("[data-poem]").forEach(b=>{b.textContent="🎤 录音背下句（自动判断）";b.onclick=()=>jumpToPractice(Number(b.dataset.poem))})}
+if(day===23){document.querySelectorAll("[data-connect]").forEach(b=>{b.onclick=()=>jumpToPractice(Number(b.dataset.connect))})}
 display();
 })();
