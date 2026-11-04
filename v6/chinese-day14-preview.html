@@ -21,7 +21,7 @@ function showQuiz(){
 }
 function selectQuiz(i){if(answers[qi]!==null)return;answers[qi]=i;const ok=i===questions[qi][2];if(ok)score++;showQuiz();speak(ok?"恭喜你回答正确！":"哦哦，正确答案是"+questions[qi][1][questions[qi][2]])}
 function endQuiz(){const msg="阅读闯关完成。答对"+score+"题，共四题。";modal("🌟 闯关完成",msg,[mk("完成",close)]);try{sessionStorage.setItem("umbrellaDay14Quiz",JSON.stringify({score,total:4,at:new Date().toISOString()}))}catch(e){}if(new URLSearchParams(location.search).get("embed")==="1"&&parent!==window)parent.postMessage({type:"v6-umbrella-quiz-complete",lessonDay:25,score,total:4},location.origin);speak(msg)}
-function steps(d){return[{key:"initial",label:"声母",options:["s","l","d"]},{key:"final",label:"韵母",options:["an","eng","in"]},{key:"tone",label:"声调",options:[1,2,3,4]}]}
+function steps(d){return[{key:"initial",label:"声母",options:["s","l","b"]},{key:"final",label:"韵母",options:["an","ang","in"]},{key:"tone",label:"声调",options:[1,2,3,4]}]}
 function openBlend(c){current=c;phase=0;renderBlend();speak(c+"。"+chars[c].word)}
 function renderBlend(){
  const d=chars[current],ss=steps(d);
