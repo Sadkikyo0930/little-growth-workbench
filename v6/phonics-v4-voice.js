@@ -13,7 +13,7 @@ const ratings={};
 try{Object.assign(ratings,JSON.parse(localStorage.getItem(key)||'{}'))}catch(e){}
 let active=null,session=0,listening=false,finishing=false,heard=[],targetWord='';
 function current(){return TRANSFER[transferIndex]?.word||''}
-function normalize(x){return String(x||'').toLowerCase().trim().replace(/[^a-z\\s'-]/g,'').replace(/\\s+/g,' ')}
+function normalize(x){return String(x||'').toLowerCase().trim().replace(/[^a-z\s'-]/g,'').replace(/\s+/g,' ')}
 function setStart(){start.disabled=false;start.textContent='🎤 点一下开始读'}
 function setStop(){start.disabled=false;start.textContent='⏹️ 点一下结束读并判断'}
 function cancel(){session++;listening=false;finishing=false;heard=[];targetWord='';if(active){try{active.abort()}catch(e){}active=null}setStart()}
