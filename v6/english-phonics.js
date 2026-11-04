@@ -20,6 +20,9 @@ const units=[
 {title:'-all 词族',label:'词尾拼读块',focus:'all',note:'ball、call、small 中 all 常读 /ɔːl/ 或相近的美式发音。',words:[['ball','b','all','球'],['call','c','all','打电话'],['small','sm','all','小的']],target:'ball',others:['bell','ball','bill'],prompt:'听一听，找出 ball'},
 {title:'ow 的不同读法',label:'元音字母组合',focus:'ow',note:'snow 的 ow 常读 /oʊ/，cow 的 ow 常读 /aʊ/。用整词对比，不死记一个读音。',words:[['snow','sn','ow','雪'],['cow','c','ow','奶牛'],['show','sh','ow','展示']],target:'snow',others:['snow','snaw','sun'],prompt:'听一听，找出 snow'},
 {title:'ng 鼻音复习',label:'辅音字母组合',focus:'ng',note:'sing、long、ring 末尾 ng 常发 /ŋ/，不能拆成字母 n 和 g 的名字。',words:[['sing','si','ng','唱歌'],['long','lo','ng','长的'],['ring','ri','ng','戒指']],target:'long',others:['land','long','line'],prompt:'听一听，找出 long'}];
+const syllables=[
+['away','a','way'],['funny','fun','ny'],['little','lit','tle'],['yellow','yel','low'],['into','in','to'],['under','un','der'],['pretty','pret','ty'],['after','af','ter'],['again','a','gain'],['open','o','pen'],['over','o','ver'],['before','be','fore'],['always','al','ways'],['because','be','cause'],['around','a','round'],['today','to','day'],['happy','hap','py']
+];
 const data=units[lesson-1],wrap=document.createElement('section');
 wrap.className='card hidden';wrap.id='phonicsModule';wrap.setAttribute('aria-label','自然拼读实验室');
 const game=document.getElementById('game'),finish=document.getElementById('finish');
@@ -42,11 +45,17 @@ function render(){locked=false;clear();wrap.classList.remove('hidden');
  if(step===1){header('看组合，读整词');wrap.append(node('p','muted','点每个单词，听正确整词发音。观察字母块怎样组合，不能把字母名称当成拼读发音。'));
  data.words.forEach(w=>{const line=node('div','steps');line.style.margin='12px 0';const parts=node('div','pyramid');parts.style.flex='1';parts.textContent=w[1]+' + '+w[2]+'  →  '+w[0];line.append(parts,btn('🔊 '+w[0],()=>speak(w[0]),'chip'));wrap.append(line)});
  wrap.append(btn('下一步：听辨挑战 →',next));return}
- if(step>=2&&step<=3){header('听辨挑战 '+(step-1)+' / 2');const target=step===2?data.target:data.words[2][0];
- const opts=step===2?data.others:[data.words[1][0],data.words[2][0],data.words[0][0]];
+ if(step===2){header('真正的分音节拼读');const example=syllables[lesson-1];
+ wrap.append(node('p','muted','和前面的字母拼读块不同，下面是一个真正的双音节单词。听整词，用手拍两下，跟着分成两个音节读。'));
+ const visual=node('div','pyramid');visual.textContent=example[1]+' · '+example[2]+'  →  '+example[0];wrap.append(visual);
+ wrap.append(btn('🔊 听整词：'+example[0],()=>speak(example[0]),'button soft'));
+ wrap.append(node('p','muted','拍手：'+example[1]+'（第一拍） + '+example[2]+'（第二拍）。分节拼写是帮助识读的提示，实际发音请以整词录音为准。'));
+ wrap.append(btn('👏 我拍了两下，开始答题 →',next));return}
+ if(step>=3&&step<=4){header('听辨挑战 '+(step-2)+' / 2');const target=step===3?data.target:data.words[2][0];
+ const opts=step===3?data.others:[data.words[1][0],data.words[2][0],data.words[0][0]];
  wrap.append(node('p','question','听整词，选择听到的英语单词。'));
  wrap.append(btn('🔊 听题目（可重听）',()=>speak(target),'button soft'));
- const grid=node('div','grid'),feedback=node('p','feedback');const control=btn(step===3?'完成拼读训练 🏅':'继续下一题 →',next);control.disabled=true;
+ const grid=node('div','grid'),feedback=node('p','feedback');const control=btn(step===4?'完成拼读训练 🏅':'继续下一题 →',next);control.disabled=true;
  opts.forEach(w=>{const b=btn(w,()=>{if(locked)return;locked=true;const ok=w===target;results.push({mode:'phonics',pattern:data.focus,word:target,selected:w,expected:target,correct:ok});if(ok)b.classList.add('correct');else b.classList.add('wrong');grid.querySelectorAll('button').forEach(x=>x.disabled=true);feedback.textContent=ok?'🌟 恭喜你，回答正确！':'💡 正确答案：'+target;
  speak(ok?'恭喜你回答正确':'哦哦，正确答案是','zh-CN');control.disabled=false},'word');grid.append(b)});
  wrap.append(grid,feedback,control);return}
