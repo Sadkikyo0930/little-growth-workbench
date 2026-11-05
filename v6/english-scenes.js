@@ -14,6 +14,21 @@ const activities={
  {type:'picture',prompt:'Look at the picture. 选出正确的英语句子。',emoji:'🧒🔎🦋',caption:'孩子在寻找蝴蝶',options:['Find the butterfly.','Go to sleep.','A blue car.'],correct:0,explain:'Find the butterfly. 找到蝴蝶。'},
  {type:'listen',prompt:'听英语，选出正确的动作',say:'Go!',options:[['🏃','出发'],['😴','睡觉'],['🍽️','吃饭']],correct:0,explain:'Go! 出发！'},
  {type:'order',prompt:'把词语排成句子',tokens:['I','can','go'],explain:'I can go. 我可以出发。'}
+],
+4:[
+ {type:'picture',prompt:'看图选择小朋友正在做什么',scene:'running',options:['He is running.','He is sleeping.','He is reading.'],correct:0,explain:'He is running. 他正在跑步。'},
+ {type:'order',prompt:'听句子，排列词块',tokens:['He','is','running'],explain:'He is running. 他正在跑步。'},
+ {type:'listen',prompt:'听英语，选择正确动作',say:'Jump!',options:[['🏃','跑步'],['🦘','跳起来'],['😴','睡觉']],correct:1,explain:'Jump! 跳起来！'}
+],
+5:[
+ {type:'picture',prompt:'看图选择小朋友正在做什么',scene:'playing',options:['I am eating.','I am playing.','I am sleeping.'],correct:1,explain:'I am playing. 我正在玩耍。'},
+ {type:'order',prompt:'听句子，排列词块',tokens:['I','am','playing'],explain:'I am playing. 我正在玩耍。'},
+ {type:'route',prompt:'听指令，让小赛车到终点',say:'Go right, then go down.',moves:['right','down'],explain:'Go right, then go down. 先向右，再向下。'}
+],
+6:[
+ {type:'picture',prompt:'看图选择正确英语句子',scene:'night',options:['It is a sunny day.','The light is on at night.','The car is red.'],correct:1,explain:'The light is on at night. 夜晚灯亮着。'},
+ {type:'listen',prompt:'听英语，选择正确的画面',say:'The moon is bright.',options:[['☀️','太阳'],['🌙','月亮'],['🌧️','雨天']],correct:1,explain:'The moon is bright. 月亮很明亮。'},
+ {type:'order',prompt:'听句子，排列词块',tokens:['I','see','a','light'],explain:'I see a light. 我看到一盏灯。'}
 ]};
 const styles=document.createElement('style');styles.textContent=`
 .scene-art{min-height:180px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border-radius:22px;background:linear-gradient(145deg,#e1f8ff,#fff6d9);border:3px solid #fff;box-shadow:0 6px 15px #2c75a51b;margin:12px 0;padding:15px}
@@ -35,16 +50,25 @@ return '<svg viewBox="0 0 640 360" role="img" aria-label="'+({cat:'草地上微�
 }
 
 function art(root,emoji,caption){const a=add(root,'div',undefined,'scene-art');const kind=emoji.includes('🐱')?'cat':emoji.includes('🚙')?'car':emoji.includes('🦋')?'butterfly':null;if(kind){a.innerHTML=pictureSvg(kind);a.querySelector('svg').style.cssText='width:100%;max-height:260px;border-radius:17px;display:block';}else add(a,'div',emoji,'scene-emoji');add(a,'div',caption,'muted')}
+function activityIllustration(kind){
+ const base='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img"><defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#99dfff"/><stop offset="1" stop-color="#f6faff"/></linearGradient></defs><rect width="640" height="360" rx="25" fill="url(#bg)"/><circle cx="530" cy="64" r="40" fill="#ffe48f"/><path d="M0 275Q130 238 320 276T640 260V360H0Z" fill="#85d99b"/><path d="M0 320Q260 293 640 324" stroke="#fff" stroke-width="10" fill="none"/>';
+ const child='<g><circle cx="286" cy="124" r="51" fill="#f5c498" stroke="#d89472" stroke-width="4"/><path d="M235 121Q229 55 287 59Q349 65 337 121Q322 77 277 86Q255 104 235 121" fill="#70482f"/><circle cx="267" cy="121" r="6" fill="#2d354b"/><circle cx="304" cy="121" r="6" fill="#2d354b"/><path d="M273 146q18 14 32-2" stroke="#b46b61" stroke-width="4" fill="none"/><rect x="242" y="174" width="93" height="85" rx="28" fill="#fa6757"/><path d="M246 190L194 229M331 190l45 35" stroke="#f5c498" stroke-width="22" stroke-linecap="round"/>';
+ const end='</svg>';
+ if(kind==='running')return base+child+'<path d="M264 250l-67 57m110-57l79 50" stroke="#2a77b4" stroke-width="23" stroke-linecap="round"/><path d="M165 304h75m119 0h75" stroke="#283f54" stroke-width="15" stroke-linecap="round"/><path d="M95 168h85m-68 30h72m-53 32h51" stroke="#fff" stroke-width="12" stroke-linecap="round" opacity=".8"/></g>'+end;
+ if(kind==='playing')return base+child+'<path d="M263 253l-28 62m71-62l33 62" stroke="#2a77b4" stroke-width="25" stroke-linecap="round"/></g><circle cx="442" cy="254" r="54" fill="#fff" stroke="#3d6db0" stroke-width="8"/><path d="M423 212l37 5 14 35-32 24-37-16z" fill="#34445e"/><path d="M395 265l30-10m38-8l25 20" stroke="#34445e" stroke-width="6"/>'+end;
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img"><rect width="640" height="360" rx="25" fill="#203762"/><circle cx="480" cy="78" r="48" fill="#fff3ba"/><circle cx="498" cy="66" r="41" fill="#203762"/><g fill="#fff8cf"><circle cx="100" cy="60" r="4"/><circle cx="178" cy="105" r="4"/><circle cx="540" cy="176" r="4"/><circle cx="370" cy="46" r="4"/></g><path d="M0 273Q200 235 420 279T640 260V360H0Z" fill="#2d6e77"/><path d="M156 310V134l135-78 137 78v176" fill="#f6b875" stroke="#d37b58" stroke-width="7"/><path d="M148 142l140-87 149 87" stroke="#a85258" stroke-width="22" stroke-linejoin="round" fill="none"/><rect x="257" y="200" width="74" height="110" fill="#704858"/><rect x="181" y="161" width="62" height="63" rx="6" fill="#fff1a3" stroke="#b16d51" stroke-width="8"/><rect x="355" y="161" width="48" height="63" rx="6" fill="#fff1a3" stroke="#b16d51" stroke-width="8"/><path d="M211 160v63m168-63v63" stroke="#b16d51" stroke-width="6"/></svg>';
+}
+
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 const msg=add(host,'div','','scene-message');let resolved=false;
 function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.');host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
 if(task.type==='picture'||task.type==='listen'){
- if(task.type==='picture')art(host,task.emoji,task.caption);
+ if(task.type==='picture'){if(task.scene){const box=add(host,'div',undefined,'scene-art');box.innerHTML=activityIllustration(task.scene);box.querySelector('svg').style.cssText='width:100%;max-height:280px;border-radius:14px';}else art(host,task.emoji,task.caption);}
  else host.append(button('🔊 听英语指令',()=>say(task.say),'button soft'));
  const choices=add(host,'div');task.options.forEach((item,i)=>{const label=Array.isArray(item)?item[0]+' '+item[1]:item;const b=button(label,()=>{if(resolved)return;choices.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)});choices.append(b);if(Array.isArray(item)){const hear=button('🔊 听选项',()=>say(item[1],'zh-CN'),'button soft');hear.style.fontSize='14px';hear.style.padding='8px';choices.append(hear)}});
- if(task.type==='listen')say(task.say);
+ if(task.type==='listen')host.append(button('🔊 再听英语',()=>say(task.say),'button soft'));
 }else if(task.type==='order'){
- const tokens=task.tokens,chosen=[],chosenBox=add(host,'div',undefined,'steps'),pool=add(host,'div',undefined,'steps');add(host,'p','点词块组成句子，再点击检查。','muted');
+ const tokens=task.tokens,chosen=[],chosenBox=add(host,'div',undefined,'steps'),pool=add(host,'div',undefined,'steps');add(host,'p','听一听，再点词块组成句子。正确句子会在检查后显示。','muted');host.insertBefore(button('🔊 听完整句子',()=>say(tokens.join(' ')+'.'),'button soft'),chosenBox);
  const submit=button('检查句子',()=>{if(chosen.length!==tokens.length||resolved)return;complete(chosen.every((x,i)=>x===i),chosen.map(i=>tokens[i]).join(' '))},'button');submit.disabled=true;
  tokens.map((_,i)=>i).reverse().forEach(i=>{const b=button(tokens[i],()=>{if(resolved)return;b.disabled=true;chosen.push(i);const c=button(tokens[i],()=>{if(resolved)return;chosen.splice(chosen.indexOf(i),1);c.remove();b.disabled=false;submit.disabled=chosen.length!==tokens.length},'chip selected');chosenBox.append(c);submit.disabled=chosen.length!==tokens.length},'chip');pool.append(b)});host.append(submit);
 }else if(task.type==='route'){
