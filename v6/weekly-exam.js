@@ -91,12 +91,32 @@ function render(){const n=answeredCount();if(n>=current.questions.length){finish
  $('weeklyListen').style.display='inline-block';$('weeklyListen').onclick=()=>speakPrompt(row[0],ref.id);
  const order=[0,1,2].sort((a,b)=>((a+n*7+ref.idx*3)%3)-((b+n*7+ref.idx*3)%3));
  $('weeklyOptions').innerHTML='';
- order.forEach(choice=>{const b=document.createElement('button');b.type='button';b.className='opt';b.style.cssText='text-align:left;min-height:56px;border:2px solid #b7d8ef;background:#f5fbff;border-radius:14px;padding:12px 16px;font-size:18px;color:#174d78';b.textContent=row[1][choice];b.onclick=()=>answerQuestion(n,choice);$('weeklyOptions').appendChild(b)});
+ order.forEach(choice=>{
+ const text=row[1][choice],wrap=document.createElement('div');
+ wrap.style.cssText='display:flex;align-items:stretch;gap:8px;min-width:0';
+ const option=document.createElement('button');option.type='button';option.className='opt weekly-choice';option.dataset.choice=String(choice);
+ option.style.cssText='flex:1;min-width:0;text-align:left;min-height:56px;border:2px solid #b7d8ef;background:#f5fbff;border-radius:14px;padding:12px 16px;font-size:18px;color:#174d78;white-space:normal';
+ option.textContent=text;option.onclick=()=>answerQuestion(n,choice);wrap.appendChild(option);
+ const voice=document.createElement('button');voice.type='button';voice.className='weekly-option-audio';
+ voice.setAttribute('aria-label','朗读选项：'+text);voice.title='朗读这个选项（不会提交答案）';voice.textContent='🔊';
+ voice.style.cssText='flex:0 0 52px;min-height:56px;border:2px solid #b7d8ef;background:#ecf8ff;border-radius:14px;font-size:22px;touch-action:manipulation';
+ voice.onclick=()=>speakOption(text,ref.id);wrap.appendChild(voice);
+ $('weeklyOptions').appendChild(wrap);
+});
 }
-function speakPrompt(message,id){if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(message);u.lang='zh-CN';u.rate=.82;window.speechSynthesis.speak(u)}
+function speakOption(message,id){
+ if(!('speechSynthesis' in window))return;
+ window.speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(message);
+ // 中文选项用普通话；英语学科中纯英文选项保持英语发音。
+ u.lang=id==='en'&&!/[\u3400-\u9fff]/.test(message)?'en-US':'zh-CN';
+ u.rate=u.lang==='zh-CN'?.82:.78;
+ window.speechSynthesis.speak(u);
+}
+function speakPrompt(message,id){speakOption(message,'cn')}
 function answerQuestion(index,choice){if(current.answers[index])return;const {ref,row}=question(index),ok=choice===row[2];
  current.answers[index]={subject:ref.id,selected:choice,correct:ok,question:row[0],chosen:row[1][choice],answer:row[1][row[2]],explanation:row[3]};
- saveExam();$('weeklyOptions').querySelectorAll('button').forEach(b=>{b.disabled=true;if(b.textContent===row[1][row[2]])b.style.background='#e2f7e9';else if(b.textContent===row[1][choice]&&!ok)b.style.background='#fff0e9'});
+ saveExam();$('weeklyOptions').querySelectorAll('.weekly-choice').forEach(b=>{b.disabled=true;if(Number(b.dataset.choice)===row[2])b.style.background='#e2f7e9';else if(Number(b.dataset.choice)===choice&&!ok)b.style.background='#fff0e9'});
  $('weeklyFeedback').textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 这道题再记住：')+row[3];
  const u=new SpeechSynthesisUtterance(ok?'恭喜你回答正确':'哦哦，正确答案是：'+row[1][row[2]]);u.lang=ref.id==='en'&&!ok?'en-US':'zh-CN';u.rate=.78;if('speechSynthesis' in window){window.speechSynthesis.cancel();window.speechSynthesis.speak(u)}
  $('weeklyNext').hidden=false;$('weeklyNext').textContent=index+1===24?'查看四科成绩':'下一题 →';
