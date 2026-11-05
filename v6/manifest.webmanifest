@@ -1,0 +1,24 @@
+{
+  "name": "小小赛车成长工坊",
+  "short_name": "赛车成长",
+  "description": "语文、数学、英语、科学每日学习与四科测评。",
+  "id": "/little-growth-workbench/v6/",
+  "start_url": "/little-growth-workbench/v6/",
+  "scope": "/little-growth-workbench/v6/",
+  "display": "standalone",
+  "display_override": [
+    "standalone"
+  ],
+  "background_color": "#c9efff",
+  "theme_color": "#0f63b7",
+  "lang": "zh-CN",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
