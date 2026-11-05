@@ -31,22 +31,22 @@ const css=document.createElement('style');css.textContent=`
 function make(tag,txt,cls){const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;if(cls)e.className=cls;return e}
 function action(label,click,cls='button soft'){const e=make('button',label,cls);e.type='button';e.onclick=click;return e}
 function mount(n,host,speech,done){const [chunk,examples,transfer,hint]=lessons[n-1];let step=0;const answers=[];
-const speak=w=>speech(w,'en-US');
+const speak=w=>speech(w,'en-US');let chunkPlayer=null;const phonetic={'at':'/æt/','an':'/æn/','ag':'/æɡ/','ing':'/ɪŋ/','ight':'/aɪt/','ake':'/eɪk/','sh':'/ʃ/','th':'/θ/'};function playChunk(){const key=chunk==='sh'?'ship':chunk==='th'?'thin':chunk;const src=window.V6PhonicsAudio&&window.V6PhonicsAudio[key];if(!src){panel.append(make('p','组合音频暂时不可用，请打开原版 V4 练习。','feedback'));return}try{if(chunkPlayer){chunkPlayer.pause();chunkPlayer.currentTime=0}chunkPlayer=new Audio(src);chunkPlayer.play().catch(()=>{panel.append(make('p','请再次点击组合发音按钮，允许浏览器播放音频。','feedback'))})}catch(e){panel.append(make('p','此设备暂时无法播放组合发音。','feedback'))}}
 const panel=make('div',undefined,'phonics-panel');host.replaceChildren(panel);
 function render(){panel.replaceChildren();panel.append(make('span','🔤 今日固定字母组合 · 第 '+n+' / 17 课','pill'));
- if(step===0){panel.append(make('div',chunk,'phonics-chunk'),make('p',hint,'phonics-hint'));panel.append(make('p','先听三个完整单词，观察它们共同的字母组合。','muted'));
- examples.forEach(w=>{const row=make('div',w,'phonics-word');const a=action('🔊 听 '+w,()=>speak(w));panel.append(row,a)});
- panel.append(action('我听好了，进入听音辨组合 →',()=>{step=1;render()},'button'));return}
- if(step===1){panel.append(make('h2','听单词，找出共同拼读块','question'));panel.append(action('🔊 听示范词：'+examples[0],()=>speak(examples[0])));
+ if(step===0){panel.append(make('div',chunk,'phonics-chunk'),make('p','组合读音 '+(phonetic[chunk]||''),'phonics-hint'));panel.append(action((chunk==='sh'||chunk==='th'?'🔊 听含有 '+chunk+' 的示范单词':'🔊 先听 '+chunk+' 组合本身怎么读'),playChunk,'button'));panel.append(make('p',chunk==='sh'||chunk==='th'?'这个音不能用普通语音准确单独播放，先听示范单词。': '这里播放 V4 原有的离线组合音频，不是把字母逐个念出来。','muted'));panel.append(make('p',hint,'phonics-hint'));panel.append(make('p','先听组合本身，再听下面三个单词；观察换了开头后，组合的读音如何保留。','muted'));
+ examples.forEach(w=>{const row=make('div',undefined,'phonics-word');const p=w.lastIndexOf(chunk);if(p>=0){row.append(document.createTextNode(w.slice(0,p)));const strong=make('span',chunk);strong.style.color='#d4553f';strong.style.textDecoration='underline';row.append(strong,document.createTextNode(w.slice(p+chunk.length)))}else row.textContent=w;const a=action('🔊 听 '+w,()=>speak(w));panel.append(row,a)});
+ panel.append(action('我听懂组合音了，进入辨音挑战 →',()=>{step=1;render()},'button'));return}
+ if(step===1){panel.append(make('h2','听单词，找出共同拼读块','question'));panel.append(action('🔊 重听 '+chunk+' 组合音',playChunk));panel.append(action('🔊 听完整示范词：'+examples[0],()=>speak(examples[0])));
  const opts=[chunk,chunk==='ing'?'ang':chunk==='ight'?'eight':chunk==='sh'?'ch':chunk==='th'?'sh':chunk==='ake'?'ack':chunk==='at'?'et':chunk==='an'?'en':'eg',chunk==='ing'?'ong':chunk==='ight'?'ite':chunk==='sh'?'th':chunk==='th'?'ch':chunk==='ake'?'ike':chunk==='at'?'ot':chunk==='an'?'in':'ig'];
  const order=[opts[1],opts[0],opts[2]];const grid=make('div',undefined,'phonics-choices');let answered=false;
  order.forEach(opt=>grid.append(action(opt,()=>{if(answered)return;answered=true;const ok=opt===chunk;answers.push({mode:'phonics-chunk',correct:ok,selected:opt,expected:chunk});grid.querySelectorAll('button').forEach(b=>b.disabled=true);panel.append(make('p',ok?'🌟 选对了！':'正确组合是 '+chunk,'feedback'));panel.append(action('下一步：自己读新词 →',()=>{step=2;render()},'button'))},'')));
  panel.append(grid);return}
- panel.append(make('h2','迁移拼读：先自己读，不提前播放答案','question'));panel.append(make('div',transfer,'phonics-word'));panel.append(make('p','试着把开头字母和 '+chunk+' 组合起来读，读完再点击听答案。','phonics-hint'));
+ panel.append(make('h2','举一反三：换个开头，自己拼读','question'));panel.append(action('🔊 再听 '+chunk+' 组合音',playChunk));panel.append(make('div',transfer,'phonics-word'));panel.append(make('p','试着把开头字母和 '+chunk+' 组合起来读，读完再点击听答案。','phonics-hint'));
  const reveal=action('🔊 我读完了，听标准单词',()=>{speak(transfer);reveal.disabled=true;const buttons=make('div',undefined,'grid');buttons.append(action('✅ 我读对了',()=>complete(true),'button'),action('🔁 还要练习',()=>complete(false),'button soft'));panel.append(buttons)},'button');
  panel.append(reveal);
 }
-function complete(ok){answers.push({mode:'phonics-transfer',correct:ok,selected:ok?'self-correct':'needs-practice',expected:transfer});done({chunk,examples,transfer,answers});}
+function complete(ok){if(chunkPlayer){chunkPlayer.pause();chunkPlayer=null}answers.push({mode:'phonics-transfer',correct:ok,selected:ok?'self-correct':'needs-practice',expected:transfer});done({chunk,examples,transfer,answers});}
 render();
 }
 window.V6PhonicsLesson={open:mount,has:n=>n>=1&&n<=17};
