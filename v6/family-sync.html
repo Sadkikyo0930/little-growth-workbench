@@ -5,7 +5,8 @@
 <section class="card"><h2>第一步 · 本机记录</h2><p id="local" class="status">正在查看本机……</p><p id="baselineStatus" class="muted">正在检查正式同步起点……</p><button type="button" id="setBaseline" class="secondary">从现在起记录正式学习（保留之前试做数据）</button><p class="muted">如果孩子还没有正式开学，请先设置正式同步起点。已有试做与旧测评仍保留在本机，但不上传云端。这个操作只设置同步过滤标记，不会清空或修改任何学习成绩。</p></section>
 <section class="card"><h2>第二步 · 妈妈登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" value="growth_mom" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
 <button id="logout" class="secondary" type="button">退出账号</button><p id="status" class="status" role="status">正在加载云端组件……</p></section>
-<section class="card"><h2>第三步 · 上传新增记录</h2><p>待同步：<span class="metric" id="pending">—</span> 条；云端已有：<span class="metric" id="remote">—</span> 条</p>
+<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">只需在孩子学习的浏览器上开启一次。之后打开 V6 学习台、有网络且家庭所有者登录会话仍有效时，会自动同步新增成绩；网络中断时保留本机数据等待补传。不要在共享设备上长期保留家长会话。</p></section>
+<section class="card"><h2>第四步 · 手动核对或补传</h2><p>待同步：<span class="metric" id="pending">—</span> 条；云端已有：<span class="metric" id="remote">—</span> 条</p>
 <button id="sync" disabled>上传尚未同步的记录</button><p class="muted">首次上传前会检查重复记录。只新增、绝不删除已有记录，也不覆盖云端数据。需要 CloudBase 数据库为妈妈账号授予 INSERT 权限及正确的 RLS 策略；如果权限未开放，页面会显示错误并停止上传。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-dashboard.html">家庭云端查看页</a></p>
 </main><script>(function(){"use strict";
@@ -20,7 +21,22 @@ function drawBaseline(){var b=getBaseline();$("baselineStatus").textContent=b?"�
 $("setBaseline").onclick=function(){var s=localState();if(!s){alert("当前浏览器没有 V6 记录，请先从 V6 主页面打开。");return}
  var current=getBaseline();if(current&&!confirm("已设置过正式同步起点。重新设置将跳过更多历史记录。确定继续吗？"))return;
  if(!confirm("当前已有 "+s.records.length+" 条历史答题。确定把现在作为正式学习起点吗？\n这些历史数据仍保留本机，但不会加入后续云端上传。"))return;
- try{localStorage.setItem(BASELINE_KEY,JSON.stringify({start:new Date().toISOString(),answerCount:s.records.length}));drawBaseline();update();status("✅ 正式同步起点已保存。原有成绩没有修改，历史试做记录不会上传。")}catch(e){alert("保存起点失败："+err(e))}
+ try{localStorage.setItem(BASELINE_KEY,JSON.stringify({start:new Date().toISOString(),answerCount:s.records.length}));drawBaseline();update();autoStatus();status("✅ 正式同步起点已保存。原有成绩没有修改，历史试做记录不会上传。")}catch(e){alert("保存起点失败："+err(e))}
+};
+var AUTO_KEY="v6-family-auto-sync-enabled",AUTO_STATUS_KEY="v6-family-auto-sync-status";
+function autoStatus(){
+ var active=localStorage.getItem(AUTO_KEY)==="yes",b=getBaseline(),saved=null;
+ try{saved=JSON.parse(localStorage.getItem(AUTO_STATUS_KEY)||"null")}catch(e){}
+ $("autoStatus").textContent=(active?"✅ 自动同步已开启。":"自动同步尚未开启。")+(b?"":"\n请先设置正式同步起点。")+(saved&&saved.message?"\n最近状态："+saved.message:"");
+ $("autoToggle").textContent=active?"关闭自动同步":"开启自动同步";
+}
+$("autoToggle").onclick=function(){
+ var active=localStorage.getItem(AUTO_KEY)==="yes";
+ if(active){localStorage.removeItem(AUTO_KEY);autoStatus();status("已关闭自动同步。孩子本机成绩不会删除。");return}
+ if(!getBaseline()){alert("请先设置正式同步起点，避免上传历史试做记录。");return}
+ if(!signed||!member||member.member_role!=="owner"){alert("请先用妈妈所有者账号登录验证，再开启自动同步。");return}
+ if(!confirm("开启后，孩子在这个浏览器完成的正式学习成绩将自动上传云端。\n家长会话可能保存在这台设备上；请确认设备由家人保管。"))return;
+ localStorage.setItem(AUTO_KEY,"yes");autoStatus();status("✅ 已开启。返回 V6 学习台正常学习，页面会自动尝试同步。")
 };
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
 function makeRows(){
@@ -78,5 +94,5 @@ $("sync").onclick=async function(){if(!signed||working||!member||member.member_r
  finally{working=false;try{await refreshRemote()}catch(e){status($("status").textContent+"\n重新读取失败："+err(e))}update()}
 };
 $("logout").onclick=async function(){try{if(auth&&typeof auth.signOut==="function")await auth.signOut();signed=false;member=null;remoteIds.clear();update();status("已退出账号。")}catch(e){status("退出失败："+err(e))}};
-drawBaseline();update();sdk(0);
+drawBaseline();update();autoStatus();sdk(0);
 })();</script></body></html>
