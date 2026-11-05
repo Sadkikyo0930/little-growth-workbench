@@ -5,7 +5,7 @@
 </style></head>
 <body><main class="shell">
 <header class="hero"><div class="pill">第一个月 · 英语综合测评</div><h1>🏁 小小英语冒险 · 月末挑战</h1><p>20 道题 · 满分 100 分 · 单词、拼读、听力、情境与故事理解</p><p id="modeLabel"></p></header>
-<section class="card" id="welcome"><h2>准备开始了吗？</h2><p class="instructions">先听英语，再独立作答。不会提前播放正确答案；每题只能提交一次。答完全部20题后统一展示对错、中文解释和各项成绩，避免中途提示影响测评。</p><div class="overview"><div>高频词与词义 <strong>6题</strong></div><div>自然拼读 <strong>4题</strong></div><div>完整句子听力 <strong>4题</strong></div><div>情境理解 <strong>4题</strong></div><div>短故事理解 <strong>2题</strong></div></div><p class="instructions">考试期间可重复听英语，词义选项可以点击「听中文」而不自动提交。</p><button class="primary" id="start">开始20题挑战</button></section>
+<section class="card" id="welcome"><h2>准备开始了吗？</h2><p class="instructions">先听英语，再独立作答。不会提前播放正确答案；每题只能提交一次。答完全部20题后统一展示对错、中文解释和各项成绩，避免中途提示影响测评。</p><div class="overview"><div>高频词与词义 <strong>6题</strong></div><div>自然拼读 <strong>4题</strong></div><div>完整句子听力 <strong>4题</strong></div><div>情境理解 <strong>4题</strong></div><div>短故事理解 <strong>2题</strong></div></div><p class="instructions">考试期间可反复听英语，完整句子和故事使用慢速朗读，词义选项可以点击「听中文」而不自动提交。</p><button class="primary" id="start">开始20题挑战</button></section>
 <section class="card hidden" id="quiz"><span class="pill" id="counter"></span><div class="bar"><i id="progress"></i></div><p class="small" id="category"></p><div class="question" id="prompt"></div><p class="instructions" id="help"></p><div class="actions"><button class="soft listen" id="play">🔊 听英文（可反复听）</button></div><div class="options" id="options"></div><div id="status" class="feedback hidden" aria-live="polite"></div><div class="actions"><button class="primary" id="submit" disabled>确认本题选择</button><button class="primary hidden" id="next">下一题 →</button></div></section>
 <section class="card hidden" id="results"><h2>🎉 英语月末挑战完成！</h2><div id="score" class="question"></div><p class="instructions" id="resultMessage"></p><div id="breakdown" class="summary"></div><h3>错题复习</h3><div id="mistakes"></div><p class="note" id="saveStatus"></p><div class="actions"><button class="soft" id="retry">重新测试（新一轮）</button></div></section>
 <p class="footer">独立英语月测，不会覆盖语文、数学、科学或原有英语学习记录。家长预览模式不保存成绩。</p></main>
@@ -94,7 +94,12 @@ function finish(){
 }
 $('modeLabel').textContent=preview?'家长验收预览 · 不保存分数':'正式月末测评 · 保存本设备成绩';
 $('start').onclick=()=>{index=0;answers=[];questions=freshQuestions();draw()};
-$('play').onclick=()=>speak(questions[index].en,'en-US',questions[index].type==='story'?.58:.63);
+$('play').onclick=()=>{
+ const q=questions[index];
+ // Keep isolated word phonics clear, but give first-grade learners more time with sentences.
+ const rate=q.type==='phonics'?.66:q.type==='story'?.5:q.type==='sentence'?.5:q.type==='scene'?.5:.54;
+ speak(q.en,'en-US',rate);
+};
 $('submit').onclick=submit;
 $('next').onclick=()=>{if(answers.length!==index+1)return;if(index===19)finish();else{index++;draw()}};
 $('retry').onclick=()=>{index=0;answers=[];view('welcome')};
