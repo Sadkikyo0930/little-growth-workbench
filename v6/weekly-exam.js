@@ -60,6 +60,9 @@ sc:[
 ]};
 const $=id=>document.getElementById(id);
 const screen=$('weeklyExam');if(!screen)return;
+// Retire the temporary English inspection page; formal English course and monthly exam remain intact.
+if($('englishPreviewMenu'))$('englishPreviewMenu').remove();
+if($('englishPreviewHomeBtn'))$('englishPreviewHomeBtn').parentElement.remove();
 const ids=['cn','ma','en','sc'];
 let practice=false,current=null;
 function sunday(){const d=new Date();return d.getDay()===0}
