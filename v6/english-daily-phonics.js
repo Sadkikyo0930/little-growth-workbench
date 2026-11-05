@@ -40,10 +40,41 @@ const css=document.createElement('style');css.textContent=`
 function make(tag,txt,cls){const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;if(cls)e.className=cls;return e}
 function action(label,click,cls='button soft'){const e=make('button',label,cls);e.type='button';e.onclick=click;return e}
 function mount(n,host,speech,done){const [chunk,examples,transfer,hint]=lessons[n-1];const transferWords=transferSets[n-1];let step=0;const answers=[];
-const speak=w=>speech(w,'en-US');let chunkPlayer=null;const phonetic={'at':'/æt/','an':'/æn/','ag':'/æɡ/','ing':'/ɪŋ/','ight':'/aɪt/','ake':'/eɪk/','sh':'/ʃ/','th':'/θ/'};function playChunk(){const key=chunk==='sh'?'ship':chunk==='th'?'thin':chunk;const src=window.V6PhonicsAudio&&window.V6PhonicsAudio[key];if(!src){panel.append(make('p','组合音频暂时不可用，请打开原版 V4 练习。','feedback'));return}try{if(chunkPlayer){chunkPlayer.pause();chunkPlayer.currentTime=0}chunkPlayer=new Audio(src);chunkPlayer.play().catch(()=>{panel.append(make('p','请再次点击组合发音按钮，允许浏览器播放音频。','feedback'))})}catch(e){panel.append(make('p','此设备暂时无法播放组合发音。','feedback'))}}
+const speak=w=>speech(w,'en-US');let chunkPlayer=null;const phonetic={'at':'/æt/','an':'/æn/','ag':'/æɡ/','ing':'/ɪŋ/','ight':'/aɪt/','ake':'/eɪk/','sh':'/ʃ/','th':'/θ/'};let shAudioContext=null;
+function playIsolatedSh(){
+  // /ʃ/ is a voiceless fricative: filtered airflow noise, without a vowel or final consonant.
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass){panel.append(make('p','当前浏览器不支持单独的 sh 音频，请使用例词发音。','feedback'));return}
+  try{
+    if(chunkPlayer){chunkPlayer.pause();chunkPlayer=null}
+    if(!shAudioContext)shAudioContext=new AudioContextClass();
+    const ctx=shAudioContext;
+    const resume=ctx.state==='suspended'?ctx.resume():Promise.resolve();
+    resume.then(()=>{
+      const duration=.72,n=Math.ceil(ctx.sampleRate*duration);
+      const buffer=ctx.createBuffer(1,n,ctx.sampleRate);
+      const data=buffer.getChannelData(0);
+      let prev=0;
+      // High-frequency turbulent airflow, reproducible without speech synthesis reading "ship".
+      for(let i=0;i<n;i++){const raw=Math.random()*2-1;prev=.83*prev+.17*raw;data[i]=raw-prev}
+      const src=ctx.createBufferSource();src.buffer=buffer;
+      const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=1600;
+      const peak=ctx.createBiquadFilter();peak.type='peaking';peak.frequency.value=3250;peak.Q.value=.85;peak.gain.value=11;
+      const low=ctx.createBiquadFilter();low.type='lowpass';low.frequency.value=6500;
+      const gain=ctx.createGain();const t=ctx.currentTime;
+      gain.gain.setValueAtTime(.0001,t);
+      gain.gain.linearRampToValueAtTime(.48,t+.065);
+      gain.gain.setValueAtTime(.48,t+duration-.13);
+      gain.gain.linearRampToValueAtTime(.0001,t+duration);
+      src.connect(hp);hp.connect(peak);peak.connect(low);low.connect(gain);gain.connect(ctx.destination);
+      src.start(t);src.stop(t+duration+.01);
+    }).catch(()=>panel.append(make('p','请再次点击播放，允许浏览器播放声音。','feedback')));
+  }catch(e){panel.append(make('p','播放失败，请重试。','feedback'))}
+}
+function playChunk(){if(chunk==='sh'){playIsolatedSh();return}const key=chunk==='th'?'thin':chunk;const src=window.V6PhonicsAudio&&window.V6PhonicsAudio[key];if(!src){panel.append(make('p','组合音频暂时不可用，请打开原版 V4 练习。','feedback'));return}try{if(chunkPlayer){chunkPlayer.pause();chunkPlayer.currentTime=0}chunkPlayer=new Audio(src);chunkPlayer.play().catch(()=>{panel.append(make('p','请再次点击组合发音按钮，允许浏览器播放音频。','feedback'))})}catch(e){panel.append(make('p','此设备暂时无法播放组合发音。','feedback'))}}
 const panel=make('div',undefined,'phonics-panel');host.replaceChildren(panel);
 function render(){panel.replaceChildren();panel.append(make('span','🔤 今日固定字母组合 · 第 '+n+' / 17 课','pill'));
- if(step===0){panel.append(make('div',chunk,'phonics-chunk'),make('p','组合读音 '+(phonetic[chunk]||''),'phonics-hint'));panel.append(action((chunk==='sh'||chunk==='th'?'🔊 听含有 '+chunk+' 的示范单词':'🔊 先听 '+chunk+' 组合本身怎么读'),playChunk,'button'));panel.append(make('p',chunk==='sh'||chunk==='th'?'这个音不能用普通语音准确单独播放，先听示范单词。': '这里播放 V4 原有的离线组合音频，不是把字母逐个念出来。','muted'));panel.append(make('p',hint,'phonics-hint'));panel.append(make('p','先听组合本身，再听下面三个单词；观察换了开头后，组合的读音如何保留。','muted'));
+ if(step===0){panel.append(make('div',chunk,'phonics-chunk'),make('p','组合读音 '+(phonetic[chunk]||''),'phonics-hint'));panel.append(action((chunk==='sh'?'🔊 单独听 sh 的发音 /ʃ/':chunk==='th'?'🔊 听含有 th 的示范单词':'🔊 先听 '+chunk+' 组合本身怎么读'),playChunk,'button'));panel.append(make('p',chunk==='sh'?'这里只发清晰的 /ʃ/ 气流摩擦音，不带 ship 后面的元音和尾音。例词 ship、shop、fish 可单独点击听完整发音。':chunk==='th'?'先听示范单词中的 th，暂不把 thin 当作独立的 th 发音。':'这里播放 V4 原有的离线组合音频，不是把字母逐个念出来。','muted'));panel.append(make('p',hint,'phonics-hint'));panel.append(make('p','先听组合本身，再听下面三个单词；观察换了开头后，组合的读音如何保留。','muted'));
  examples.forEach(w=>{const row=make('button',undefined,'phonics-word phonics-word-play');row.type='button';row.setAttribute('aria-label','点击听 '+w+' 的发音');row.onclick=()=>speak(w);const p=w.lastIndexOf(chunk);if(p>=0){row.append(document.createTextNode(w.slice(0,p)));const strong=make('span',chunk);strong.style.color='#d4553f';strong.style.textDecoration='underline';row.append(strong,document.createTextNode(w.slice(p+chunk.length)))}else row.textContent=w;const symbol=make('span',' 🔊');symbol.style.cssText='font-size:18px;vertical-align:middle;color:#3383c1';row.append(symbol);panel.append(row)});
  panel.append(action('我听懂组合音了，进入辨音挑战 →',()=>{step=1;render()},'button'));return}
  if(step===1){panel.append(make('h2','听单词，找出共同拼读块','question'));panel.append(action('🔊 重听 '+chunk+' 组合音',playChunk));panel.append(action('🔊 听完整示范词：'+examples[0],()=>speak(examples[0])));
