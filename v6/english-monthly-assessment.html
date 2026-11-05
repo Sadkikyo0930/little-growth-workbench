@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>英语月末测评 · 20题</title>
+<style>
+:root{font-family:system-ui,-apple-system,"PingFang SC",sans-serif;color:#20476d;background:#eaf7ff}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(160deg,#c9eaff,#e9f8ff 48%,#fff5d9)}button{font:inherit;cursor:pointer}button:disabled{cursor:default;opacity:.58}.shell{max-width:780px;margin:auto;padding:15px 13px 40px}.hero{background:linear-gradient(117deg,#286db3,#67b0df);border:4px solid white;border-radius:25px;padding:20px;color:white;box-shadow:0 7px 24px #1d5d9b20}.hero h1{font-size:clamp(23px,5vw,35px);margin:4px 0 8px}.hero p{margin:5px 0;line-height:1.65}.card{background:#fff;border:2px solid #b6dcef;border-radius:23px;box-shadow:0 7px 20px #285b8420;padding:18px;margin:14px 0}.pill{display:inline-block;background:#e6f3ff;border-radius:30px;color:#1b619d;font-size:14px;padding:6px 12px;font-weight:800}.bar{height:11px;border-radius:30px;background:#deedfa;overflow:hidden;margin:14px 0}.bar>i{display:block;background:#54beab;height:100%;width:0;transition:width .25s}.question{font-weight:900;font-size:clamp(20px,4.8vw,27px);line-height:1.55}.instructions{color:#486982;line-height:1.75}.actions{display:flex;flex-wrap:wrap;gap:10px}.primary,.soft{border-radius:16px;padding:13px 17px;border:2px solid #a4d3ec;font-weight:850}.primary{background:#228cc6;color:white;border-color:#228cc6}.soft{background:#eff9ff;color:#23618d}.primary:focus-visible,.soft:focus-visible,.option:focus-visible{outline:3px solid #f5b64d;outline-offset:3px}.options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}.option{border:2px solid #b7daf0;border-radius:18px;background:#f0f9ff;color:#255276;padding:16px 9px;min-height:90px;font-size:18px;font-weight:850;word-break:break-word}.option.chosen{background:#dcf2ff;border-color:#2c95da}.option.good{border-color:#2db78a;background:#ddfaee}.option.bad{border-color:#e28b83;background:#fff1ee}.picture{display:block;font-size:35px;margin-bottom:7px}.listen{background:#fff1c8;color:#795316;border:2px solid #eccd7d}.note{font-size:15px;line-height:1.7;color:#315a77}.feedback{padding:15px;border-radius:16px;background:#edf8ff;color:#255f86;margin:12px 0;font-size:17px;line-height:1.75;font-weight:700}.hidden{display:none!important}.summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric{border-radius:14px;background:#f1f9ff;padding:13px}.metric strong{display:block;font-size:23px;color:#137caf}.small{font-size:13px;color:#51758c}.footer{font-size:13px;color:#476b83;text-align:center;line-height:1.7}.overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:13px 0}.overview div{background:#f2f9ff;border-radius:12px;padding:12px;font-size:14px}.overview strong{color:#1b79ae}@media(max-width:450px){.options{grid-template-columns:1fr}.summary{grid-template-columns:1fr}.hero{padding:15px}}
+</style></head>
+<body><main class="shell">
+<header class="hero"><div class="pill">第一个月 · 英语综合测评</div><h1>🏁 小小英语冒险 · 月末挑战</h1><p>20 道题 · 满分 100 分 · 单词、拼读、听力、情境与故事理解</p><p id="modeLabel"></p></header>
+<section class="card" id="welcome"><h2>准备开始了吗？</h2><p class="instructions">先听英语，再独立作答。不会提前播放正确答案；每题只能提交一次。答完全部20题后统一展示对错、中文解释和各项成绩，避免中途提示影响测评。</p><div class="overview"><div>高频词与词义 <strong>6题</strong></div><div>自然拼读 <strong>4题</strong></div><div>完整句子听力 <strong>4题</strong></div><div>情境理解 <strong>4题</strong></div><div>短故事理解 <strong>2题</strong></div></div><p class="instructions">考试期间可重复听英语，词义选项可以点击「听中文」而不自动提交。</p><button class="primary" id="start">开始20题挑战</button></section>
+<section class="card hidden" id="quiz"><span class="pill" id="counter"></span><div class="bar"><i id="progress"></i></div><p class="small" id="category"></p><div class="question" id="prompt"></div><p class="instructions" id="help"></p><div class="actions"><button class="soft listen" id="play">🔊 听英文（可反复听）</button></div><div class="options" id="options"></div><div id="status" class="feedback hidden" aria-live="polite"></div><div class="actions"><button class="primary" id="submit" disabled>确认本题选择</button><button class="primary hidden" id="next">下一题 →</button></div></section>
+<section class="card hidden" id="results"><h2>🎉 英语月末挑战完成！</h2><div id="score" class="question"></div><p class="instructions" id="resultMessage"></p><div id="breakdown" class="summary"></div><h3>错题复习</h3><div id="mistakes"></div><p class="note" id="saveStatus"></p><div class="actions"><button class="soft" id="retry">重新测试（新一轮）</button></div></section>
+<p class="footer">独立英语月测，不会覆盖语文、数学、科学或原有英语学习记录。家长预览模式不保存成绩。</p></main>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id),preview=new URLSearchParams(location.search).get('preview')==='1';
+const items=[
+{type:'vocab',en:'Please help me.',cn:'请帮助我。',choices:['请帮助我。','请离开这里。','请看我。','请等一下。'],answer:0,explain:'help 是“帮助”，please 表示礼貌地请求。'},
+{type:'vocab',en:'He is here.',cn:'他在这里。',choices:['她在这里。','他在这里。','他们在外面。','它很大。'],answer:1,explain:'he 表示“他”，here 表示“这里”。'},
+{type:'vocab',en:'I like the blue car.',cn:'我喜欢蓝色的汽车。',choices:['我有一辆红车。','我正在跑。','我喜欢蓝色的汽车。','我有两个苹果。'],answer:2,explain:'like 是“喜欢”，blue 是“蓝色”。'},
+{type:'vocab',en:'Now we can play.',cn:'现在我们可以玩了。',choices:['我们必须停下。','我们在厨房。','明天去玩。','现在我们可以玩了。'],answer:3,explain:'now 是“现在”，can 是“能够、可以”。'},
+{type:'vocab',en:'Get four apples.',cn:'拿四个苹果。',choices:['拿四个苹果。','拿三个苹果。','拿一个苹果。','吃四颗糖。'],answer:0,explain:'get 在这里是“拿”，four 是“四”。'},
+{type:'vocab',en:'This is our house.',cn:'这是我们的房子。',choices:['那是他的新房子。','这是我们的房子。','去房子外面。','房子里有两个人。'],answer:1,explain:'our 表示“我们的”，不能与 are 混淆。'},
+{type:'phonics',en:'ship',target:'sh',choices:['sh','th','ch','ing'],answer:0,explain:'ship 开头是 sh，读 /ʃ/；不是完整的 thing。'},
+{type:'phonics',en:'thin',target:'th',choices:['sh','th','ight','ake'],answer:1,explain:'thin 开头是 th，清辅音 /θ/。'},
+{type:'phonics',en:'cake',target:'ake',choices:['ing','at','ake','an'],answer:2,explain:'cake 末尾是 ake，读 /eɪk/。'},
+{type:'phonics',en:'night',target:'ight',choices:['sh','ake','ing','ight'],answer:3,explain:'night 中包含 ight，读 /aɪt/。'},
+{type:'sentence',en:'The little dog is under the table.',choices:['小狗在桌子上。','小狗在桌子下面。','小狗跑出了房间。','小狗睡在床上。'],answer:1,explain:'under the table 是“在桌子下面”。'},
+{type:'sentence',en:'We can see three stars.',choices:['我有三辆车。','天上有四颗星。','我们能看见三颗星。','我们能看见一只猫。'],answer:2,explain:'we can see 表示“我们能看见”，three 是“三”。'},
+{type:'sentence',en:'Go out and look at the tree.',choices:['进屋看书。','坐在树下面。','把树画成蓝色。','出去看那棵树。'],answer:3,explain:'go out 是“出去”，look at 是“看”。'},
+{type:'sentence',en:'Please put the red book on the desk.',choices:['请把红色的书放在桌上。','请把蓝色的书放进包里。','请拿走桌上的书。','请看窗外的红车。'],answer:0,explain:'red book 是“红色的书”，on the desk 是“在书桌上”。'},
+{type:'scene',en:'Find the boy with a yellow hat.',choices:[['👦🧢','戴蓝帽子的男孩'],['👦🟡','戴黄帽子的男孩'],['👧🟡','穿黄衣服的女孩'],['🐶','小狗']],answer:1,explain:'boy 是男孩，yellow hat 是黄色帽子。'},
+{type:'scene',en:'The basket has two red apples.',choices:[['🍎🍎🍎','三个红苹果'],['🍐🍐','两个梨'],['🍎🍎','两个红苹果'],['🍌','一根香蕉']],answer:2,explain:'two 表示两个，red apples 是红苹果。'},
+{type:'scene',en:'The light is on in the bedroom.',choices:[['🌞','户外晴天'],['🌧️','外面在下雨'],['🛏️🌑','卧室关灯'],['🛏️💡','卧室亮灯']],answer:3,explain:'light is on 表示灯亮着，bedroom 是卧室。'},
+{type:'scene',en:'The car is new and blue.',choices:[['🚙🔵','新蓝色汽车'],['🚗🔴','旧红色汽车'],['🚲','自行车'],['🚌🟡','黄色巴士']],answer:0,explain:'new 是新的，blue 是蓝色。'},
+{type:'story',en:'Mia has a little brown dog. The dog runs to the garden. Mia finds the dog under a tree.',question:'Mia 最后在哪里找到小狗？',choices:['厨房里','树下面','小汽车里','床上'],answer:1,explain:'最后一句 Mia finds the dog under a tree，说明在树下面。'},
+{type:'story',en:'Ben has two apples. He gives one apple to his friend. Now Ben has one apple.',question:'Ben 送出一个苹果后还剩几个？',choices:['三个','两个','一个','没有'],answer:2,explain:'有两个苹果，送出一个，还剩一个。'}
+];
+const sections={vocab:'高频词与词义',phonics:'自然拼读',sentence:'完整句子听力',scene:'情境理解',story:'短故事理解'};
+let index=0,answers=[],chosen=-1,utter=null,questions=items;
+function speak(s,lang='en-US',rate){if(!window.speechSynthesis)return;try{speechSynthesis.cancel();utter=new SpeechSynthesisUtterance(s);utter.lang=lang;utter.rate=rate|| (lang==='en-US'?.65:.85);const voices=speechSynthesis.getVoices();utter.voice=voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(lang.slice(0,2)))||null;speechSynthesis.speak(utter)}catch(e){}}
+function make(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
+function button(text,cls,fn){const b=make('button',cls,text);b.type='button';b.onclick=fn;return b}
+function view(name){['welcome','quiz','results'].forEach(id=>$(id).classList.toggle('hidden',id!==name))}
+function draw(){
+ const q=questions[index];chosen=-1;view('quiz');$('counter').textContent='第 '+(index+1)+' / 20 题';$('category').textContent=sections[q.type];$('progress').style.width=100*index/questions.length+'%';
+ $('prompt').textContent=q.type==='phonics'?'听英语，找出这个单词里的拼读块':q.type==='story'?q.question:'听英语，然后选择正确答案。';
+ $('help').textContent=q.type==='phonics'?'听完整单词，再找其中相同的拼读字母。':q.type==='story'?'先听完整小故事，再回答问题。':q.type==='scene'?'先听英文描述，选择符合条件的画面。':'听英文，可以反复播放，但不会提前透露正确答案。';
+ $('play').textContent=q.type==='story'?'🔊 慢速听完整小故事':'🔊 慢速听英语（可反复听）';
+ $('status').classList.add('hidden');$('submit').disabled=true;$('submit').classList.remove('hidden');$('next').classList.add('hidden');
+ const box=$('options');box.replaceChildren();
+ q.choices.forEach((raw,i)=>{
+   const label=Array.isArray(raw)?raw[1]:raw;const cell=make('div');
+   const select=button('', 'option',()=>{if($('submit').classList.contains('hidden'))return;chosen=i;Array.from(box.querySelectorAll('.option')).forEach(x=>x.classList.remove('chosen'));select.classList.add('chosen');$('submit').disabled=false;});
+   if(Array.isArray(raw))select.append(make('span','picture',raw[0]));
+   select.append(document.createTextNode(label));cell.append(select);
+   if(q.type!=='phonics'){const audio=button('🔊 听中文','soft',()=>speak(label,'zh-CN',.8));audio.style.cssText='margin-top:5px;width:100%;padding:9px 6px;font-size:13px';cell.append(audio)}
+   box.append(cell);
+ });
+}
+function submit(){
+ if(chosen<0)return;
+ const q=questions[index];answers.push({index,section:q.type,correct:chosen===q.answer,selected:chosen,expected:q.answer});
+ $('options').querySelectorAll('.option').forEach((b,i)=>{b.disabled=true;if(i===chosen)b.classList.add('chosen')});
+ $('submit').classList.add('hidden');$('next').classList.remove('hidden');$('next').textContent=index===questions.length-1?'查看月末测评结果':'下一题 →';
+ $('status').textContent='本题已记录。完成全部20题后统一查看成绩与解析。';$('status').classList.remove('hidden');
+}
+function finish(){
+ const total=answers.filter(a=>a.correct).length,score=total*5;
+ $('progress').style.width='100%';view('results');$('score').textContent=score+' / 100 分 · 答对 '+total+' / 20 题';
+ $('resultMessage').textContent=score>=90?'表现出色！继续巩固易混淆的拼读和长句。':score>=70?'很不错！下面的错题可以帮助安排下个月的学习。':'继续努力！建议先复习错题对应的词语和句子，不必急着增加难度。';
+ $('breakdown').replaceChildren();
+ Object.keys(sections).forEach(type=>{const candidates=answers.filter(a=>a.section===type);const good=candidates.filter(a=>a.correct).length;const div=make('div','metric');div.append(make('span','small',sections[type]),make('strong',good+' / '+candidates.length+' 题'));$('breakdown').append(div)});
+ $('mistakes').replaceChildren();
+ const wrong=answers.filter(a=>!a.correct);
+ if(!wrong.length)$('mistakes').append(make('p','note','全部答对了！可以继续挑战更长的英语句子。'));
+ wrong.forEach(a=>{const q=questions[a.index],cell=make('div','feedback');const correct=Array.isArray(q.choices[q.answer])?q.choices[q.answer][1]:q.choices[q.answer];cell.append(make('strong',undefined,'第 '+(a.index+1)+' 题 · '+sections[q.type]),make('p',undefined,'正确答案：'+correct),make('p',undefined,'讲解：'+q.explain));cell.append(button('🔊 听讲解','soft',()=>speak(q.explain,'zh-CN',.82)));$('mistakes').append(cell)});
+ if(preview){$('saveStatus').textContent='本次为家长预览，不保存成绩或学习进度。';}
+ else {
+  try{const key='v6-english-monthly-exam-v1';const prior=JSON.parse(localStorage.getItem(key)||'[]');const record={date:new Date().toISOString(),month:'2026-11',score,total:questions.length,correct:total,sections:Object.fromEntries(Object.keys(sections).map(t=>[t,{correct:answers.filter(a=>a.section===t&&a.correct).length,total:answers.filter(a=>a.section===t).length}])),answers};prior.push(record);localStorage.setItem(key,JSON.stringify(prior));$('saveStatus').textContent='成绩已保存在此设备的英语月测专用记录中（不改写原有学习记录）。'}
+  catch(e){$('saveStatus').textContent='当前浏览器未允许保存成绩，请截屏保留结果。'}
+ }
+}
+$('modeLabel').textContent=preview?'家长验收预览 · 不保存分数':'正式月末测评 · 保存本设备成绩';
+$('start').onclick=()=>{index=0;answers=[];questions=items.slice();draw()};
+$('play').onclick=()=>speak(questions[index].en,'en-US',questions[index].type==='story'?.58:.63);
+$('submit').onclick=submit;
+$('next').onclick=()=>{if(answers.length!==index+1)return;if(index===19)finish();else{index++;draw()}};
+$('retry').onclick=()=>{index=0;answers=[];view('welcome')};
+})();
+</script></body></html>
