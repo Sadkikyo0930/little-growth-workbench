@@ -91,6 +91,18 @@ const styles=document.createElement('style');styles.textContent=`
 .scene-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.scene-tile{border:2px solid #9bcae7;background:#f1f9ff;border-radius:16px;padding:13px 5px;color:#235277;min-height:110px;font-size:17px;font-weight:850;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center}.scene-tile .symbol{font-size:40px}.scene-tile.correct{background:#d9f8e9;border-color:#4ab888}.scene-tile.incorrect{background:#fff0eb;border-color:#e38c7d}.scene-template{text-align:center;font-size:25px;font-weight:850;background:#f2faff;border-radius:16px;padding:18px 8px;margin:12px 0}.scene-sequence-slots{display:flex;flex-direction:column;gap:8px;margin:12px 0}.scene-sequence-slots button{width:100%;border:2px dashed #91c6e9;border-radius:12px;min-height:49px;background:#f8fdff;color:#205982;font-size:15px}.scene-tile button{font-size:13px}.scene-translation-option{min-width:0}
 .home-room-grid,.observation-grid,.treasure-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}.observation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-room-card,.observation-card,.treasure-card{width:100%;min-width:0;display:flex;flex-direction:column;align-items:center;gap:9px;padding:12px 5px;border:2px solid #94c9e8;border-radius:18px;background:linear-gradient(160deg,#f3faff,#e2f3fe);color:#23517c;font-weight:800;min-height:143px}.home-room-card .scene-icon,.observation-card .scene-icon,.treasure-card .scene-icon{font-size:43px;line-height:1.2;filter:drop-shadow(0 5px 3px #2448692a)}.home-room-card span,.observation-card span,.treasure-card span{overflow-wrap:anywhere;text-align:center}.scene-progress{padding:12px;background:#fff3d2;color:#75551a;border-radius:15px;font-weight:800;text-align:center;margin:10px 0}.scene-scenery{display:flex;justify-content:center;align-items:center;font-size:58px;min-height:120px;border-radius:19px;background:linear-gradient(135deg,#d9efff 0%,#eaf7ef 55%,#fff0cb 100%);border:3px solid #fff;margin:12px 0}.scene-option-hear{font-size:13px!important;padding:9px 4px!important;margin:4px 0!important;width:100%}.scene-choice-card{min-width:0}
 `;document.head.append(styles);
+function shuffledSceneTokens(count){
+ const source=Array.from({length:count},(_,i)=>i);
+ if(count<3)return source.slice().reverse();
+ const reverse=source.slice().reverse();
+ const eq=(a,b)=>a.every((v,i)=>v===b[i]);
+ for(let tries=0;tries<30;tries++){
+  const result=source.slice();
+  for(let i=count-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]]}
+  if(!eq(result,source)&&!eq(result,reverse))return result;
+ }
+ return source.slice(1).concat(source[0]);
+}
 function button(label,click,cls='scene-choice'){const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=label;b.onclick=click;return b}
 function add(parent,tag,text,cls){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;parent.append(e);return e}
 
@@ -241,7 +253,7 @@ if(task.type==='room'||task.type==='compare'||task.type==='treasure'){
 }else if(task.type==='order'){
  const tokens=task.tokens,chosen=[],chosenBox=add(host,'div',undefined,'steps'),pool=add(host,'div',undefined,'steps');add(host,'p','听一听，再点词块组成句子。正确句子会在检查后显示。','muted');host.append(button('🔊 听完整句子',()=>say(tokens.join(' ')+'.','en-US'),'button soft'));
  const submit=button('检查句子',()=>{if(chosen.length!==tokens.length||resolved)return;complete(chosen.every((x,i)=>x===i),chosen.map(i=>tokens[i]).join(' '))},'button');submit.disabled=true;
- tokens.map((_,i)=>i).reverse().forEach(i=>{const b=button(tokens[i],()=>{if(resolved)return;b.disabled=true;chosen.push(i);const c=button(tokens[i],()=>{if(resolved)return;chosen.splice(chosen.indexOf(i),1);c.remove();b.disabled=false;submit.disabled=chosen.length!==tokens.length},'chip selected');chosenBox.append(c);submit.disabled=chosen.length!==tokens.length},'chip');pool.append(b)});host.append(submit);
+ shuffledSceneTokens(tokens.length).forEach(i=>{const b=button(tokens[i],()=>{if(resolved)return;b.disabled=true;chosen.push(i);const c=button(tokens[i],()=>{if(resolved)return;chosen.splice(chosen.indexOf(i),1);c.remove();b.disabled=false;submit.disabled=chosen.length!==tokens.length},'chip selected');chosenBox.append(c);submit.disabled=chosen.length!==tokens.length},'chip');pool.append(b)});host.append(submit);
 }else if(task.type==='route'){
  art(host,'🏎️ 🏁','听清方向，帮助赛车到达终点');host.append(button('🔊 再听指令',()=>say(task.say),'button soft'));
  const route=add(host,'div',undefined,'scene-route');const cells=[];for(let i=0;i<9;i++)cells.push(add(route,'div','·'));let pos=0;const target=4;const paint=()=>{cells.forEach((c,i)=>{c.textContent=i===pos?'🏎️':i===target?'🏁':'·';c.style.background=i===pos?'#fff0b0':'#e8f5ff'})};paint();
