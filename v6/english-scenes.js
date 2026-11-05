@@ -61,7 +61,7 @@ function activityIllustration(kind){
 
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 const msg=add(host,'div','','scene-message');let resolved=false;
-function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.','en-US');host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
+function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.','en-US');if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
 if(task.type==='picture'||task.type==='listen'){
  if(task.type==='picture'){if(task.scene){const box=add(host,'div',undefined,'scene-art');box.innerHTML=activityIllustration(task.scene);box.querySelector('svg').style.cssText='width:100%;max-height:280px;border-radius:14px';}else art(host,task.emoji,task.caption);}
  else add(host,'p','请点击下面的英文播放按钮，再选择正确答案。','muted');
