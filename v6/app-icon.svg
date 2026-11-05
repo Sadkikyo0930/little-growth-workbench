@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="小小赛车成长">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#44cbff"/><stop offset=".6" stop-color="#0871cf"/><stop offset="1" stop-color="#153d9c"/></linearGradient><linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff7773"/><stop offset="1" stop-color="#b51829"/></linearGradient></defs>
+<rect width="512" height="512" rx="108" fill="url(#bg)"/>
+<path d="M68 131 Q256 45 444 131" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" opacity=".8"/>
+<path d="M105 310 L143 227 Q156 193 199 193 L326 193 Q359 195 380 227 L418 307 Q436 320 434 344 L434 379 Q434 393 419 393 L96 393 Q79 393 79 378 L79 340 Q79 323 105 310Z" fill="url(#red)" stroke="#fff" stroke-width="12"/>
+<path d="M160 272 L185 223 Q193 213 213 213 L310 213 Q326 216 336 232 L367 272Z" fill="#123d7a" stroke="#a3eaff" stroke-width="7"/>
+<path d="M110 314 Q157 298 191 323 L176 345 L103 345Z M400 314 Q356 298 323 323 L338 345 L409 345Z" fill="#ccffff" stroke="#fff" stroke-width="4"/>
+<rect x="211" y="314" width="91" height="25" rx="10" fill="#fff"/>
+<circle cx="141" cy="392" r="30" fill="#163049" stroke="#fff" stroke-width="8"/><circle cx="367" cy="392" r="30" fill="#163049" stroke="#fff" stroke-width="8"/>
+<path d="M233 102 L246 69 L263 101 L298 105 L271 126 L279 159 L251 143 L222 159 L229 126 L203 105Z" fill="#ffdc50" stroke="#fff5bb" stroke-width="5"/>
+</svg>
