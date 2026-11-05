@@ -5,7 +5,7 @@
 <section class="card"><h2>第一步 · 本机记录</h2><p id="local" class="status">正在查看本机……</p><p id="baselineStatus" class="muted">正在检查正式同步起点……</p><button type="button" id="setBaseline" class="secondary">从现在起记录正式学习（保留之前试做数据）</button><p class="muted">如果孩子还没有正式开学，请先设置正式同步起点。已有试做与旧测评仍保留在本机，但不上传云端。这个操作只设置同步过滤标记，不会清空或修改任何学习成绩。</p></section>
 <section class="card"><h2>第二步 · 妈妈登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" value="growth_mom" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
 <button id="logout" class="secondary" type="button">退出账号</button><p id="status" class="status" role="status">正在加载云端组件……</p></section>
-<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">只需在孩子学习的浏览器上开启一次。之后打开 V6 学习台、有网络且家庭所有者登录会话仍有效时，会自动同步新增成绩；网络中断时保留本机数据等待补传。不要在共享设备上长期保留家长会话。</p></section>
+<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><p id="autoHistory" class="muted">尚未产生云端同步结果。</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">只需在孩子学习的浏览器上开启一次。之后打开 V6 学习台、有网络且家庭所有者登录会话仍有效时，会自动同步新增成绩；网络中断时保留本机数据等待补传。不要在共享设备上长期保留家长会话。</p></section>
 <section class="card"><h2>第四步 · 手动核对或补传</h2><p>待同步：<span class="metric" id="pending">—</span> 条；云端已有：<span class="metric" id="remote">—</span> 条</p>
 <button id="sync" disabled>上传尚未同步的记录</button><p class="muted">首次上传前会检查重复记录。只新增、绝不删除已有记录，也不覆盖云端数据。需要 CloudBase 数据库为妈妈账号授予 INSERT 权限及正确的 RLS 策略；如果权限未开放，页面会显示错误并停止上传。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-dashboard.html">家庭云端查看页</a></p>
@@ -35,7 +35,7 @@ var AUTO_KEY="v6-family-auto-sync-enabled",AUTO_STATUS_KEY="v6-family-auto-sync-
 function autoStatus(){
  var active=localStorage.getItem(AUTO_KEY)==="yes",b=getBaseline(),saved=null;
  try{saved=JSON.parse(localStorage.getItem(AUTO_STATUS_KEY)||"null")}catch(e){}
- $("autoStatus").textContent=(active?"✅ 自动同步已开启。":"自动同步尚未开启。")+(b?"":"\n请先设置正式同步起点。")+(saved&&saved.message?"\n最近状态："+saved.message:"");
+ $("autoStatus").textContent=(active?"✅ 自动同步开关已开启（不代表已上传成功）。":"自动同步尚未开启。")+(b?"":"\n请先设置正式同步起点。")+(saved&&saved.message?"\n最新结果："+saved.message:"");$("autoHistory").textContent=saved&&saved.at?"最近检测："+new Date(saved.at).toLocaleString()+(saved.syncedAt?" · 最近成功上传："+new Date(saved.syncedAt).toLocaleString():""):"还没有检测到实际上传结果；孩子尚未正式学习时属于正常情况。";
  $("autoToggle").textContent=active?"关闭自动同步":"开启自动同步";
 }
 $("autoToggle").onclick=function(){
@@ -103,5 +103,5 @@ $("sync").onclick=async function(){if(!signed||working||!member||member.member_r
  finally{working=false;try{await refreshRemote()}catch(e){status($("status").textContent+"\n重新读取失败："+err(e))}update()}
 };
 $("logout").onclick=async function(){try{if(auth&&typeof auth.signOut==="function")await auth.signOut();signed=false;member=null;remoteIds.clear();update();status("已退出账号。")}catch(e){status("退出失败："+err(e))}};
-drawBaseline();update();autoStatus();sdk(0);
+drawBaseline();update();autoStatus();setInterval(autoStatus,5000);sdk(0);
 })();</script></body></html>
