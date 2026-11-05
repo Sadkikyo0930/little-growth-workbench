@@ -40,6 +40,18 @@ let index=0,answers=[],chosen=-1,utter=null,questions=items;
 function speak(s,lang='en-US',rate){if(!window.speechSynthesis)return;try{speechSynthesis.cancel();utter=new SpeechSynthesisUtterance(s);utter.lang=lang;utter.rate=rate|| (lang==='en-US'?.65:.85);const voices=speechSynthesis.getVoices();utter.voice=voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(lang.slice(0,2)))||null;speechSynthesis.speak(utter)}catch(e){}}
 function make(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
 function button(text,cls,fn){const b=make('button',cls,text);b.type='button';b.onclick=fn;return b}
+function freshQuestions(){
+ return items.map(original=>{
+  const q={...original,choices:original.choices.slice()};
+  const correct=q.choices[q.answer];
+  for(let i=q.choices.length-1;i>0;i--){
+   const j=Math.floor(Math.random()*(i+1));
+   [q.choices[i],q.choices[j]]=[q.choices[j],q.choices[i]];
+  }
+  q.answer=q.choices.indexOf(correct);
+  return q;
+ });
+}
 function view(name){['welcome','quiz','results'].forEach(id=>$(id).classList.toggle('hidden',id!==name))}
 function draw(){
  const q=questions[index];chosen=-1;view('quiz');$('counter').textContent='第 '+(index+1)+' / 20 题';$('category').textContent=sections[q.type];$('progress').style.width=100*index/questions.length+'%';
@@ -81,7 +93,7 @@ function finish(){
  }
 }
 $('modeLabel').textContent=preview?'家长验收预览 · 不保存分数':'正式月末测评 · 保存本设备成绩';
-$('start').onclick=()=>{index=0;answers=[];questions=items.slice();draw()};
+$('start').onclick=()=>{index=0;answers=[];questions=freshQuestions();draw()};
 $('play').onclick=()=>speak(questions[index].en,'en-US',questions[index].type==='story'?.58:.63);
 $('submit').onclick=submit;
 $('next').onclick=()=>{if(answers.length!==index+1)return;if(index===19)finish();else{index++;draw()}};
