@@ -15,6 +15,14 @@ var $=id=>document.getElementById(id),subjectNames={cn:"语文",ma:"数学",en:"
 var cdns=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
 function status(v){$("status").textContent=v}
 function err(e){return String(e&&(e.message||e.code||e.error_description)||e||"未知错误")}
+function deviceId(){
+ var key="v6-family-sync-device-id",v=localStorage.getItem(key);
+ if(v&&/^[a-f0-9]{16}$/.test(v))return v;
+ var bytes=new Uint8Array(8);if(!window.crypto||!crypto.getRandomValues)throw Error("设备不支持安全随机数");
+ crypto.getRandomValues(bytes);v=Array.from(bytes).map(x=>x.toString(16).padStart(2,"0")).join("");
+ localStorage.setItem(key,v);if(localStorage.getItem(key)!==v)throw Error("无法保存设备编号，已停止同步");return v
+}
+
 function localState(){try{var v=JSON.parse(localStorage.getItem(KEY)||"null");return v&&Array.isArray(v.records)?v:null}catch(e){return null}}
 function getBaseline(){try{var b=JSON.parse(localStorage.getItem(BASELINE_KEY)||"null");return b&&Number.isInteger(b.answerCount)&&b.answerCount>=0&&typeof b.start==="string"?b:null}catch(e){return null}}
 function drawBaseline(){var b=getBaseline();$("baselineStatus").textContent=b?"✅ 已设置正式同步起点："+new Date(b.start).toLocaleString()+"。设置时已有 "+b.answerCount+" 条历史答题保留本机、不上传。":"⚠️ 尚未设置正式同步起点。为避免把测试记录上传，上传功能暂时锁定。";$("setBaseline").textContent=b?"重新设置正式同步起点（慎用）":"从现在起记录正式学习（保留之前试做数据）"}
@@ -40,23 +48,24 @@ $("autoToggle").onclick=function(){
 };
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
 function makeRows(){
+ var prefix=deviceId();
  var s=localState();if(!s){$("local").textContent="本浏览器暂无 V6 学习记录。孩子未开始正式学习时这是正常的。";return []}
  var baseline=getBaseline();drawBaseline();if(!baseline){$("local").textContent="已找到 "+s.records.length+" 条本机历史答题。先设置正式同步起点，再上传。";return []}
  var items=[];
  // Each recorded answer is append-only; use a stable index, not changing payload content, as the identity.
  (s.records||[]).forEach(function(r,i){if(i<baseline.answerCount||!r||typeof r!=="object")return;
-  items.push({record_id:"v6-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
+  items.push({record_id:"v6-"+prefix+"-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
  });
  var course=s.v6Course||{},subjs=course.subjects||{};
  Object.keys(subjs).forEach(function(day){var n=Number(day);if(!Number.isInteger(n)||n<1||n>30)return;
   var map=subjs[day];if(!map||typeof map!=="object")return;
-  Object.keys(map).forEach(function(name){if(!map[name]||!Number.isFinite(Date.parse(map[name]))||Date.parse(map[name])<Date.parse(baseline.start))return;items.push({record_id:"v6-course-"+n+"-"+({"语文":"cn","数学":"ma","英语":"en","科学":"sc"}[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:map[name]}})})
+  Object.keys(map).forEach(function(name){if(!map[name]||!Number.isFinite(Date.parse(map[name]))||Date.parse(map[name])<Date.parse(baseline.start))return;items.push({record_id:"v6-"+prefix+"-course-"+n+"-"+({"语文":"cn","数学":"ma","英语":"en","科学":"sc"}[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:map[name]}})})
  });
  var weekly=s.weeklyExams||{};
  Object.keys(weekly).forEach(function(week){var exam=weekly[week];if(!exam||!exam.finishedAt||Date.parse(exam.finishedAt)<Date.parse(baseline.start))return;
-  items.push({record_id:"v6-weekly-"+week,record_type:"weekly-exam",subject:"四科周测",learning_day:dayIndex(week),record_data:{version:1,source:"v6",week:week,finished_at:exam.finishedAt,answers:exam.answers||{}}})
+  items.push({record_id:"v6-"+prefix+"-weekly-"+week,record_type:"weekly-exam",subject:"四科周测",learning_day:dayIndex(week),record_data:{version:1,source:"v6",week:week,finished_at:exam.finishedAt,answers:exam.answers||{}}})
  });
- if(course.englishMonthlyExam&&course.englishMonthlyExam.finishedAt&&Date.parse(course.englishMonthlyExam.finishedAt)>=Date.parse(baseline.start)){items.push({record_id:"v6-monthly-english",record_type:"monthly-exam",subject:"英语",learning_day:30,record_data:{version:1,source:"v6",exam:course.englishMonthlyExam}})}
+ if(course.englishMonthlyExam&&course.englishMonthlyExam.finishedAt&&Date.parse(course.englishMonthlyExam.finishedAt)>=Date.parse(baseline.start)){items.push({record_id:"v6-"+prefix+"-monthly-english",record_type:"monthly-exam",subject:"英语",learning_day:30,record_data:{version:1,source:"v6",exam:course.englishMonthlyExam}})}
  $("local").textContent="已找到 "+(s.records||[]).length+" 条答题、"+Object.values(subjs).reduce((n,m)=>n+Object.values(m||{}).filter(Boolean).length,0)+" 项正式课程完成记录、"+Object.values(weekly).filter(x=>x&&x.finishedAt).length+" 份已完成周测。\n可同步记录："+items.length+" 条。";
  return items;
 }
