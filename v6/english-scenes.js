@@ -141,7 +141,8 @@ if(task.type==='fill'){
     const card=add(tiles,'div',undefined);card.style.minWidth='0';
     const b=button('',()=>{if(resolved||selected.includes(i))return;selected.push(i);refresh()},'scene-tile');b.dataset.sceneIndex=i;
     add(b,'span',task.lines[i][1],'symbol');add(b,'span',task.lines[i][2]);card.append(b);
-    card.append(button('🔊 听这一句',()=>say(task.lines[i][0],'en-US'),'button soft'));
+    card.append(button('🔊 听中文',()=>say(task.lines[i][2],'zh-CN'),'button soft'));
+    card.append(button('🔊 听英语',()=>say(task.lines[i][0],'en-US'),'button soft'));
   });
   const submit=button('✅ 检查故事顺序',()=>{if(resolved||selected.length!==task.lines.length)return;tiles.querySelectorAll('button').forEach(b=>b.disabled=true);complete(selected.every((x,i)=>x===i),selected.map(i=>task.lines[i][2]).join(' → '))},'button');
   submit.disabled=true;host.append(submit);refresh();
