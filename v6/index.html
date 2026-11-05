@@ -458,6 +458,7 @@ function refreshHomeMode(){
  if($('homeArtLearning'))$('homeArtLearning').textContent=doneNames.length+'/'+names.length;
  if($('homeArtFill'))$('homeArtFill').style.width=(names.length?100*doneNames.length/names.length:0)+'%';
  if($('homeArtStar'))$('homeArtStar').textContent=doneNames.length+'/2';
+ if(typeof window.v6CleanArtRefresh==='function')window.v6CleanArtRefresh();
 
 }
 
@@ -501,6 +502,7 @@ function home(){
   const correct=subRecords.filter(r=>r.correct===true).length;
   el.textContent=completed?(subRecords.length?Math.round(correct/subRecords.length*100)+'%':'✓ 已完成'):subRecords.length?'进行中':'未测评';
  });
+ if(typeof window.v6CleanArtRefresh==='function')window.v6CleanArtRefresh();
  const tasks=$('tasks');if(tasks)tasks.innerHTML='';
  const progress=$('progress');if(progress)progress.style.width=Math.round(complete/4*100)+'%';
  if($('progressText'))$('progressText').textContent='四科学科摸底：'+complete+' / 4 科';
@@ -612,4 +614,4 @@ $('englishBack').onclick=()=>{$('englishLessonFrame').src='about:blank';if(engli
  setTimeout(()=>URL.revokeObjectURL(url),30000);
 };
 $('reset').onclick=()=>{if(confirm('清空 V6 摸底记录？')){state={records:[],finished:{},sessions:{},started:null};save();home()}};refreshHomeMode();document.querySelectorAll('.illustrated-screen').forEach(el=>{let img=new Image();img.onload=()=>{};img.onerror=()=>el.classList.add('asset-missing');img.src=getComputedStyle(el).backgroundImage.slice(5,-2)});openScreen('home');
-</script><script src="./weekly-exam.js?v=20261105-weekday-baseline7"></script><script src="./clean-art.js?v=20261105-no-overlays-2"></script><script src="./chinese-classroom.js?v=18"></script></body></html>
+</script><script src="./weekly-exam.js?v=20261105-weekday-baseline7"></script><script src="./clean-art.js?v=20261105-native-svg-3"></script><script src="./chinese-classroom.js?v=18"></script></body></html>
