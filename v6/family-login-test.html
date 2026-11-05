@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>家庭云存档 · 安全读取测试</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#e7f6ff;color:#183d65;font:16px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+main{max-width:480px;margin:16px auto;padding:18px}h1{font-size:23px}p{line-height:1.6}
+section{padding:20px;border-radius:20px;background:white;box-shadow:0 6px 18px #2356a318;margin:14px 0}
+label{display:block;margin:12px 0 5px;font-weight:700}input{font-size:17px;width:100%;padding:13px;border:1px solid #a7c4db;border-radius:12px}
+button{width:100%;padding:14px;font-weight:800;font-size:17px;background:#1974dc;color:white;border:0;border-radius:13px;margin-top:12px}button:disabled{opacity:.45}
+#logout{background:#fff;color:#1264ad;border:1px solid #aacce9}
+#status{white-space:pre-wrap;word-break:break-word;background:#f0f8ff;border-radius:10px;padding:12px;margin-top:15px}
+small{display:block;color:#55728b;line-height:1.6;margin-top:10px}
+</style></head>
+<body><main>
+<h1>🏎️ 家庭学习云存档 · 连接测试</h1>
+<p>这是独立测试页，不会修改 V6 课程、成绩、孩子记录，也不会向云端写入数据。</p>
+<section>
+<strong>腾讯云 CloudBase（上海）</strong><br><small>仅用于验证妈妈、爸爸、外婆各自登录并读取家庭信息。</small>
+<form id="form" autocomplete="on">
+<label for="username">家庭账号</label>
+<input id="username" autocomplete="username" placeholder="growth_mom / growth_dad / growth_grandma" required>
+<label for="password">登录密码</label>
+<input id="password" type="password" autocomplete="current-password" placeholder="请输入自己的密码" required>
+<button id="login" type="submit">登录并验证只读权限</button>
+</form>
+<button id="logout" type="button">退出云端账号</button>
+<div id="status" role="status">正在加载云端连接组件……</div>
+<small>密码只传给 CloudBase 登录接口，不写入 GitHub、学习记录或网页日志。请不要把带有密码的截图发给他人。测试时在各自设备上登录。</small>
+</section>
+<a href="./">返回 V6 学习台</a>
+</main>
+<script src="https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js"></script>
+<script>
+(function(){
+"use strict";
+var form=document.getElementById('form'),status=document.getElementById('status'),login=document.getElementById('login');
+var app,auth;
+function message(t){status.textContent=t}
+function errText(e){return e&& (e.message||e.code||e.error_description)||String(e||"未知错误")}
+try {
+ if(!window.cloudbase||typeof cloudbase.init!=="function")throw Error("CloudBase SDK 未加载，请检查手机网络是否可访问 static.cloudbase.net");
+ app=cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});
+ auth=app.auth;
+ if(!auth||typeof auth.signInWithPassword!=="function")throw Error("当前 SDK 不支持 signInWithPassword，请升级 SDK。");
+ message("连接组件已加载。请使用已创建的家庭账号测试。");
+}catch(e){message("初始化失败："+errText(e));login.disabled=true}
+form.addEventListener('submit',async function(e){
+ e.preventDefault();if(!auth)return;
+ var username=document.getElementById('username').value.trim();
+ var password=document.getElementById('password').value;
+ if(!username||!password)return;
+ login.disabled=true;message("正在验证登录……");
+ try{
+  var result=await auth.signInWithPassword({username:username,password:password});
+  if(result&&result.error)throw result.error;
+  if(typeof auth.getSession==="function"){
+   var sessionResult=await auth.getSession();
+   if(sessionResult&&sessionResult.error)throw sessionResult.error;
+   if(!sessionResult||!sessionResult.data||!sessionResult.data.session)throw Error("没有获取到有效登录会话");
+  }
+  document.getElementById('password').value="";
+  message("登录成功，正在验证家庭只读权限……");
+  var db=app.rdb();
+  var read=await db.from('growth_family_members').select('family_id,user_id,member_role');
+  if(read&&read.error)throw read.error;
+  var rows=read&&Array.isArray(read.data)?read.data:[];
+  if(rows.length===1 && rows[0].family_id==="little-growth-family-001"){
+   var role={owner:"妈妈（所有者）",parent:"爸爸",grandparent:"外婆"}[rows[0].member_role]||rows[0].member_role;
+   message("✅ 登录及家庭读取成功\n账号："+username+"\n家庭成员："+role+"\n家庭记录数："+rows.length+"\n\n本次未写入任何云端学习记录。");
+  }else{
+   message("⚠️ 登录成功，但读取结果与预期不符。\n可见的家庭成员记录数："+rows.length+"\n请停止下一步，截图此消息给我排查。");
+  }
+ }catch(error){document.getElementById('password').value="";message("⚠️ 登录或读取测试未通过：\n"+errText(error)+"\n\n请勿把密码发给我。");}
+ finally{login.disabled=false}
+});
+document.getElementById('logout').onclick=async function(){
+ try{if(auth&&typeof auth.signOut==="function")await auth.signOut();message("已退出账号。")}catch(e){message("退出失败："+errText(e))}
+};
+})();
+</script></body></html>
