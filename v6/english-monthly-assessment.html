@@ -88,7 +88,7 @@ function finish(){
  wrong.forEach(a=>{const q=questions[a.index],cell=make('div','feedback');const correct=Array.isArray(q.choices[q.answer])?q.choices[q.answer][1]:q.choices[q.answer];cell.append(make('strong',undefined,'第 '+(a.index+1)+' 题 · '+sections[q.type]),make('p',undefined,'正确答案：'+correct),make('p',undefined,'讲解：'+q.explain));cell.append(button('🔊 听讲解','soft',()=>speak(q.explain,'zh-CN',.82)));$('mistakes').append(cell)});
  if(preview){$('saveStatus').textContent='本次为家长预览，不保存成绩或学习进度。';}
  else {
-  try{const key='v6-english-monthly-exam-v1';const prior=JSON.parse(localStorage.getItem(key)||'[]');const record={date:new Date().toISOString(),month:'2026-11',score,total:questions.length,correct:total,sections:Object.fromEntries(Object.keys(sections).map(t=>[t,{correct:answers.filter(a=>a.section===t&&a.correct).length,total:answers.filter(a=>a.section===t).length}])),answers};prior.push(record);localStorage.setItem(key,JSON.stringify(prior));$('saveStatus').textContent='成绩已保存在此设备的英语月测专用记录中（不改写原有学习记录）。'}
+  try{const key='v6-english-monthly-exam-v1';const prior=JSON.parse(localStorage.getItem(key)||'[]');const record={date:new Date().toISOString(),month:'2026-11',score,total:questions.length,correct:total,sections:Object.fromEntries(Object.keys(sections).map(t=>[t,{correct:answers.filter(a=>a.section===t&&a.correct).length,total:answers.filter(a=>a.section===t).length}])),answers};prior.push(record);localStorage.setItem(key,JSON.stringify(prior));$('saveStatus').textContent='成绩已保存在此设备的英语月测专用记录中（不改写原有学习记录）。';if(window.parent!==window){window.parent.postMessage({type:'v6-english-monthly-assessment-complete',version:1,cohort:'20261109',record:record},location.origin)}}
   catch(e){$('saveStatus').textContent='当前浏览器未允许保存成绩，请截屏保留结果。'}
  }
 }
