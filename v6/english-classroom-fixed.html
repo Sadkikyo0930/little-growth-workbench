@@ -9,7 +9,7 @@ const meanings={"a":"一个","and":"和","away":"离开","big":"大的","blue":"
 const days=[1,3,4,7,8,10,11,14,15,17,18,21,22,24,25,28,29];
 const qs=new URLSearchParams(location.search),lesson=Number(qs.get('lesson')||1);if(!Number.isInteger(lesson)||lesson<1||lesson>17)return;
 const words=lessons[lesson-1],phrase=phrases[lesson-1];const secondHalf=days[lesson-1]>=16;document.getElementById('englishBanner').src=secondHalf?'./english_banner_second_half.webp':'./english_banner_first_half.webp';const $=id=>document.getElementById(id);
-let stage=0,score=0,answers=[],sceneAnswers=[],locked=false,utter=null;
+let stage=0,score=0,answers=[],sceneAnswers=[],locked=false,utter=null;const hasScenes=()=>!!(window.V6EnglishScenes&&window.V6EnglishScenes.has(lesson));const lessonSteps=()=>hasScenes()?9:6;
 function speech(s,lang='en-US'){if(!window.speechSynthesis)return;try{speechSynthesis.cancel();utter=new SpeechSynthesisUtterance(s);utter.lang=lang;utter.rate=lang==='en-US'?.78:.9;const voices=speechSynthesis.getVoices();utter.voice=voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(lang.slice(0,2)))||null;speechSynthesis.speak(utter)}catch(e){}}
 function el(tag,cls,txt){const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x}
 function button(cls,txt,fn){const b=el('button',cls,txt);b.onclick=fn;return b}
@@ -20,8 +20,8 @@ $('lessonTitle').textContent='第 '+lesson+' 课 · '+titles[lesson-1];
 $('words').textContent='今天的词：'+words.map(w=>w+'（'+(meanings[w]||'高频词')+'）').join('　');
 $('listenWords').onclick=()=>speech(words.join('. '));
 $('start').onclick=()=>{$('intro').classList.add('hidden');$('game').classList.remove('hidden');stage=0;render()};
-$('next').onclick=()=>{stage++;if(stage>=(lesson<=3?9:6))finish();else render()};
-function render(){if(stage>=6&&lesson<=3&&window.V6EnglishScenes){locked=false;$('feedback').textContent='';$('next').classList.add('hidden');$('bar').style.width=(stage/9*100)+'%';$('step').textContent='情境互动 · 第 '+(stage-5)+' / 3 关';$('mode').textContent='🎮 看图、听指令、组句子';$('question').textContent=['看图选句子','听力与句子挑战','情境游戏'][stage-6];$('body').replaceChildren();window.V6EnglishScenes.render(lesson,stage-6,$('body'),speech,result=>{sceneAnswers.push(result);stage++;if(stage>=9)finish();else render()});return}locked=false;$('feedback').textContent='';$('next').classList.add('hidden');$('bar').style.width=stage/6*100+'%';$('step').textContent='第 '+(stage+1)+' / 6 关 · 目前答对 '+score+' 题';$('body').replaceChildren();
+$('next').onclick=()=>{stage++;if(stage>=lessonSteps())finish();else render()};
+function render(){if(stage>=6&&hasScenes()){locked=false;$('feedback').textContent='';$('next').classList.add('hidden');$('bar').style.width=(stage/lessonSteps()*100)+'%';$('step').textContent='情境互动 · 第 '+(stage-5)+' / 3 关';$('mode').textContent='🎮 看图、听指令、组句子';$('question').textContent=['看图选句子','听力与句子挑战','情境游戏'][stage-6];$('body').replaceChildren();window.V6EnglishScenes.render(lesson,stage-6,$('body'),speech,result=>{sceneAnswers.push(result);stage++;if(stage>=lessonSteps())finish();else render()});return}locked=false;$('feedback').textContent='';$('next').classList.add('hidden');$('bar').style.width=stage/6*100+'%';$('step').textContent='第 '+(stage+1)+' / 6 关 · 目前答对 '+score+' 题';$('body').replaceChildren();
 if(stage<4){const target=words[stage];$('mode').textContent='👂 听音认词';$('question').textContent='听英语发音，选择听到的高频词。';$('body').append(button('button soft','🔊 听英语：点击可重听',()=>speech(target)));
 const grid=el('div','grid');const order=[0,1,2,3].map((_,i)=>(i+stage)%4);
 order.forEach(i=>{const w=words[i],b=button('word',w,()=>{if(locked)return;const ok=w===target;b.classList.add(ok?'correct':'wrong');grid.querySelectorAll('button').forEach(x=>x.disabled=true);record(ok,w,target,'listen')});grid.append(b)});$('body').append(grid);return}
@@ -38,4 +38,4 @@ try{const key=qs.get('cohort')==='20261109'?'v6_english_course_20261109_progress
 if(qs.get('cohort')==='20261109'&&window.parent!==window)window.parent.postMessage({type:'v6-english-lesson-complete',cohort:'20261109',lesson,total:6,answers,score,sceneAnswers},location.origin);
 speech('完成六关英语学习。今天我们学了四个高频词。','zh-CN')}
 })();
-</script><script src="./english-scenes.js?v=20261105-illustrated1"></script></body></html>
+</script><script src="./english-scenes.js?v=20261105-scenes2"></script></body></html>
