@@ -56,13 +56,13 @@ function sdk(i){if(i>=cdns.length){status("SDK 加载失败，请检查网络。
  var s=document.createElement("script");s.src=cdns[i];s.async=true;s.onload=function(){try{if(!window.cloudbase||typeof cloudbase.init!=="function")return sdk(i+1);app=cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});auth=app.auth;db=app.rdb();if(!auth||typeof auth.signInWithPassword!=="function"||!db)throw Error("SDK 不支持所需接口");$("login").disabled=false;status("云端组件已就绪。请使用妈妈的账号登录。")}catch(e){status("初始化失败："+err(e))}};s.onerror=function(){sdk(i+1)};document.head.appendChild(s)}
 $("form").addEventListener("submit",async function(e){e.preventDefault();if(!auth)return;working=true;signed=false;member=null;$("login").disabled=true;$("sync").disabled=true;
  try{var u=$("username").value.trim().toLowerCase();if(u!=="growth_mom")throw Error("当前同步中心仅允许妈妈所有者账号上传。");
- status("登录中……");var login=await auth.signInWithPassword({username:u,password:$("password").value});if(login&&login.error)throw login.error;$("password").value="";
+ status("登录中……");var login=await auth.signInWithPassword({username:u,password:$("password").value});if(login&&login.error)throw login.error; if(typeof auth.getSession!=="function")throw Error("SDK 缺少会话校验接口");var sr=await auth.getSession();if(sr&&sr.error)throw sr.error;var session=sr&&sr.data&&sr.data.session;if(!session||!session.user||!session.user.id)throw Error("登录未建立有效会话，禁止上传");$("password").value="";
  var r=await db.from("growth_family_members").select("family_id,user_id,member_role");if(r&&r.error)throw r.error;
- var rows=r&&Array.isArray(r.data)?r.data:[];if(rows.length!==1||rows[0].family_id!==FAMILY||rows[0].member_role!=="owner")throw Error("当前账号不具备家庭所有者权限，禁止上传。");
+ var rows=r&&Array.isArray(r.data)?r.data:[];if(rows.length!==1||rows[0].family_id!==FAMILY||rows[0].member_role!=="owner"||String(rows[0].user_id)!==String(session.user.id))throw Error("家庭所有者身份与登录账号不匹配，禁止上传。");
  member=rows[0];await refreshRemote();signed=true;status("✅ 妈妈所有者账号已登录，云端读取正常。可上传新增记录。");
  }catch(e){status("❌ "+err(e));signed=false}finally{working=false;$("login").disabled=false;update()}
 });
-$("sync").onclick=async function(){if(!signed||working||!member||member.member_role!=="owner")return;update();if(!pending.length)return;
+$("sync").onclick=async function(){if(!signed||working||!member||member.member_role!=="owner")return;try{var token=await auth.getSession();if(token&&token.error)throw token.error;if(!token||!token.data||!token.data.session||String(token.data.session.user.id)!==String(member.user_id))throw Error("会话已失效，请重新登录");}catch(e){signed=false;status("❌ 上传前身份验证失败："+err(e));update();return}update();if(!pending.length)return;
  if(!confirm("确定上传 "+pending.length+" 条尚未同步的学习记录吗？\n只新增，不会覆盖云端及本地成绩。"))return;
  working=true;$("sync").disabled=true;
  var inserted=0;try{
