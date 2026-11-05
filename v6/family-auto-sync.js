@@ -3,7 +3,7 @@
 var KEY="growth-workbench-v6-adaptive-2",BASELINE="v6-family-sync-baseline-20261105",ENABLED="v6-family-auto-sync-enabled",STATUS="v6-family-auto-sync-status",FAMILY="little-growth-family-001";
 var SDK=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
 var running=false,app=null,auth=null,db=null,lastFingerprint="",lastAttempt=0;
-function saveStatus(message){try{localStorage.setItem(STATUS,JSON.stringify({at:new Date().toISOString(),message:message}))}catch(e){}}
+function saveStatus(message,meta){try{localStorage.setItem(STATUS,JSON.stringify(Object.assign({at:new Date().toISOString(),message:message},meta||{})));}catch(e){}}
 function readState(){try{var s=JSON.parse(localStorage.getItem(KEY)||"null");return s&&Array.isArray(s.records)?s:null}catch(e){return null}}
 function baseline(){try{var x=JSON.parse(localStorage.getItem(BASELINE)||"null");return x&&Number.isInteger(x.answerCount)&&x.answerCount>=0&&Number.isFinite(Date.parse(x.start))?x:null}catch(e){return null}}
 function error(e){return String(e&&(e.message||e.code||e.error_description)||e||"未知错误")}
@@ -52,9 +52,9 @@ async function connect(){
 }
 async function run(){
  if(running||localStorage.getItem(ENABLED)!=="yes"||!navigator.onLine)return;
- var s=readState(),b=baseline();if(!s||!b){saveStatus("未设置正式同步起点，已暂停自动同步");return}
+ var s=readState(),b=baseline();if(!s||!b){saveStatus("未设置正式同步起点，已暂停自动同步",{state:"paused"});return}
  var rows=build(s,b);
- if(!rows.length){saveStatus("已启用自动同步，尚无正式学习记录");return}
+ if(!rows.length){saveStatus("已启用，等待孩子产生第一条正式学习记录",{state:"idle",pending:0});return}
  var fp=rows.map(x=>x.record_id).join("|");
  // Avoid repeating requests on idle pages and avoid tight retry loops after network failures.
  if(fp===lastFingerprint&&Date.now()-lastAttempt<60000)return;
@@ -63,12 +63,12 @@ async function run(){
   await connect();
   var sessionResult=await auth.getSession();if(sessionResult&&sessionResult.error)throw sessionResult.error;
   var session=sessionResult&&sessionResult.data&&sessionResult.data.session;
-  if(!session||!session.user||!session.user.id){saveStatus("等待家长在同步中心登录授权，正式成绩已保存在本机");return}
+  if(!session||!session.user||!session.user.id){saveStatus("需要家长重新登录授权；本机成绩安全保留",{state:"auth_required",pending:rows.length});return}
   var membersResult=await db.from("growth_family_members").select("family_id,user_id,member_role");
   if(membersResult&&membersResult.error)throw membersResult.error;
   var members=membersResult&&membersResult.data;
   if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||members[0].member_role!=="owner"||String(members[0].user_id)!==String(session.user.id)){
-   saveStatus("登录会话不是家庭所有者，已暂停上传");return
+   saveStatus("当前会话不是授权的上传账号，已暂停；本机成绩安全保留",{state:"auth_required",pending:rows.length});return
   }
   var existing=await db.from("growth_learning_records").select("record_id,family_id");
   if(existing&&existing.error)throw existing.error;
@@ -85,10 +85,10 @@ async function run(){
    ids.add(item.record_id);count++;
   }
   lastFingerprint=fp;
-  saveStatus("同步完成：云端共有 "+ids.size+" 条，本次新增 "+count+" 条");
+  saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",{state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()});
  }catch(e){
   // Never discard local records; next online/foreground trigger will retry.
-  saveStatus("自动同步未完成，本机成绩已保留："+error(e));
+  saveStatus("上传失败，本机成绩已保留："+error(e),{state:"error",pending:rows.length});
  }finally{running=false}
 }
 function schedule(){if(localStorage.getItem(ENABLED)==="yes")run()}
