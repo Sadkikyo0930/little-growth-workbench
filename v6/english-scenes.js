@@ -134,7 +134,7 @@ if(task.type==='fill'){
   });
 }else if(task.type==='sequence'){
   add(host,'p','先听三句英语，再按故事发生的顺序依次点选图片。','muted');
-  host.append(button('🔊 慢速听完整小故事',()=>say(task.lines.map(x=>x[0]).join('  ').join(' '),'en-US',.58),'button soft'));
+  host.append(button('🔊 慢速听完整小故事',()=>say(task.lines.map(x=>x[0]).join('  '),'en-US',.58),'button soft'));
   const selected=[],slots=add(host,'div',undefined,'scene-sequence-slots'),tiles=add(host,'div',undefined,'scene-tile-grid');
   const status=add(host,'p','已排列 0 / 3 幅','muted');
   const visualOrder=[1,2,0];
