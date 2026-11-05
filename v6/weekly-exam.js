@@ -157,6 +157,7 @@ function build(week){
  return {week,createdAt:new Date().toISOString(),questions:ordered,answers:{},finishedAt:null};
 }
 function open(){
+ if(!sunday()){home();return}
  openScreen('weeklyExam');
  const week=key(),completed=store()[week],canStart=officialAllowed();
  $('weeklyActions').hidden=false;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=true;
@@ -251,8 +252,9 @@ $('weeklyPreview').insertAdjacentElement('afterend',secondPreview);
 const thirdPreview=document.createElement('button');thirdPreview.id='weeklyPreviewThird';thirdPreview.type='button';thirdPreview.style.cssText=secondPreview.style.cssText;
 secondPreview.insertAdjacentElement('afterend',thirdPreview);
 $('weeklyStart').onclick=()=>enter(false);$('weeklyPreview').onclick=()=>enter(true,FIRST_SUNDAY);secondPreview.onclick=()=>enter(true,SECOND_SUNDAY);thirdPreview.onclick=()=>enter(true,THIRD_SUNDAY);$('weeklyBack').onclick=()=>{if(practice&&current)current=null;openScreen('home')};$('weeklyNext').onclick=()=>render();
-const former=$('goAssessment').onclick;$('goAssessment').onclick=()=>{open()};
-const nav=document.querySelector('[data-tab="assessment"]');if(nav)nav.onclick=()=>{if(sunday())open();else open()};
+const openAssessmentByDay=()=>{if(sunday())open();else home()};
+$('goAssessment').onclick=openAssessmentByDay;
+const nav=document.querySelector('[data-tab="assessment"]');if(nav)nav.onclick=openAssessmentByDay;
 // 首页直接使用原有图片上的“进入测评”透明热区，不再覆盖额外入口贴片。
 
 })();
