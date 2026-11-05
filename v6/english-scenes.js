@@ -64,6 +64,21 @@ const activities={
  {type:'collect',prompt:'快乐小超市 · 听数量把苹果放进购物篮',say:'Get four apples.',item:'🍎',count:4,max:6,explain:'Get four apples. 拿四个苹果。'},
  {type:'shop',prompt:'快乐小超市 · 听顾客想买什么',say:'Get a good red apple.',options:[['🍎','红苹果'],['🍌','香蕉'],['🥛','牛奶']],correct:0,explain:'Get a good red apple. 拿一个好的红苹果。'},
  {type:'choiceAudio',prompt:'购物任务 · 听懂完整句子的意思',say:'I want to eat an apple.',options:['我想吃一个苹果。','我有四辆汽车。','我想喝牛奶。'],correct:0,explain:'I want to eat an apple. 我想吃一个苹果。'}
+],
+15:[
+ {type:'room',prompt:'温暖小家 · 听线索找出房间',say:'He is in the bedroom.',options:[['🛏️','卧室','bedroom'],['🛋️','客厅','living room'],['🍽️','厨房','kitchen']],correct:0,explain:'He is in the bedroom. 他在卧室里。'},
+ {type:'room',prompt:'温暖小家 · 找出正确的玩具',say:'He has a red car.',options:[['🚗','红色玩具车','red car'],['🧸','棕色小熊','brown bear'],['🚂','蓝色小火车','blue train']],correct:0,explain:'He has a red car. 他有一辆红色玩具车。'},
+ {type:'fill',prompt:'我的喜好 · 看句子选择合适的词',say:'I like the car.',template:'I ___ the car.',choices:['into','he','like'],correct:2,explain:'I like the car. 我喜欢这辆汽车。',reasons:{into:'into 表示进入里面，不能表达喜欢。',he:'he 表示他，不能放在这里表示喜欢。',like:'I like ... 表示我喜欢……，所以这里选 like。'}}
+],
+16:[
+ {type:'compare',prompt:'超级观察员 · 找到新的汽车',say:'The car is new.',options:[['🚗','崭新的蓝色汽车','new',true],['🚙','旧旧的棕色汽车','old',false]],correct:0,explain:'The car is new. 这辆车是新的。'},
+ {type:'compare',prompt:'超级观察员 · 哪幅画没有球？',say:'No ball is here.',options:[['🛝','滑梯旁没有球','no ball',true],['⚽','草地上有足球','ball',false]],correct:0,explain:'No ball is here. 这里没有球。'},
+ {type:'choiceAudio',prompt:'观察规则 · must 表示什么意思？',say:'You must stop now.',options:['你现在必须停下。','你现在可以出去玩。','你有一辆新汽车。'],correct:0,explain:'You must stop now. 你现在必须停下。'}
+],
+17:[
+ {type:'treasure',prompt:'灯塔宝藏 · 找到第一个线索',say:'Look on the table.',options:[['🪑','桌子上','on the table'],['🚪','门后面','behind the door'],['🌳','树下面','under the tree']],correct:0,explain:'Look on the table. 看桌子上面。',progress:1},
+ {type:'treasure',prompt:'灯塔宝藏 · 找到下一步的路',say:'Please go out.',options:[['🚪','走到外面','go out'],['🛏️','回卧室睡觉','go to bed'],['🛑','留在这里','stay here']],correct:0,explain:'Please go out. 请走到外面去。',progress:2},
+ {type:'treasure',prompt:'灯塔宝藏 · 打开最后的宝箱',say:'This is our treasure. Please open it.',options:[['🗝️','用钥匙打开宝箱','open it'],['🚗','开走小汽车','drive away'],['🎒','收好书包','pack a bag']],correct:0,explain:'This is our treasure. Please open it. 这是我们的宝藏，请打开它。',progress:3}
 ]};
 const styles=document.createElement('style');styles.textContent=`
 .scene-art{min-height:180px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border-radius:22px;background:linear-gradient(145deg,#e1f8ff,#fff6d9);border:3px solid #fff;box-shadow:0 6px 15px #2c75a51b;margin:12px 0;padding:15px}
@@ -74,6 +89,7 @@ const styles=document.createElement('style');styles.textContent=`
 .scene-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}.scene-actions button{border:0;border-radius:13px;background:#dbeeff;color:#174e83;font-size:23px;font-weight:800;padding:12px 16px}
 .new-scene-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}.new-scene-card{border:2px solid #b1d9f3;border-radius:17px;background:#f5fbff;color:#205881;padding:12px 4px;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;font-weight:800;font-size:13px}.new-scene-card .visual{font-size:52px;line-height:1.3}.new-scene-card:disabled{opacity:.75}.new-scene-card.good{border-color:#40bc83;background:#dcf8e9}.new-scene-card.bad{border-color:#e5928c;background:#fff0eb}.collection-tray{min-height:100px;border:3px dashed #8ac5eb;border-radius:18px;background:#eff9ff;padding:15px;text-align:center;display:flex;flex-direction:column;gap:7px;justify-content:center}.collection-items{font-size:35px;min-height:45px;letter-spacing:6px}.collection-controls{display:flex;gap:10px;margin:12px 0}.collection-controls button{flex:1;min-width:0}.scene-audio-play{background:#fff4ce!important;color:#694e17!important}
 .scene-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.scene-tile{border:2px solid #9bcae7;background:#f1f9ff;border-radius:16px;padding:13px 5px;color:#235277;min-height:110px;font-size:17px;font-weight:850;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center}.scene-tile .symbol{font-size:40px}.scene-tile.correct{background:#d9f8e9;border-color:#4ab888}.scene-tile.incorrect{background:#fff0eb;border-color:#e38c7d}.scene-template{text-align:center;font-size:25px;font-weight:850;background:#f2faff;border-radius:16px;padding:18px 8px;margin:12px 0}.scene-sequence-slots{display:flex;flex-direction:column;gap:8px;margin:12px 0}.scene-sequence-slots button{width:100%;border:2px dashed #91c6e9;border-radius:12px;min-height:49px;background:#f8fdff;color:#205982;font-size:15px}.scene-tile button{font-size:13px}.scene-translation-option{min-width:0}
+.home-room-grid,.observation-grid,.treasure-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}.observation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-room-card,.observation-card,.treasure-card{width:100%;min-width:0;display:flex;flex-direction:column;align-items:center;gap:9px;padding:12px 5px;border:2px solid #94c9e8;border-radius:18px;background:linear-gradient(160deg,#f3faff,#e2f3fe);color:#23517c;font-weight:800;min-height:143px}.home-room-card .scene-icon,.observation-card .scene-icon,.treasure-card .scene-icon{font-size:43px;line-height:1.2;filter:drop-shadow(0 5px 3px #2448692a)}.home-room-card span,.observation-card span,.treasure-card span{overflow-wrap:anywhere;text-align:center}.scene-progress{padding:12px;background:#fff3d2;color:#75551a;border-radius:15px;font-weight:800;text-align:center;margin:10px 0}.scene-scenery{display:flex;justify-content:center;align-items:center;font-size:58px;min-height:120px;border-radius:19px;background:linear-gradient(135deg,#d9efff 0%,#eaf7ef 55%,#fff0cb 100%);border:3px solid #fff;margin:12px 0}.scene-option-hear{font-size:13px!important;padding:9px 4px!important;margin:4px 0!important;width:100%}.scene-choice-card{min-width:0}
 `;document.head.append(styles);
 function button(label,click,cls='scene-choice'){const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=label;b.onclick=click;return b}
 function add(parent,tag,text,cls){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;parent.append(e);return e}
@@ -99,7 +115,29 @@ function activityIllustration(kind){
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 add(host,'h3',task.prompt,'question');const msg=add(host,'div','','scene-message');let resolved=false;
 function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;if(task.type!=='fill')say(task.explain.split('.')[0]+'.','en-US',.62);if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
-if(task.type==='fill'){
+if(task.type==='room'||task.type==='compare'||task.type==='treasure'){
+  const type=task.type;
+  add(host,'p',type==='room'?'听慢速英文，根据线索找到正确的房间或物品。':type==='compare'?'认真观察两张图，听英文判断哪一张符合描述。':'听英语线索，选择下一步行动，找齐三把宝藏钥匙。','muted');
+  if(type==='treasure')add(host,'div','🗺️ 灯塔宝藏探险 · 第 '+task.progress+' / 3 个线索','scene-progress');
+  const scenery=add(host,'div',type==='room'?'🏡  🪟  🪴':type==='compare'?'🔍  🏞️':'🏝️  🗼  🧰','scene-scenery');
+  scenery.setAttribute('aria-label',type==='room'?'房屋探险':type==='compare'?'观察比较':'灯塔宝藏');
+  host.append(button('🔊 慢速听英文线索',()=>say(task.say,'en-US',.6),'button soft scene-audio-play'));
+  const grid=add(host,'div',undefined,type==='room'?'home-room-grid':type==='compare'?'observation-grid':'treasure-grid');
+  task.options.forEach((opt,i)=>{
+    const card=add(grid,'div',undefined,'scene-choice-card');
+    const select=button('',()=>{
+      if(resolved)return;
+      grid.querySelectorAll('.scene-select').forEach(x=>x.disabled=true);
+      select.style.borderColor=i===task.correct?'#2bb17a':'#e88c7b';
+      select.style.background=i===task.correct?'#e1f8ed':'#fff1e8';
+      complete(i===task.correct,opt[1]);
+      if(type==='treasure'&&i===task.correct)add(host,'p',task.progress===3?'🎁 宝箱已经打开！':'🔑 找到一把钥匙，继续下一段探险。','scene-progress');
+    },type==='room'?'home-room-card scene-select':type==='compare'?'observation-card scene-select':'treasure-card scene-select');
+    add(select,'span',opt[0],'scene-icon');add(select,'span',opt[1]);
+    card.append(select);
+    card.append(button('🔊 听中文',()=>say(opt[1],'zh-CN'),'button soft scene-option-hear'));
+  });
+}else if(task.type==='fill'){
   add(host,'p','先自己读句子，选择缺少的词。提交前不播放完整英文，也不会透露答案。','muted');
   add(host,'div',task.template,'scene-template');
   const grid=add(host,'div',undefined,'scene-tile-grid');
