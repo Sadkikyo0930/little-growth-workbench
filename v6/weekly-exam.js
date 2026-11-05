@@ -253,6 +253,6 @@ secondPreview.insertAdjacentElement('afterend',thirdPreview);
 $('weeklyStart').onclick=()=>enter(false);$('weeklyPreview').onclick=()=>enter(true,FIRST_SUNDAY);secondPreview.onclick=()=>enter(true,SECOND_SUNDAY);thirdPreview.onclick=()=>enter(true,THIRD_SUNDAY);$('weeklyBack').onclick=()=>{if(practice&&current)current=null;openScreen('home')};$('weeklyNext').onclick=()=>render();
 const former=$('goAssessment').onclick;$('goAssessment').onclick=()=>{open()};
 const nav=document.querySelector('[data-tab="assessment"]');if(nav)nav.onclick=()=>{if(sunday())open();else open()};
-const extra=document.createElement('button');extra.id='weeklyExamAccess';extra.type='button';extra.textContent='🏆 周日四科合卷 · 第一周 / 第二周 / 第三周'+(officialAllowed()?' · 正式测评':' · 家长预览');extra.style.cssText='display:block;margin:12px auto;padding:12px 20px;border:2px solid #98d2ee;border-radius:16px;background:#f1faff;color:#12548f;font-size:16px;font-weight:900';extra.onclick=open;
-$('home').prepend(extra);
+// 首页直接使用原有图片上的“进入测评”透明热区，不再覆盖额外入口贴片。
+
 })();
