@@ -6,6 +6,12 @@
 <section class="card"><h2>第二步 · 家庭成员登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" placeholder="growth_mom / growth_dad / growth_grandma" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
 <button id="logout" class="secondary" type="button">退出账号</button><p id="status" class="status" role="status">正在加载云端组件……</p></section>
 <section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><p id="autoHistory" class="muted">尚未产生云端同步结果。</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">每台学习设备只需授权一次。之后打开 V6 学习台、有网络且该家庭成员登录会话仍有效时，会尝试同步新增成绩；网络中断时保留本机数据等待补传。请勿在公共设备上保留家长会话。</p></section>
+<section class="card"><h2>云端写入诊断（不计成绩）</h2>
+<p>验证当前家庭账号是否真的具有 INSERT 和 SELECT 权限。只在你点击按钮并确认后，新增 1 条 <strong>sync-test</strong> 诊断记录；同一设备重复测试会读取原记录，不会连续新增。</p>
+<button id="testWrite" type="button" disabled>测试云端写入与读取</button>
+<p id="testStatus" class="status" role="status">登录家庭账号后可以测试。没有触发云端写入。</p>
+<p class="muted">诊断记录会保留在 CloudBase 数据库中，但不会存入孩子本机的学习档案，也不会计入家庭页面的答题、学习天数和学科统计。此页面不执行删除。</p>
+</section>
 <section class="card"><h2>第四步 · 手动核对或补传</h2><p>待同步：<span class="metric" id="pending">—</span> 条；云端已有：<span class="metric" id="remote">—</span> 条</p>
 <button id="sync" disabled>上传尚未同步的记录</button><p class="muted">首次上传前会检查重复记录。只新增、绝不删除已有记录，也不覆盖云端数据。需要 CloudBase 数据库为授权家庭成员配置仅 INSERT 的 GRANT 与 RLS 策略；未完成权限配置时，页面可能提示拒绝写入。任何角色都不应从此页面修改或删除云端记录。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-dashboard.html">家庭云端查看页</a></p>
@@ -69,13 +75,13 @@ function makeRows(){
  $("local").textContent="已找到 "+(s.records||[]).length+" 条答题、"+Object.values(subjs).reduce((n,m)=>n+Object.values(m||{}).filter(Boolean).length,0)+" 项正式课程完成记录、"+Object.values(weekly).filter(x=>x&&x.finishedAt).length+" 份已完成周测。\n可同步记录："+items.length+" 条。";
  return items;
 }
-function update(){all=makeRows();pending=all.filter(r=>!remoteIds.has(r.record_id));$("pending").textContent=pending.length;$("remote").textContent=remoteIds.size;$("sync").disabled=!signed||working||pending.length===0}
+function update(){all=makeRows();pending=all.filter(r=>!remoteIds.has(r.record_id));$("pending").textContent=pending.length;$("remote").textContent=remoteIds.size;$("sync").disabled=!signed||working||pending.length===0;$("testWrite").disabled=!signed||working||!member}
 async function refreshRemote(){
- var res=await db.from("growth_learning_records").select("record_id,family_id");
+ var res=await db.from("growth_learning_records").select("record_id,family_id,record_type");
  if(res&&res.error)throw res.error;
  if(!res||!Array.isArray(res.data))throw Error("云端读取格式异常，停止同步");
  if(res.data.some(x=>x.family_id!==FAMILY))throw Error("发现非本家庭记录，请先检查 RLS 权限");
- remoteIds=new Set(res.data.map(x=>String(x.record_id)));update()
+ remoteIds=new Set(res.data.filter(x=>x.record_type!=="sync-test").map(x=>String(x.record_id)));update()
 }
 function sdk(i){if(i>=cdns.length){status("SDK 加载失败，请检查网络。");return}
  var s=document.createElement("script");s.src=cdns[i];s.async=true;s.onload=function(){try{if(!window.cloudbase||typeof cloudbase.init!=="function")return sdk(i+1);app=cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});auth=app.auth;db=app.rdb();if(!auth||typeof auth.signInWithPassword!=="function"||!db)throw Error("SDK 不支持所需接口");$("login").disabled=false;status("云端组件已就绪。请使用妈妈的账号登录。")}catch(e){status("初始化失败："+err(e))}};s.onerror=function(){sdk(i+1)};document.head.appendChild(s)}
@@ -87,6 +93,44 @@ $("form").addEventListener("submit",async function(e){e.preventDefault();if(!aut
  member=rows[0];await refreshRemote();signed=true;status("✅ 家庭成员已登录，云端读取正常。数据库允许 INSERT 后即可上传新增记录。");
  }catch(e){status("❌ "+err(e));signed=false}finally{working=false;$("login").disabled=false;update()}
 });
+async function requireSession(){
+ if(!auth||typeof auth.getSession!=="function")throw Error("登录接口不可用");
+ var result=await auth.getSession();if(result&&result.error)throw result.error;
+ var session=result&&result.data&&result.data.session;
+ if(!session||!session.user||!session.user.id||!member||String(session.user.id)!==String(member.user_id))throw Error("会话已过期或与授权身份不匹配，请重新登录");
+ return session;
+}
+$("testWrite").onclick=async function(){
+ if(!signed||working||!member)return;
+ if(!confirm("将向 CloudBase 新增一条 sync-test 诊断记录（同一设备仅一条），并读取确认。\n不会计入孩子的正式成绩，但诊断记录会保留在云端。确定执行？"))return;
+ working=true;update();$("testStatus").textContent="正在校验当前登录会话……";
+ try{
+  await requireSession();
+  var id="v6-"+deviceId()+"-sync-test-v1";
+  var already=await db.from("growth_learning_records").select("record_id,family_id,record_type,created_by");
+  if(already&&already.error)throw already.error;
+  if(!already||!Array.isArray(already.data))throw Error("读取返回数据格式异常");
+  if(already.data.some(x=>x.family_id!==FAMILY))throw Error("读取到非本家庭数据，暂停测试");
+  var found=already.data.find(x=>x.record_id===id);
+  if(found&&found.record_type!=="sync-test")throw Error("诊断编号与其他记录冲突，未写入");
+  if(found&&String(found.created_by)!==String(member.user_id))throw Error("本设备曾由不同家庭账号测试；诊断记录已存在，未再写入");
+  if(!found){
+   $("testStatus").textContent="正在插入一条诊断记录……";
+   var row={record_id:id,family_id:FAMILY,record_type:"sync-test",subject:"系统检测",learning_day:null,record_data:{test:true,version:1,description:"家庭同步写入诊断，不属于儿童学习成绩"},created_by:member.user_id};
+   var result=await db.from("growth_learning_records").insert(row);
+   if(result&&result.error)throw result.error;
+  }
+  $("testStatus").textContent="写入请求完成，正在从云端重新读取验证……";
+  var check=await db.from("growth_learning_records").select("record_id,family_id,record_type,created_by");
+  if(check&&check.error)throw check.error;
+  if(!check||!Array.isArray(check.data))throw Error("云端验证返回异常");
+  var match=check.data.find(x=>x.record_id===id&&x.family_id===FAMILY&&x.record_type==="sync-test"&&String(x.created_by)===String(member.user_id));
+  if(!match)throw Error("未能从云端重新读取对应诊断记录，不能判定成功");
+  $("testStatus").textContent="✅ 验证通过：云端 INSERT 成功，且 SELECT 能读取相同记录。\n这条测试记录不会计入孩子成绩。";
+  await refreshRemote();
+ }catch(e){$("testStatus").textContent="❌ 写入诊断未通过："+err(e)+"\n本机学习成绩没有修改。请把错误内容发来排查。"}
+ finally{working=false;update()}
+};
 $("sync").onclick=async function(){if(!signed||working||!member||member.member_role!=="owner")return;try{var token=await auth.getSession();if(token&&token.error)throw token.error;if(!token||!token.data||!token.data.session||String(token.data.session.user.id)!==String(member.user_id))throw Error("会话已失效，请重新登录");}catch(e){signed=false;status("❌ 上传前身份验证失败："+err(e));update();return}update();if(!pending.length)return;
  if(!confirm("确定上传 "+pending.length+" 条尚未同步的学习记录吗？\n只新增，不会覆盖云端及本地成绩。"))return;
  working=true;$("sync").disabled=true;
