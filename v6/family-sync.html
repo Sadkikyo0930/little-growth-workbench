@@ -1,13 +1,13 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>V6 家庭云端同步中心</title>
 <style>*{box-sizing:border-box}body{margin:0;background:#e8f5ff;color:#193e65;font:16px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:560px;margin:auto;padding:22px 16px 60px}h1{font-size:24px}p{line-height:1.65}.card{background:white;border-radius:19px;padding:20px;margin:16px 0;box-shadow:0 6px 18px #2356a31a}label{display:block;font-weight:700;margin:12px 0 6px}input{font:inherit;width:100%;padding:13px;border:1px solid #abc9dd;border-radius:11px}button{background:#1771ce;color:#fff;border:0;border-radius:12px;padding:14px;width:100%;font:inherit;font-weight:800;margin:8px 0}button:disabled{opacity:.42}.secondary{background:white;color:#176ab2;border:1px solid #b0cadd}.muted{font-size:13px;color:#5b7388}.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#eff7ff;padding:12px;border-radius:12px;margin-top:10px}.metric{font-size:22px;font-weight:800}a{color:#1672c0}</style></head><body><main>
 <h1>🏎️ V6 家庭云端同步中心</h1>
-<p>在孩子使用的浏览器中，妈妈登录后可把已完成的答题、正式课程和周测记录上传到腾讯云。未开始学习时，无需上传。</p>
+<p>在孩子使用的浏览器中，由妈妈、爸爸或外婆用各自的家庭账号首次授权。以后孩子在此浏览器学习，程序会尝试自动同步到腾讯云。未开始正式学习时无需上传。</p>
 <section class="card"><h2>第一步 · 本机记录</h2><p id="local" class="status">正在查看本机……</p><p id="baselineStatus" class="muted">正在检查正式同步起点……</p><button type="button" id="setBaseline" class="secondary">从现在起记录正式学习（保留之前试做数据）</button><p class="muted">如果孩子还没有正式开学，请先设置正式同步起点。已有试做与旧测评仍保留在本机，但不上传云端。这个操作只设置同步过滤标记，不会清空或修改任何学习成绩。</p></section>
-<section class="card"><h2>第二步 · 妈妈登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" value="growth_mom" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
+<section class="card"><h2>第二步 · 家庭成员登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" placeholder="growth_mom / growth_dad / growth_grandma" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
 <button id="logout" class="secondary" type="button">退出账号</button><p id="status" class="status" role="status">正在加载云端组件……</p></section>
-<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><p id="autoHistory" class="muted">尚未产生云端同步结果。</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">只需在孩子学习的浏览器上开启一次。之后打开 V6 学习台、有网络且家庭所有者登录会话仍有效时，会自动同步新增成绩；网络中断时保留本机数据等待补传。不要在共享设备上长期保留家长会话。</p></section>
+<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><p id="autoHistory" class="muted">尚未产生云端同步结果。</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">每台学习设备只需授权一次。之后打开 V6 学习台、有网络且该家庭成员登录会话仍有效时，会尝试同步新增成绩；网络中断时保留本机数据等待补传。请勿在公共设备上保留家长会话。</p></section>
 <section class="card"><h2>第四步 · 手动核对或补传</h2><p>待同步：<span class="metric" id="pending">—</span> 条；云端已有：<span class="metric" id="remote">—</span> 条</p>
-<button id="sync" disabled>上传尚未同步的记录</button><p class="muted">首次上传前会检查重复记录。只新增、绝不删除已有记录，也不覆盖云端数据。需要 CloudBase 数据库为妈妈账号授予 INSERT 权限及正确的 RLS 策略；如果权限未开放，页面会显示错误并停止上传。</p></section>
+<button id="sync" disabled>上传尚未同步的记录</button><p class="muted">首次上传前会检查重复记录。只新增、绝不删除已有记录，也不覆盖云端数据。需要 CloudBase 数据库为授权家庭成员配置仅 INSERT 的 GRANT 与 RLS 策略；未完成权限配置时，页面可能提示拒绝写入。任何角色都不应从此页面修改或删除云端记录。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-dashboard.html">家庭云端查看页</a></p>
 </main><script>(function(){"use strict";
 var FAMILY="little-growth-family-001",KEY="growth-workbench-v6-adaptive-2",BASELINE_KEY="v6-family-sync-baseline-20261105",app,auth,db,member,all=[],pending=[],remoteIds=new Set(),signed=false,working=false;
@@ -42,8 +42,8 @@ $("autoToggle").onclick=function(){
  var active=localStorage.getItem(AUTO_KEY)==="yes";
  if(active){localStorage.removeItem(AUTO_KEY);autoStatus();status("已关闭自动同步。孩子本机成绩不会删除。");return}
  if(!getBaseline()){alert("请先设置正式同步起点，避免上传历史试做记录。");return}
- if(!signed||!member||member.member_role!=="owner"){alert("请先用妈妈所有者账号登录验证，再开启自动同步。");return}
- if(!confirm("开启后，孩子在这个浏览器完成的正式学习成绩将自动上传云端。\n家长会话可能保存在这台设备上；请确认设备由家人保管。"))return;
+ if(!signed||!member||!["owner","parent","grandparent"].includes(member.member_role)){alert("请先用当前设备对应的家庭成员账号登录验证，再开启自动同步。");return}
+ if(!confirm("开启后，孩子在这个浏览器完成的正式学习成绩将自动上传云端。\n该家庭账号的会话可能保存在这台设备上；请确认设备由家人保管。"))return;
  localStorage.setItem(AUTO_KEY,"yes");autoStatus();status("✅ 已开启。返回 V6 学习台正常学习，页面会自动尝试同步。")
 };
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
@@ -80,11 +80,11 @@ async function refreshRemote(){
 function sdk(i){if(i>=cdns.length){status("SDK 加载失败，请检查网络。");return}
  var s=document.createElement("script");s.src=cdns[i];s.async=true;s.onload=function(){try{if(!window.cloudbase||typeof cloudbase.init!=="function")return sdk(i+1);app=cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});auth=app.auth;db=app.rdb();if(!auth||typeof auth.signInWithPassword!=="function"||!db)throw Error("SDK 不支持所需接口");$("login").disabled=false;status("云端组件已就绪。请使用妈妈的账号登录。")}catch(e){status("初始化失败："+err(e))}};s.onerror=function(){sdk(i+1)};document.head.appendChild(s)}
 $("form").addEventListener("submit",async function(e){e.preventDefault();if(!auth)return;working=true;signed=false;member=null;$("login").disabled=true;$("sync").disabled=true;
- try{var u=$("username").value.trim().toLowerCase();if(u!=="growth_mom")throw Error("当前同步中心仅允许妈妈所有者账号上传。");
+ try{var u=$("username").value.trim().toLowerCase();if(!["growth_mom","growth_dad","growth_grandma"].includes(u))throw Error("只接受已建立的三个家庭成员账号。");
  status("登录中……");var login=await auth.signInWithPassword({username:u,password:$("password").value});if(login&&login.error)throw login.error; if(typeof auth.getSession!=="function")throw Error("SDK 缺少会话校验接口");var sr=await auth.getSession();if(sr&&sr.error)throw sr.error;var session=sr&&sr.data&&sr.data.session;if(!session||!session.user||!session.user.id)throw Error("登录未建立有效会话，禁止上传");$("password").value="";
  var r=await db.from("growth_family_members").select("family_id,user_id,member_role");if(r&&r.error)throw r.error;
- var rows=r&&Array.isArray(r.data)?r.data:[];if(rows.length!==1||rows[0].family_id!==FAMILY||rows[0].member_role!=="owner"||String(rows[0].user_id)!==String(session.user.id))throw Error("家庭所有者身份与登录账号不匹配，禁止上传。");
- member=rows[0];await refreshRemote();signed=true;status("✅ 妈妈所有者账号已登录，云端读取正常。可上传新增记录。");
+ var rows=r&&Array.isArray(r.data)?r.data:[];if(rows.length!==1||rows[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(rows[0].member_role)||String(rows[0].user_id)!==String(session.user.id))throw Error("家庭成员身份与登录账号不匹配，禁止上传。");
+ member=rows[0];await refreshRemote();signed=true;status("✅ 家庭成员已登录，云端读取正常。数据库允许 INSERT 后即可上传新增记录。");
  }catch(e){status("❌ "+err(e));signed=false}finally{working=false;$("login").disabled=false;update()}
 });
 $("sync").onclick=async function(){if(!signed||working||!member||member.member_role!=="owner")return;try{var token=await auth.getSession();if(token&&token.error)throw token.error;if(!token||!token.data||!token.data.session||String(token.data.session.user.id)!==String(member.user_id))throw Error("会话已失效，请重新登录");}catch(e){signed=false;status("❌ 上传前身份验证失败："+err(e));update();return}update();if(!pending.length)return;
