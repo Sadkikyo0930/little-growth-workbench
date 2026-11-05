@@ -73,8 +73,8 @@ if(task.type==='picture'||task.type==='listen'){
  tokens.map((_,i)=>i).reverse().forEach(i=>{const b=button(tokens[i],()=>{if(resolved)return;b.disabled=true;chosen.push(i);const c=button(tokens[i],()=>{if(resolved)return;chosen.splice(chosen.indexOf(i),1);c.remove();b.disabled=false;submit.disabled=chosen.length!==tokens.length},'chip selected');chosenBox.append(c);submit.disabled=chosen.length!==tokens.length},'chip');pool.append(b)});host.append(submit);
 }else if(task.type==='route'){
  art(host,'🏎️ 🏁','听清方向，帮助赛车到达终点');host.append(button('🔊 再听指令',()=>say(task.say),'button soft'));
- const route=add(host,'div',undefined,'scene-route');for(let i=0;i<9;i++)add(route,'div',i===0?'🏎️':i===7?'🏁':'·');
- const moves=[],arrows=add(host,'div',undefined,'scene-actions');[['up','⬆️'],['left','⬅️'],['down','⬇️'],['right','➡️']].forEach(([d,e])=>arrows.append(button(e,()=>{if(resolved)return;moves.push(d);msg.textContent='已走 '+moves.length+' 步';if(moves.length===task.moves.length){const ok=moves.every((x,i)=>x===task.moves[i]);complete(ok,moves.join(' → '))}},'chip')));say(task.say);
+ const route=add(host,'div',undefined,'scene-route');const cells=[];for(let i=0;i<9;i++)cells.push(add(route,'div','·'));let pos=0;const target=4;const paint=()=>{cells.forEach((c,i)=>{c.textContent=i===pos?'🏎️':i===target?'🏁':'·';c.style.background=i===pos?'#fff0b0':'#e8f5ff'})};paint();
+ const moves=[],arrows=add(host,'div',undefined,'scene-actions');[['up','⬆️'],['left','⬅️'],['down','⬇️'],['right','➡️']].forEach(([d,e])=>arrows.append(button(e,()=>{if(resolved)return;const row=Math.floor(pos/3),col=pos%3;let next=pos;if(d==='up'&&row>0)next-=3;if(d==='down'&&row<2)next+=3;if(d==='left'&&col>0)next--;if(d==='right'&&col<2)next++;moves.push(d);pos=next;paint();msg.textContent='第 '+moves.length+' 步 · 赛车已经移动';if(moves.length===task.moves.length){const ok=pos===target&&moves.every((x,i)=>x===task.moves[i]);arrows.querySelectorAll('button').forEach(b=>b.disabled=true);complete(ok,moves.join(' → '))}},'chip')));say(task.say);
 }
 }
 window.V6EnglishScenes={has:lesson=>!!activities[lesson],render:init};
