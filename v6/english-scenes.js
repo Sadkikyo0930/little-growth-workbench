@@ -44,6 +44,26 @@ const activities={
  {type:'detect',prompt:'寻找好朋友 · 根据英文介绍寻找角色',say:'Find the girl in yellow.',options:[['👧','黄色衣服','yellow'],['👦','蓝色衣服','blue'],['🧑','红色衣服','red']],correct:0,explain:'Find the girl in yellow. 找到穿黄色衣服的女孩。'},
  {type:'detect',prompt:'小伙伴在哪里？',say:'Where is the boy? He is here.',options:[['👧','黄色衣服','yellow'],['👦','蓝色衣服','blue'],['🐶','棕色小狗','brown']],correct:1,explain:'He is here. 他就在这里。'},
  {type:'choiceAudio',prompt:'听对话 · 朋友说了什么？',say:'Where are you? I am here.',options:['你在哪里？我在这里。','你的汽车是什么颜色？','我们要吃什么？'],correct:0,explain:'Where are you? I am here. 你在哪里？我在这里。'}
+],
+11:[
+ {type:'fill',prompt:'句子修理站 · 把正确单词放进空格',say:'I am happy.',template:'I ___ happy.',choices:['are','am','at'],correct:1,explain:'I am happy. 我很开心。',hint:'I 表示我，am 表示是'},
+ {type:'fill',prompt:'句子修理站 · 多位朋友来了',say:'We are here.',template:'We ___ here.',choices:['am','at','are'],correct:2,explain:'We are here. 我们在这里。',hint:'We 表示我们'},
+ {type:'choiceAudio',prompt:'听懂句子 · at 用在什么位置？',say:'Look at the cat.',options:['看看那只猫。','我有一只猫。','所有小猫都在睡觉。'],correct:0,explain:'Look at the cat. 看看那只猫。'}
+],
+12:[
+ {type:'color',prompt:'神奇调色屋 · 听英语选择颜色',say:'The bear is brown.',item:'🐻',options:[['棕色','#9d704a'],['黑色','#303d51'],['黄色','#f4ca56']],correct:0,explain:'The bear is brown. 这只熊是棕色的。'},
+ {type:'color',prompt:'神奇调色屋 · 给小汽车选颜色',say:'Make the car black.',item:'🚗',options:[['蓝色','#4e97d5'],['黑色','#303d51'],['棕色','#9d704a']],correct:1,explain:'Make the car black. 把汽车涂成黑色。'},
+ {type:'choiceAudio',prompt:'听懂小故事 · 谁吃过苹果？',say:'The boy ate an apple.',options:['男孩吃过一个苹果。','男孩买了一辆汽车。','男孩看见一个苹果。'],correct:0,explain:'The boy ate an apple. 男孩吃过一个苹果。'}
+],
+13:[
+ {type:'sequence',prompt:'故事排序师 · 听故事，把画面按顺序排列',lines:[['The dog came to the park.','🐶','小狗来到公园'],['The dog saw a ball.','⚽','小狗看见一个球'],['The dog ran after the ball.','🐕','小狗追着球跑']],explain:'The dog came to the park. 小狗来到公园，然后看见球并追了过去。'},
+ {type:'choiceAudio',prompt:'故事理解 · 小狗最后做了什么？',say:'The dog ran after the ball.',options:['追着球跑。','吃了晚餐。','回家睡觉。'],correct:0,explain:'The dog ran after the ball. 小狗追着球跑。'},
+ {type:'fill',prompt:'句子修理 · 谁来到了公园？',say:'The dog came to the park.',template:'The dog ___ to the park.',choices:['did','came','but'],correct:1,explain:'The dog came to the park. 小狗来到了公园。',hint:'came 是 come 的过去式'}
+],
+14:[
+ {type:'collect',prompt:'快乐小超市 · 听数量把苹果放进购物篮',say:'Get four apples.',item:'🍎',count:4,max:6,explain:'Get four apples. 拿四个苹果。'},
+ {type:'shop',prompt:'快乐小超市 · 听顾客想买什么',say:'Get a good red apple.',options:[['🍎','红苹果'],['🍌','香蕉'],['🥛','牛奶']],correct:0,explain:'Get a good red apple. 拿一个好的红苹果。'},
+ {type:'choiceAudio',prompt:'购物任务 · 听懂完整句子的意思',say:'I want to eat an apple.',options:['我想吃一个苹果。','我有四辆汽车。','我想喝牛奶。'],correct:0,explain:'I want to eat an apple. 我想吃一个苹果。'}
 ]};
 const styles=document.createElement('style');styles.textContent=`
 .scene-art{min-height:180px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border-radius:22px;background:linear-gradient(145deg,#e1f8ff,#fff6d9);border:3px solid #fff;box-shadow:0 6px 15px #2c75a51b;margin:12px 0;padding:15px}
@@ -53,6 +73,7 @@ const styles=document.createElement('style');styles.textContent=`
 .scene-route{display:grid;grid-template-columns:repeat(3,68px);gap:6px;justify-content:center;margin:15px auto}.scene-route div{height:62px;border-radius:13px;background:#e8f5ff;display:flex;align-items:center;justify-content:center;font-size:34px;border:2px solid #c5e0f3}
 .scene-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}.scene-actions button{border:0;border-radius:13px;background:#dbeeff;color:#174e83;font-size:23px;font-weight:800;padding:12px 16px}
 .new-scene-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}.new-scene-card{border:2px solid #b1d9f3;border-radius:17px;background:#f5fbff;color:#205881;padding:12px 4px;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;font-weight:800;font-size:13px}.new-scene-card .visual{font-size:52px;line-height:1.3}.new-scene-card:disabled{opacity:.75}.new-scene-card.good{border-color:#40bc83;background:#dcf8e9}.new-scene-card.bad{border-color:#e5928c;background:#fff0eb}.collection-tray{min-height:100px;border:3px dashed #8ac5eb;border-radius:18px;background:#eff9ff;padding:15px;text-align:center;display:flex;flex-direction:column;gap:7px;justify-content:center}.collection-items{font-size:35px;min-height:45px;letter-spacing:6px}.collection-controls{display:flex;gap:10px;margin:12px 0}.collection-controls button{flex:1;min-width:0}.scene-audio-play{background:#fff4ce!important;color:#694e17!important}
+.scene-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.scene-tile{border:2px solid #9bcae7;background:#f1f9ff;border-radius:16px;padding:13px 5px;color:#235277;min-height:110px;font-size:17px;font-weight:850;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center}.scene-tile .symbol{font-size:40px}.scene-tile.correct{background:#d9f8e9;border-color:#4ab888}.scene-tile.incorrect{background:#fff0eb;border-color:#e38c7d}.scene-template{text-align:center;font-size:25px;font-weight:850;background:#f2faff;border-radius:16px;padding:18px 8px;margin:12px 0}.scene-sequence-slots{display:flex;flex-direction:column;gap:8px;margin:12px 0}.scene-sequence-slots button{width:100%;border:2px dashed #91c6e9;border-radius:12px;min-height:49px;background:#f8fdff;color:#205982;font-size:15px}.scene-tile button{font-size:13px}.scene-translation-option{min-width:0}
 `;document.head.append(styles);
 function button(label,click,cls='scene-choice'){const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=label;b.onclick=click;return b}
 function add(parent,tag,text,cls){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;parent.append(e);return e}
@@ -78,7 +99,63 @@ function activityIllustration(kind){
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 const msg=add(host,'div','','scene-message');let resolved=false;
 function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.','en-US');if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
-if(task.type==='find'||task.type==='detect'){
+if(task.type==='fill'){
+  add(host,'p','先听完整英文句子，再选合适的单词修理句子。','muted');
+  host.append(button('🔊 听完整英语',()=>say(task.say,'en-US'),'button soft'));
+  add(host,'div',task.template,'scene-template');
+  const grid=add(host,'div',undefined,'scene-tile-grid');
+  task.choices.forEach((word,i)=>{
+    const b=button(word,()=>{if(resolved)return;grid.querySelectorAll('button').forEach(x=>x.disabled=true);complete(i===task.correct,word)},'scene-tile');grid.append(b)
+  });
+  add(host,'p','小提示：'+task.hint,'muted');
+}else if(task.type==='color'){
+  add(host,'p','听英文描述，再挑选正确的颜色。','muted');
+  const model=add(host,'div',task.item,'scene-art');model.style.fontSize='70px';
+  host.append(button('🔊 听颜色指令',()=>say(task.say,'en-US'),'button soft'));
+  const grid=add(host,'div',undefined,'scene-tile-grid');
+  task.options.forEach((opt,i)=>{
+    const cell=add(grid,'div',undefined);cell.style.minWidth='0';
+    const choose=button('',()=>{if(resolved)return;grid.querySelectorAll('.scene-color-select').forEach(x=>x.disabled=true);complete(i===task.correct,opt[0])},'scene-tile scene-color-select');
+    choose.style.width='100%';
+    const swatch=add(choose,'span',' ','symbol');swatch.style.cssText='display:block;border:3px solid #ffffff;border-radius:50%;width:60px;height:60px;background:'+opt[1]+';box-shadow:0 2px 9px #27455d33';
+    add(choose,'span',opt[0]);cell.append(choose);
+    const hear=button('🔊 听中文',()=>say(opt[0],'zh-CN'),'button soft');hear.style.fontSize='13px';cell.append(hear);
+  });
+}else if(task.type==='sequence'){
+  add(host,'p','先听三句英语，再按故事发生的顺序依次点选图片。','muted');
+  host.append(button('🔊 听完整小故事',()=>say(task.lines.map(x=>x[0]).join(' '),'en-US'),'button soft'));
+  const selected=[],slots=add(host,'div',undefined,'scene-sequence-slots'),tiles=add(host,'div',undefined,'scene-tile-grid');
+  const status=add(host,'p','已排列 0 / 3 幅','muted');
+  const visualOrder=[1,2,0];
+  function refresh(){
+    slots.replaceChildren();
+    selected.forEach((idx,pos)=>{
+      slots.append(button((pos+1)+' · '+task.lines[idx][1]+' '+task.lines[idx][2],()=>{if(resolved)return;selected.splice(pos,1);refresh()},'scene-choice'));
+    });
+    const available=new Set(selected);
+    tiles.querySelectorAll('[data-scene-index]').forEach(b=>b.disabled=available.has(Number(b.dataset.sceneIndex)));
+    status.textContent='已排列 '+selected.length+' / 3 幅';
+    submit.disabled=selected.length!==task.lines.length;
+  }
+  visualOrder.forEach(i=>{
+    const card=add(tiles,'div',undefined);card.style.minWidth='0';
+    const b=button('',()=>{if(resolved||selected.includes(i))return;selected.push(i);refresh()},'scene-tile');b.dataset.sceneIndex=i;
+    add(b,'span',task.lines[i][1],'symbol');add(b,'span',task.lines[i][2]);card.append(b);
+    card.append(button('🔊 听这一句',()=>say(task.lines[i][0],'en-US'),'button soft'));
+  });
+  const submit=button('✅ 检查故事顺序',()=>{if(resolved||selected.length!==task.lines.length)return;tiles.querySelectorAll('button').forEach(b=>b.disabled=true);complete(selected.every((x,i)=>x===i),selected.map(i=>task.lines[i][2]).join(' → '))},'button');
+  submit.disabled=true;host.append(submit);refresh();
+}else if(task.type==='shop'){
+  add(host,'p','先听顾客的英文需求，然后从货架选择正确的商品。','muted');
+  host.append(button('🔊 听购物需求',()=>say(task.say,'en-US'),'button soft'));
+  const grid=add(host,'div',undefined,'scene-tile-grid');
+  task.options.forEach((opt,i)=>{
+    const cell=add(grid,'div',undefined);cell.style.minWidth='0';
+    const choose=button('',()=>{if(resolved)return;grid.querySelectorAll('.scene-shop-select').forEach(x=>x.disabled=true);complete(i===task.correct,opt[1])},'scene-tile scene-shop-select');choose.style.width='100%';
+    add(choose,'span',opt[0],'symbol');add(choose,'span',opt[1]);cell.append(choose);
+    cell.append(button('🔊 听中文',()=>say(opt[1],'zh-CN'),'button soft'));
+  });
+}else if(task.type==='find'||task.type==='detect'){
  add(host,'p','先听英文，再点击对应的画面。可以重复播放。','muted');
  host.append(button('🔊 听英语线索',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
  const grid=add(host,'div',undefined,'new-scene-grid');
