@@ -29,6 +29,21 @@ const activities={
  {type:'picture',prompt:'看图选择正确英语句子',scene:'night',options:['It is a sunny day.','The light is on at night.','The car is red.'],correct:1,explain:'The light is on at night. 夜晚灯亮着。'},
  {type:'listen',prompt:'听英语，选择正确的画面',say:'The moon is bright.',options:[['☀️','太阳'],['🌙','月亮'],['🌧️','雨天']],correct:1,explain:'The moon is bright. 月亮很明亮。'},
  {type:'order',prompt:'听句子，排列词块',tokens:['I','see','a','light'],explain:'I see a light. 我看到一盏灯。'}
+]
+,8:[
+ {type:'find',prompt:'神奇观察员 · 听英语，找到描述的画面',say:'I see a red car.',options:[['🚗','红色汽车'],['🚙','蓝色汽车'],['🚌','黄色巴士']],correct:0,explain:'I see a red car. 我看见一辆红色汽车。',colors:['#f66b62','#4b91dd','#f5c665']},
+ {type:'find',prompt:'观察员 · 谁在跑？',say:'I see a boy run.',options:[['🏃','奔跑的男孩'],['🧑‍🍳','做饭的人'],['😴','睡觉的人']],correct:0,explain:'I see a boy run. 我看到一个男孩在跑。'},
+ {type:'choiceAudio',prompt:'听懂情境 · 选择对应的意思',say:'I see the cat.',options:['我看见了那只猫。','我听见了小汽车。','我正在跑步。'],correct:0,explain:'I see the cat. 我看见了那只猫。'}
+],
+9:[
+ {type:'collect',prompt:'玩具整理员 · 按听到的数量收集玩具',say:'Put two cars in the box.',item:'🚗',count:2,max:4,explain:'Put two cars in the box. 把两辆汽车放进盒子里。'},
+ {type:'collect',prompt:'数一数 · 给车队准备礼物',say:'Put three stars in the box.',item:'⭐',count:3,max:5,explain:'Put three stars in the box. 把三颗星星放进盒子里。'},
+ {type:'choiceAudio',prompt:'听力小侦探 · up 的意思是什么？',say:'Look up!',options:['向上看！','快睡觉！','向下看！'],correct:0,explain:'Look up! 向上看！'}
+],
+10:[
+ {type:'detect',prompt:'寻找好朋友 · 根据英文介绍寻找角色',say:'Find the girl in yellow.',options:[['👧','黄色衣服','yellow'],['👦','蓝色衣服','blue'],['🧑','红色衣服','red']],correct:0,explain:'Find the girl in yellow. 找到穿黄色衣服的女孩。'},
+ {type:'detect',prompt:'小伙伴在哪里？',say:'Where is the boy? He is here.',options:[['👧','黄色衣服','yellow'],['👦','蓝色衣服','blue'],['🐶','棕色小狗','brown']],correct:1,explain:'He is here. 他就在这里。'},
+ {type:'choiceAudio',prompt:'听对话 · 朋友说了什么？',say:'Where are you? I am here.',options:['你在哪里？我在这里。','你的汽车是什么颜色？','我们要吃什么？'],correct:0,explain:'Where are you? I am here. 你在哪里？我在这里。'}
 ]};
 const styles=document.createElement('style');styles.textContent=`
 .scene-art{min-height:180px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border-radius:22px;background:linear-gradient(145deg,#e1f8ff,#fff6d9);border:3px solid #fff;box-shadow:0 6px 15px #2c75a51b;margin:12px 0;padding:15px}
@@ -37,6 +52,7 @@ const styles=document.createElement('style');styles.textContent=`
 .scene-message{font-size:17px;font-weight:800;line-height:1.65;color:#285b80;min-height:30px;margin:10px 0}
 .scene-route{display:grid;grid-template-columns:repeat(3,68px);gap:6px;justify-content:center;margin:15px auto}.scene-route div{height:62px;border-radius:13px;background:#e8f5ff;display:flex;align-items:center;justify-content:center;font-size:34px;border:2px solid #c5e0f3}
 .scene-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}.scene-actions button{border:0;border-radius:13px;background:#dbeeff;color:#174e83;font-size:23px;font-weight:800;padding:12px 16px}
+.new-scene-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}.new-scene-card{border:2px solid #b1d9f3;border-radius:17px;background:#f5fbff;color:#205881;padding:12px 4px;min-height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;font-weight:800;font-size:13px}.new-scene-card .visual{font-size:52px;line-height:1.3}.new-scene-card:disabled{opacity:.75}.new-scene-card.good{border-color:#40bc83;background:#dcf8e9}.new-scene-card.bad{border-color:#e5928c;background:#fff0eb}.collection-tray{min-height:100px;border:3px dashed #8ac5eb;border-radius:18px;background:#eff9ff;padding:15px;text-align:center;display:flex;flex-direction:column;gap:7px;justify-content:center}.collection-items{font-size:35px;min-height:45px;letter-spacing:6px}.collection-controls{display:flex;gap:10px;margin:12px 0}.collection-controls button{flex:1;min-width:0}.scene-audio-play{background:#fff4ce!important;color:#694e17!important}
 `;document.head.append(styles);
 function button(label,click,cls='scene-choice'){const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=label;b.onclick=click;return b}
 function add(parent,tag,text,cls){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;parent.append(e);return e}
@@ -62,7 +78,26 @@ function activityIllustration(kind){
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 const msg=add(host,'div','','scene-message');let resolved=false;
 function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.','en-US');if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
-if(task.type==='picture'||task.type==='listen'){
+if(task.type==='find'||task.type==='detect'){
+ add(host,'p','先听英文，再点击对应的画面。可以重复播放。','muted');
+ host.append(button('🔊 听英语线索',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
+ const grid=add(host,'div',undefined,'new-scene-grid');
+ task.options.forEach((opt,i)=>{const label=opt[1],b=button('',()=>{if(resolved)return;grid.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)},'new-scene-card');const v=add(b,'span',opt[0],'visual');if(task.colors&&task.colors[i])v.style.filter='drop-shadow(0 4px 4px #0002)';if(task.type==='detect'&&opt[2])b.style.borderTop='8px solid '+({yellow:'#f1c846',blue:'#6dabed',red:'#ef8b7e',brown:'#a77b5b'}[opt[2]]||'#8bd4d9');add(b,'span',label);grid.append(b)});
+}else if(task.type==='collect'){
+ add(host,'p','听清楚要放进去几个。点「放入一个」收集，完成后检查。','muted');
+ host.append(button('🔊 播放英语任务',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
+ const tray=add(host,'div',undefined,'collection-tray');add(tray,'strong','我的玩具盒');const items=add(tray,'div','（空）','collection-items');let n=0;
+ const counter=add(tray,'div','已放入 0 个','muted');const controls=add(host,'div',undefined,'collection-controls');
+ const addOne=button('＋ 放入一个',()=>{if(resolved||n>=task.max)return;n++;draw()},'button soft');
+ const remove=button('－ 拿出一个',()=>{if(resolved||n<=0)return;n--;draw()},'button soft');
+ function draw(){items.textContent=n?task.item.repeat(n):'（空）';counter.textContent='已放入 '+n+' 个';addOne.disabled=n>=task.max;remove.disabled=n===0}
+ controls.append(addOne,remove);draw();
+ host.append(button('✅ 检查数量',()=>{if(resolved)return;addOne.disabled=true;remove.disabled=true;complete(n===task.count,n+' 个')},'button'));
+}else if(task.type==='choiceAudio'){
+ add(host,'p','听完整句子，然后选择对应的中文意思。','muted');
+ host.append(button('🔊 播放英文句子',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
+ const grid=add(host,'div');task.options.forEach((opt,i)=>grid.append(button(opt,()=>{if(resolved)return;grid.querySelectorAll('button').forEach(x=>x.disabled=true);complete(i===task.correct,opt)})));
+}else if(task.type==='picture'||task.type==='listen'){
  if(task.type==='picture'){if(task.scene){const box=add(host,'div',undefined,'scene-art');box.innerHTML=activityIllustration(task.scene);box.querySelector('svg').style.cssText='width:100%;max-height:280px;border-radius:14px';}else art(host,task.emoji,task.caption);}
  else add(host,'p','请点击下面的英文播放按钮，再选择正确答案。','muted');
  const choices=add(host,'div');task.options.forEach((item,i)=>{const label=Array.isArray(item)?item[0]+' '+item[1]:item;const b=button(label,()=>{if(resolved)return;choices.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)});choices.append(b);if(Array.isArray(item)){const hear=button('🔊 听选项',()=>say(item[1],'zh-CN'),'button soft');hear.style.fontSize='14px';hear.style.padding='8px';choices.append(hear)}});
