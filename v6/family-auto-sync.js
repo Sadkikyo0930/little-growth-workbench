@@ -67,8 +67,8 @@ async function run(){
   var membersResult=await db.from("growth_family_members").select("family_id,user_id,member_role");
   if(membersResult&&membersResult.error)throw membersResult.error;
   var members=membersResult&&membersResult.data;
-  if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||members[0].member_role!=="owner"||String(members[0].user_id)!==String(session.user.id)){
-   saveStatus("当前会话不是授权的上传账号，已暂停；本机成绩安全保留",{state:"auth_required",pending:rows.length});return
+  if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role)||String(members[0].user_id)!==String(session.user.id)){
+   saveStatus("当前会话不是该家庭的授权成员，已暂停；本机成绩安全保留",{state:"auth_required",pending:rows.length});return
   }
   var existing=await db.from("growth_learning_records").select("record_id,family_id");
   if(existing&&existing.error)throw existing.error;
