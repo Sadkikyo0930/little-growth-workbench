@@ -70,11 +70,11 @@ async function run(){
   if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role)||String(members[0].user_id)!==String(session.user.id)){
    saveStatus("当前会话不是该家庭的授权成员，已暂停；本机成绩安全保留",{state:"auth_required",pending:rows.length});return
   }
-  var existing=await db.from("growth_learning_records").select("record_id,family_id");
+  var existing=await db.from("growth_learning_records").select("record_id,family_id,record_type");
   if(existing&&existing.error)throw existing.error;
   if(!existing||!Array.isArray(existing.data))throw Error("云端读取结果异常");
   if(existing.data.some(x=>x.family_id!==FAMILY))throw Error("检测到其他家庭数据，已停止同步");
-  var ids=new Set(existing.data.map(x=>String(x.record_id))),count=0;
+  var ids=new Set(existing.data.filter(x=>x.record_type!=="sync-test").map(x=>String(x.record_id))),count=0;
   for(var j=0;j<rows.length;j++){
    var item=rows[j];if(ids.has(item.record_id))continue;
    // Recheck consent while uploading in case user disables autosync.
