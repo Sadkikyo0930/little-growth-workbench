@@ -14,7 +14,7 @@ small{display:block;color:#55728b;line-height:1.6;margin-top:10px}
 </style></head>
 <body><main>
 <h1>🏎️ 家庭学习云存档 · 连接测试</h1>
-<p>这是独立测试页，不会修改 V6 课程、成绩、孩子记录，也不会向云端写入数据。</p>
+<p>这是独立测试页，不会修改 V6 课程、成绩、孩子记录，也不会向云端写入数据。</p><p style="background:#fff0db;padding:12px;border-radius:12px;font-size:14px">注意：CloudBase 官方要求外部网页配置安全来源。如果免费版不允许添加 GitHub Pages 域名，登录请求可能被浏览器跨域限制。本页仅用于诊断，不需要购买套餐。</p>
 <section>
 <strong>腾讯云 CloudBase（上海）</strong><br><small>仅用于验证妈妈、爸爸、外婆各自登录并读取家庭信息。</small>
 <form id="form" autocomplete="on">
@@ -35,7 +35,7 @@ small{display:block;color:#55728b;line-height:1.6;margin-top:10px}
 (function(){
 "use strict";
 var form=document.getElementById('form'),status=document.getElementById('status'),login=document.getElementById('login');
-var app,auth;login.disabled=true;
+var app,auth,stage='SDK 加载';login.disabled=true;
 function message(t){status.textContent=t}
 function errText(e){return e&& (e.message||e.code||e.error_description)||String(e||"未知错误")}
 var cdns=[
@@ -50,7 +50,7 @@ function initSdk(){
   auth=app.auth;
   if(!auth||typeof auth.signInWithPassword!=="function")throw Error("当前 SDK 没有 signInWithPassword 登录方法");
   if(typeof app.rdb!=="function")throw Error("当前 SDK 没有 PostgreSQL rdb 方法");
-  message("✅ CloudBase 连接组件加载成功。请填写账号和密码，然后进行只读验证。");
+  message("✅ SDK 已初始化，但尚未验证云端接口。请测试登录连接。");
   login.disabled=false;
  }catch(e){message("SDK 初始化失败："+errText(e));login.disabled=true}
 }
@@ -76,12 +76,12 @@ form.addEventListener('submit',async function(e){
  var username=document.getElementById('username').value.trim().toLowerCase();
  var password=document.getElementById('password').value;
  if(!username||!password)return;
- login.disabled=true;message("正在验证登录……");document.getElementById("password").setAttribute("autocomplete","off");
+ login.disabled=true;stage="账号登录";message("阶段 1/2：连接账号登录接口……");document.getElementById("password").setAttribute("autocomplete","off");
  try{
   var result=await auth.signInWithPassword({username:username,password:password});
   if(result&&result.error)throw result.error;
   document.getElementById('password').value="";
-  message("登录成功，正在验证家庭只读权限……");
+  stage="家庭记录读取";message("✅ 登录通过。阶段 2/2：读取家庭成员表……");
   var db=app.rdb();
   var read=await db.from('growth_family_members').select('family_id,user_id,member_role');
   if(read&&read.error)throw read.error;
@@ -92,7 +92,7 @@ form.addEventListener('submit',async function(e){
   }else{
    message("⚠️ 登录成功，但读取结果与预期不符。\n可见的家庭成员记录数："+rows.length+"\n请停止下一步，截图此消息给我排查。");
   }
- }catch(error){document.getElementById('password').value="";message("⚠️ 登录或读取测试未通过：\n"+errText(error)+"\n\n请勿把密码发给我。");}
+ }catch(error){document.getElementById('password').value="";message("❌ 失败阶段："+stage+"\n错误："+errText(error)+"\n\n如果是 Load failed / Failed to fetch，可能是 CloudBase 安全来源未授权 GitHub 域名或网络跨域阻断。重复改密码没有意义。本页没有写入存档。");}
  finally{login.disabled=false}
 });
 document.getElementById('logout').onclick=async function(){
