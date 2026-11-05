@@ -98,7 +98,7 @@ function activityIllustration(kind){
 
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 add(host,'h3',task.prompt,'question');const msg=add(host,'div','','scene-message');let resolved=false;
-function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;if(task.type!=='fill')say(task.explain.split('.')[0]+'.','en-US');if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
+function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;if(task.type!=='fill')say(task.explain.split('.')[0]+'.','en-US',.62);if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
 if(task.type==='fill'){
   add(host,'p','先自己读句子，选择缺少的词。提交前不播放完整英文，也不会透露答案。','muted');
   add(host,'div',task.template,'scene-template');
@@ -112,7 +112,7 @@ if(task.type==='fill'){
       add(host,'p',(ok?'✅ 选对了！':'❌ 选错了，你选的是 '+word+'。正确答案是 '+right+'。')+' '+reason,'scene-message');
       const explanation=(ok?'为什么正确：':'为什么不对：')+reason;
       host.append(button('🔊 听老师讲解为什么',()=>say(explanation,'zh-CN'),'button soft'));
-      host.append(button('🔊 听正确的完整英语句子',()=>say(task.say,'en-US'),'button soft'));
+      host.append(button('🔊 听正确的完整英语句子',()=>say(task.say,'en-US',.6),'button soft'));
       host.append(button('🔊 听句子中文意思',()=>say(task.explain.slice(task.explain.indexOf('.')+1).trim(),'zh-CN'),'button soft'));
       // Give the explanation first, then read the now-revealed sentence as separate speech actions.
       say(explanation,'zh-CN');
@@ -122,7 +122,7 @@ if(task.type==='fill'){
 }else if(task.type==='color'){
   add(host,'p','听英文描述，再挑选正确的颜色。','muted');
   const model=add(host,'div',task.item,'scene-art');model.style.fontSize='70px';
-  host.append(button('🔊 听颜色指令',()=>say(task.say,'en-US'),'button soft'));
+  host.append(button('🔊 听颜色指令',()=>say(task.say,'en-US',.6),'button soft'));
   const grid=add(host,'div',undefined,'scene-tile-grid');
   task.options.forEach((opt,i)=>{
     const cell=add(grid,'div',undefined);cell.style.minWidth='0';
@@ -159,7 +159,7 @@ if(task.type==='fill'){
   submit.disabled=true;host.append(submit);refresh();
 }else if(task.type==='shop'){
   add(host,'p','先听顾客的英文需求，然后从货架选择正确的商品。','muted');
-  host.append(button('🔊 听购物需求',()=>say(task.say,'en-US'),'button soft'));
+  host.append(button('🔊 听购物需求',()=>say(task.say,'en-US',.6),'button soft'));
   const grid=add(host,'div',undefined,'scene-tile-grid');
   task.options.forEach((opt,i)=>{
     const cell=add(grid,'div',undefined);cell.style.minWidth='0';
@@ -169,12 +169,12 @@ if(task.type==='fill'){
   });
 }else if(task.type==='find'||task.type==='detect'){
  add(host,'p','先听英文，再点击对应的画面。可以重复播放。','muted');
- host.append(button('🔊 听英语线索',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
+ host.append(button('🔊 听英语线索',()=>say(task.say,'en-US',.6),'button soft scene-audio-play'));
  const grid=add(host,'div',undefined,'new-scene-grid');
  task.options.forEach((opt,i)=>{const label=opt[1],b=button('',()=>{if(resolved)return;grid.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)},'new-scene-card');const v=add(b,'span',opt[0],'visual');if(task.colors&&task.colors[i])v.style.filter='drop-shadow(0 4px 4px #0002)';if(task.type==='detect'&&opt[2])b.style.borderTop='8px solid '+({yellow:'#f1c846',blue:'#6dabed',red:'#ef8b7e',brown:'#a77b5b'}[opt[2]]||'#8bd4d9');add(b,'span',label);grid.append(b)});
 }else if(task.type==='collect'){
  add(host,'p','听清楚要放进去几个。点「放入一个」收集，完成后检查。','muted');
- host.append(button('🔊 播放英语任务',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
+ host.append(button('🔊 播放英语任务',()=>say(task.say,'en-US',.6),'button soft scene-audio-play'));
  const tray=add(host,'div',undefined,'collection-tray');add(tray,'strong','我的玩具盒');const items=add(tray,'div','（空）','collection-items');let n=0;
  const counter=add(tray,'div','已放入 0 个','muted');const controls=add(host,'div',undefined,'collection-controls');
  const addOne=button('＋ 放入一个',()=>{if(resolved||n>=task.max)return;n++;draw()},'button soft');
@@ -184,7 +184,7 @@ if(task.type==='fill'){
  host.append(button('✅ 检查数量',()=>{if(resolved)return;addOne.disabled=true;remove.disabled=true;complete(n===task.count,n+' 个')},'button'));
 }else if(task.type==='choiceAudio'){
  add(host,'p','听完整句子，然后选择对应的中文意思。','muted');
- host.append(button('🔊 播放英文句子',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
+ host.append(button('🔊 播放英文句子',()=>say(task.say,'en-US',.6),'button soft scene-audio-play'));
  const grid=add(host,'div');
  task.options.forEach((opt,i)=>{
    const group=add(grid,'div',undefined,'scene-translation-option');
@@ -199,7 +199,7 @@ if(task.type==='fill'){
  if(task.type==='picture'){if(task.scene){const box=add(host,'div',undefined,'scene-art');box.innerHTML=activityIllustration(task.scene);box.querySelector('svg').style.cssText='width:100%;max-height:280px;border-radius:14px';}else art(host,task.emoji,task.caption);}
  else add(host,'p','请点击下面的英文播放按钮，再选择正确答案。','muted');
  const choices=add(host,'div');task.options.forEach((item,i)=>{const label=Array.isArray(item)?item[0]+' '+item[1]:item;const b=button(label,()=>{if(resolved)return;choices.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)});choices.append(b);if(Array.isArray(item)){const hear=button('🔊 听选项',()=>say(item[1],'zh-CN'),'button soft');hear.style.fontSize='14px';hear.style.padding='8px';choices.append(hear)}});
- if(task.type==='listen'){const listen=button('🔊 播放英文原句（点击听）',()=>say(task.say,'en-US'),'button soft');host.insertBefore(listen,choices);}
+ if(task.type==='listen'){const listen=button('🔊 播放英文原句（点击听）',()=>say(task.say,'en-US',.6),'button soft');host.insertBefore(listen,choices);}
 }else if(task.type==='order'){
  const tokens=task.tokens,chosen=[],chosenBox=add(host,'div',undefined,'steps'),pool=add(host,'div',undefined,'steps');add(host,'p','听一听，再点词块组成句子。正确句子会在检查后显示。','muted');host.append(button('🔊 听完整句子',()=>say(tokens.join(' ')+'.','en-US'),'button soft'));
  const submit=button('检查句子',()=>{if(chosen.length!==tokens.length||resolved)return;complete(chosen.every((x,i)=>x===i),chosen.map(i=>tokens[i]).join(' '))},'button');submit.disabled=true;
