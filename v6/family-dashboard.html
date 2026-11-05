@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>家庭学习云端记录 · V6</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eaf6ff;color:#183d65;font:16px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+main{max-width:660px;margin:auto;padding:22px 16px 50px}h1{font-size:24px;margin:12px 0 6px}p{line-height:1.55}
+.card{background:white;border-radius:20px;padding:20px;margin:15px 0;box-shadow:0 5px 18px #154d8520}
+label{display:block;font-weight:700;margin:12px 0 6px}input{width:100%;font:inherit;padding:13px;border:1px solid #a7c6e2;border-radius:12px}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:14px;background:#1671d2;color:white;width:100%;margin-top:12px}
+button:disabled{opacity:.5}.secondary{background:white;color:#1b65a5;border:1px solid #a7c6e2}
+#status{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#eff7ff;border-radius:12px;margin-top:12px}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metric{background:#edf6ff;padding:12px 4px;border-radius:12px;text-align:center}.metric b{display:block;font-size:23px}.metric small{font-size:12px}
+.item{padding:13px 0;border-bottom:1px solid #e3edf6}.item:last-child{border:0}.muted{color:#5a728b;font-size:13px}.empty{padding:24px 0;color:#5a728b;text-align:center}
+a{color:#1264ad}#data{display:none}
+</style></head><body><main>
+<h1>🏎️ 家庭学习云端记录</h1>
+<p>妈妈、爸爸、外婆各自登录，查看已同步的 V6 学习成绩。本页面只读取，不上传、不修改、不删除任何记录。</p>
+<section class="card"><form id="form">
+<label for="username">家庭账号</label><input id="username" required autocomplete="username" placeholder="growth_mom / growth_dad / growth_grandma">
+<label for="password">登录密码</label><input id="password" required type="password" autocomplete="current-password" placeholder="请输入密码">
+<button id="login" type="submit" disabled>登录并查看学习记录</button></form>
+<button class="secondary" id="logout" type="button">退出云端账号</button>
+<div id="status" role="status">正在加载 CloudBase 连接组件……</div></section>
+<section class="card" id="data"><h2 id="greeting">家庭学习记录</h2>
+<div class="summary"><div class="metric"><b id="total">0</b><small>云端记录</small></div><div class="metric"><b id="days">0</b><small>学习日期</small></div><div class="metric"><b id="subjects">0</b><small>涉及学科</small></div></div>
+<div id="records"></div>
+<p class="muted">仅显示已上传至 CloudBase 的记录。孩子在 V6 浏览器中保存的本地成绩尚未自动上传，暂时显示空列表属于正常情况。</p></section>
+<p><a href="./">返回 V6 学习台</a> · <a href="./family-login-test.html">家庭登录诊断页</a></p>
+</main><script>
+(function(){"use strict";
+var FAMILY="little-growth-family-001",app,auth;
+var $=id=>document.getElementById(id);
+var cdns=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
+function setStatus(t){$("status").textContent=t}
+function err(e){return String(e&& (e.message||e.code||e.error_description)||e||"未知错误")}
+function reset(){ $("data").style.display="none";$("records").replaceChildren() }
+function load(i){
+ if(i>=cdns.length){setStatus("SDK 加载失败，请检查网络后刷新。");return}
+ var s=document.createElement("script");s.src=cdns[i];s.async=true;
+ s.onload=function(){try{if(!window.cloudbase||typeof cloudbase.init!=="function")return load(i+1);app=cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});auth=app.auth;if(!auth||typeof auth.signInWithPassword!=="function"||typeof app.rdb!=="function")throw Error("SDK 不支持当前登录或数据库接口");$("login").disabled=false;setStatus("连接组件已准备好，请登录。")}catch(e){setStatus("初始化失败："+err(e))}};
+ s.onerror=function(){load(i+1)};document.head.appendChild(s)
+}
+function field(row,name,fallback){return row[name]===undefined||row[name]===null?fallback:row[name]}
+function render(rows,member){
+ $("data").style.display="block";
+ var names={owner:"妈妈（所有者）",parent:"爸爸",grandparent:"外婆"};
+ $("greeting").textContent="家庭学习记录 · "+(names[member.member_role]||"家庭成员");
+ rows=rows.filter(x=>x&&x.family_id===FAMILY);
+ rows.sort((a,b)=>String(b.learning_day||b.created_at||"").localeCompare(String(a.learning_day||a.created_at||"")));
+ var days=new Set(rows.map(r=>r.learning_day).filter(Boolean)),subjects=new Set(rows.map(r=>r.subject).filter(Boolean));
+ $("total").textContent=rows.length;$("days").textContent=days.size;$("subjects").textContent=subjects.size;
+ var list=$("records");list.replaceChildren();
+ if(!rows.length){var empty=document.createElement("div");empty.className="empty";empty.textContent="还没有上传到云端的学习记录。现有 V6 本地学习成绩不会因此消失。";list.appendChild(empty);return}
+ rows.slice(0,100).forEach(function(r){
+  var div=document.createElement("div");div.className="item";
+  var title=document.createElement("strong");title.textContent=String(field(r,"subject","未分类"))+" · "+String(field(r,"record_type","学习记录"));
+  var info=document.createElement("div");info.className="muted";info.textContent="学习日期："+String(field(r,"learning_day","未填写"))+" · 创建时间："+String(field(r,"created_at","未填写"));
+  var details=document.createElement("div");details.className="muted";
+  var payload=r.record_data;
+  if(typeof payload==="string"){try{payload=JSON.parse(payload)}catch(e){}}
+  if(payload&&typeof payload==="object"){
+   var text=JSON.stringify(payload);details.textContent=text.length>240?text.slice(0,240)+"…":text;
+  }
+  div.append(title,info,details);list.appendChild(div)
+ });
+ if(rows.length>100){var more=document.createElement("p");more.className="muted";more.textContent="仅展示最近 100 条，统计数字包含本次可读取的全部记录。";list.appendChild(more)}
+}
+$("form").addEventListener("submit",async function(e){
+ e.preventDefault();if(!app||!auth)return;
+ reset();$("login").disabled=true;var username=$("username").value.trim().toLowerCase(),password=$("password").value;
+ try{
+  setStatus("正在验证账号……");
+  var result=await auth.signInWithPassword({username:username,password:password});if(result&&result.error)throw result.error;
+  $("password").value="";setStatus("已登录，正在检查家庭成员权限……");
+  var db=app.rdb();var m=await db.from("growth_family_members").select("family_id,user_id,member_role");
+  if(m&&m.error)throw m.error;
+  var members=Array.isArray(m&&m.data)?m.data:[];
+  if(members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role))throw Error("家庭成员查询结果异常，已停止读取学习记录。");
+  setStatus("家庭身份已确认，正在读取云端学习记录……");
+  var q=await db.from("growth_learning_records").select("record_id,family_id,record_type,subject,learning_day,record_data,created_at");
+  if(q&&q.error)throw q.error;
+  if(!q||!Array.isArray(q.data))throw Error("学习记录接口未返回预期的数据格式");
+  var foreign=q.data.some(x=>x.family_id!==FAMILY);
+  if(foreign)throw Error("数据库返回了其他家庭的数据，请立即检查 RLS 策略。");
+  render(q.data,members[0]);setStatus("✅ 登录成功，家庭身份检查通过，云端读取完成。当前读取到 "+q.data.length+" 条学习记录。此页面没有执行写入。");
+ }catch(e){reset();$("password").value="";setStatus("❌ "+err(e))}
+ finally{$("login").disabled=false}
+});
+$("logout").onclick=async function(){try{if(auth&&typeof auth.signOut==="function")await auth.signOut();reset();$("password").value="";setStatus("已退出云端账号。")}catch(e){setStatus("退出失败："+err(e))}};
+load(0);
+})();
+</script></body></html>
