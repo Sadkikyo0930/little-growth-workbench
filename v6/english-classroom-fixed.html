@@ -12,6 +12,19 @@ const qs=new URLSearchParams(location.search),lesson=Number(qs.get('lesson')||1)
 const words=lessons[lesson-1],phrase=phrases[lesson-1];const secondHalf=days[lesson-1]>=16;document.getElementById('englishBanner').src=secondHalf?'./english_banner_second_half.webp':'./english_banner_first_half.webp';const $=id=>document.getElementById(id);
 let stage=0,score=0,answers=[],sceneAnswers=[],phonicsResult=null,locked=false,utter=null,meaningAudioConfirmed=false;const hasScenes=()=>!!(window.V6EnglishScenes&&window.V6EnglishScenes.has(lesson));const lessonSteps=()=>hasScenes()?9:6;
 function speech(s,lang='en-US',rate){if(!window.speechSynthesis)return;try{speechSynthesis.cancel();utter=new SpeechSynthesisUtterance(s);utter.lang=lang;utter.rate=typeof rate==='number'?Math.max(.5,Math.min(1.3,rate)):(lang==='en-US'?.78:.9);const voices=speechSynthesis.getVoices();utter.voice=voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(lang.slice(0,2)))||null;speechSynthesis.speak(utter)}catch(e){}}
+function shuffledWordOrder(count){
+ const source=Array.from({length:count},(_,i)=>i);
+ if(count<3)return source.slice().reverse();
+ const reverse=source.slice().reverse();
+ const same=(a,b)=>a.every((v,i)=>v===b[i]);
+ let result;
+ for(let tries=0;tries<30;tries++){
+  result=source.slice();
+  for(let i=count-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]]}
+  if(!same(result,source)&&!same(result,reverse))return result;
+ }
+ return source.slice(1).concat(source[0]);
+}
 function el(tag,cls,txt){const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x}
 function button(cls,txt,fn){const b=el('button',cls,txt);b.onclick=fn;return b}
 function record(ok,chosen,correct,mode){if(locked)return;locked=true;score+=ok?1:0;answers.push({correct:ok,selected:chosen,expected:correct,mode,word:words[Math.min(stage,3)]});$('feedback').textContent=ok?'🌟 恭喜你，回答正确！':'💡 哦哦，正确答案是：'+correct;$('next').classList.remove('hidden');$('next').disabled=stage<4;$('next').textContent=stage<4?'🔒 请先听中文意思':'下一题 →';speech(ok?'恭喜你回答正确':'哦哦，正确答案是','zh-CN')}
@@ -23,7 +36,7 @@ $('listenWords').onclick=()=>speech(words.join('. '));
 words.forEach(w=>{
  const card=el('div','meaning-option');
  card.style.cssText='min-width:0;background:#f0f8ff;border:2px solid #b9d9f0;border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:6px';
- const wordBtn=button('button soft','🔊 '+w,()=>speech(w,'en-US'));
+ const wordBtn=button('button soft',lesson===17&&(w==='our'||w==='out')?'🔊 '+w+'（例句）':'🔊 '+w,()=>{if(lesson===17&&w==='our')speech('This is our car.','en-GB',.65);else if(lesson===17&&w==='out')speech('Go out now.','en-GB',.65);else speech(w,'en-US')});
  wordBtn.style.cssText='margin:0;padding:10px 5px;font-size:18px';
  const cn=meanings[w]||'高频词';
  card.append(wordBtn,el('p','muted','中文：'+cn));
@@ -36,20 +49,24 @@ $('next').onclick=()=>{if(stage<4&&!meaningAudioConfirmed)return;stage++;if(stag
 function render(){meaningAudioConfirmed=false;$('next').disabled=false;$('next').textContent='下一题 →';try{if(window.speechSynthesis)window.speechSynthesis.cancel()}catch(e){}if(stage>=6&&hasScenes()){locked=false;$('feedback').textContent='';$('next').classList.add('hidden');$('bar').style.width=(stage/lessonSteps()*100)+'%';$('step').textContent='情境互动 · 第 '+(stage-5)+' / 3 关';$('mode').textContent='🎮 看图、听指令、组句子';$('question').textContent=['看图选句子','听力与句子挑战','情境游戏'][stage-6];$('body').replaceChildren();window.V6EnglishScenes.render(lesson,stage-6,$('body'),speech,result=>{sceneAnswers.push(result);stage++;if(stage>=lessonSteps())finish();else render()});return}locked=false;$('feedback').textContent='';$('next').classList.add('hidden');$('bar').style.width=stage/6*100+'%';$('step').textContent='第 '+(stage+1)+' / 6 关 · 目前答对 '+score+' 题';$('body').replaceChildren();
 if(stage<4){const target=words[stage];const spoken=target==='I'?'eye':target;
 const homophone=lesson===9&&(target==='to'||target==='two');
+const distinguishOurOut=lesson===17&&(target==='our'||target==='out');
+const pronunciationExample=target==='our'?'This is our car.':'Go out now.';
+const pronunciationExampleMeaning=target==='our'?'这是我们的汽车（our 表示“我们的”）':'现在出去（out 表示“出去”）';
 const contextLine=target==='to'?'Go to the car.':'I have two cars.';
 const contextMeaning=target==='to'?'走向汽车（to 表示方向）':'我有两辆汽车（two 表示数量）';
-$('mode').textContent=homophone?'👂 同音词 · 听句子理解意思':'👂 听音认词';
-$('question').textContent=homophone?'to 和 two 读音相同！听整句话，判断空格里应该用哪个词。':'每题只读一个英文单词，听清楚后选择对应单词。';
+$('mode').textContent=distinguishOurOut?'👂 our / out · 听例句辨词':homophone?'👂 同音词 · 听句子理解意思':'👂 听音认词';
+$('question').textContent=distinguishOurOut?'our 和 out 不一样：听完整例句，选择空格处的正确单词。':homophone?'to 和 two 读音相同！听整句话，判断空格里应该用哪个词。':'每题只读一个英文单词，听清楚后选择对应单词。';
 if(homophone){$('body').append(el('p','muted',target==='to'?'句子提示：Go ___ the car. （走向汽车）':'句子提示：I have ___ cars. （我有两辆汽车）'));}
-const listen=button('button soft',homophone?'🔊 播放完整英文句子（可反复听）':'🔊 播放本题单词（可反复听）',()=>{try{if(window.speechSynthesis)window.speechSynthesis.cancel()}catch(e){}speech(homophone?contextLine:spoken,'en-US')});listen.setAttribute('aria-label',homophone?'播放英文句子，根据语境选择正确单词':'只播放当前题的一个英语单词');$('body').append(listen);
+if(distinguishOurOut){$('body').append(el('p','muted',target==='our'?'听力句子：This is ___ car. （这是我们的车）':'听力句子：Go ___ now. （现在出去）'));}
+const listen=button('button soft',(homophone||distinguishOurOut)?'🔊 播放完整英文例句（可反复听）':'🔊 播放本题单词（可反复听）',()=>{try{if(window.speechSynthesis)window.speechSynthesis.cancel()}catch(e){}speech(distinguishOurOut?pronunciationExample:(homophone?contextLine:spoken),distinguishOurOut?'en-GB':'en-US',distinguishOurOut?.65:undefined)});listen.setAttribute('aria-label',(homophone||distinguishOurOut)?'播放英语例句，根据语境选择正确单词':'只播放当前题的一个英语单词');$('body').append(listen);
 const grid=el('div','grid');const order=[0,1,2,3].map((_,i)=>(i+stage)%4);
-order.forEach(i=>{const w=words[i],b=button('word',w,()=>{if(locked)return;const ok=w===target;b.classList.add(ok?'correct':'wrong');grid.querySelectorAll('button').forEach(x=>x.disabled=true);record(ok,w,homophone?target+' · '+contextMeaning:target,homophone?'context-homophone':'listen');const cn=meanings[target]||'高频词';$('body').append(el('p','muted','正确单词：'+target+' · 中文意思：'+cn));$('body').append(button('button soft','🔊 听正确单词的中文意思',()=>{meaningAudioConfirmed=true;$('next').disabled=false;$('next').textContent='下一题 →';speech(cn,'zh-CN')}))});grid.append(b)});$('body').append(grid);return}
+order.forEach(i=>{const w=words[i],b=button('word',w,()=>{if(locked)return;const ok=w===target;b.classList.add(ok?'correct':'wrong');grid.querySelectorAll('button').forEach(x=>x.disabled=true);record(ok,w,distinguishOurOut?target+' · '+pronunciationExampleMeaning:(homophone?target+' · '+contextMeaning:target),distinguishOurOut?'context-our-out':(homophone?'context-homophone':'listen'));const cn=meanings[target]||'高频词';$('body').append(el('p','muted','正确单词：'+target+' · 中文意思：'+cn));$('body').append(button('button soft','🔊 听正确单词的中文意思',()=>{meaningAudioConfirmed=true;$('next').disabled=false;$('next').textContent='下一题 →';speech(cn,'zh-CN')}))});grid.append(b)});$('body').append(grid);return}
 if(stage===4){$('mode').textContent='💡 理解词义';const isToTwo=lesson===9;$('question').textContent=isToTwo?'听完整句子 Go to the car.，选择其中 to 的意思。':'听英语单词，找出正确的中文意思。';const target=words[1];$('body').append(button('button soft',isToTwo?'🔊 听完整句子':'🔊 听单词',()=>speech(isToTwo?'Go to the car.':target)));const grid=el('div','grid');[2,0,3,1].forEach(i=>{const w=words[i],cell=el('div','meaning-option');cell.style.cssText='background:#f0f8ff;border:2px solid #b7d9f1;border-radius:17px;padding:9px;min-width:0';const audio=button('button soft','🔊 点我听中文',()=>speech(meanings[w]||w,'zh-CN'));audio.style.cssText='width:100%;font-size:16px;background:#fff0bf;color:#714900;border:2px solid #f3c965';const b=button('button','选择：'+(meanings[w]||w),()=>{if(locked)return;const ok=w===target;grid.querySelectorAll('.meaning-select').forEach(x=>x.disabled=true);record(ok,w,target+' · '+(meanings[target]||''),'meaning')});b.classList.add('meaning-select');b.style.cssText='width:100%;font-size:17px';cell.append(audio,b);grid.append(cell)});$('body').append(grid);return}
 $('mode').textContent='🔺 金字塔句子';$('question').textContent='听完整句子，再点击词块按顺序拼出来。';
 const tokens=phrase.replace(/[.!?]/g,'').split(' ');
 $('body').append(button('button soft','🔊 听完整句子（可重复）',()=>speech(phrase)));$('body').append(el('p','muted','先听整句话，再按听到的顺序点击下方英文词块。完成检查后才显示正确句子。'));
 const chosen=[],result=el('div','steps'),pool=el('div','steps');$('body').append(el('p','muted','下面将词语重新排列成完整的句子：'),result,pool);
-const order=tokens.map((_,i)=>i).reverse();const submit=button('button','✅ 检查句子',()=>{if(locked)return;const reply=chosen.map(i=>tokens[i]).join(' ');const ok=chosen.every((v,i)=>v===i);pool.querySelectorAll('button').forEach(b=>b.disabled=true);result.querySelectorAll('button').forEach(b=>b.disabled=true);record(ok,reply,phrase,'pyramid');$('body').append(el('p','pyramid','正确句子：'+phrase));const meaning=phraseMeanings[lesson-1];$('body').append(el('p','muted','中文句意：'+meaning));const explain='这句话是：'+phrase+'。中文意思是：'+meaning;$('body').append(button('button soft','🔊 听中文句意讲解（可重听）',()=>speech('这句话的意思是：'+meaning,'zh-CN')));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;const vs=speechSynthesis.getVoices();u.voice=vs.find(v=>v.lang.toLowerCase()==='zh-cn')||vs.find(v=>v.lang.toLowerCase().startsWith('zh'))||null;speechSynthesis.speak(u)}catch(e){}});submit.disabled=true;
+const order=shuffledWordOrder(tokens.length);const submit=button('button','✅ 检查句子',()=>{if(locked)return;const reply=chosen.map(i=>tokens[i]).join(' ');const ok=chosen.every((v,i)=>v===i);pool.querySelectorAll('button').forEach(b=>b.disabled=true);result.querySelectorAll('button').forEach(b=>b.disabled=true);record(ok,reply,phrase,'pyramid');$('body').append(el('p','pyramid','正确句子：'+phrase));const meaning=phraseMeanings[lesson-1];$('body').append(el('p','muted','中文句意：'+meaning));const explain='这句话是：'+phrase+'。中文意思是：'+meaning;$('body').append(button('button soft','🔊 听中文句意讲解（可重听）',()=>speech('这句话的意思是：'+meaning,'zh-CN')));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;const vs=speechSynthesis.getVoices();u.voice=vs.find(v=>v.lang.toLowerCase()==='zh-cn')||vs.find(v=>v.lang.toLowerCase().startsWith('zh'))||null;speechSynthesis.speak(u)}catch(e){}});submit.disabled=true;
 order.forEach(i=>{const b=button('chip',tokens[i],()=>{if(locked||b.disabled)return;b.disabled=true;chosen.push(i);const c=button('chip selected',tokens[i],()=>{if(locked)return;const at=chosen.indexOf(i);if(at>=0)chosen.splice(at,1);c.remove();b.disabled=false;submit.disabled=chosen.length!==tokens.length});result.append(c);submit.disabled=chosen.length!==tokens.length});pool.append(b)});$('body').append(submit);
 }
 function finish(){const payload={score,total:6,answers,words,sceneAnswers,phonicsResult,at:new Date().toISOString()};$('game').classList.add('hidden');$('finish').classList.remove('hidden');$('result').textContent='完成 6 关高频词'+(sceneAnswers.length?'，以及 3 关情境游戏（答对 '+sceneAnswers.filter(x=>x.correct).length+' 关）':'')+'，高频词答对 '+score+' / 6 题。今天学习：'+words.join('、')+'。';$('againListen').onclick=()=>speech(phrase);$('restart').onclick=()=>{stage=0;score=0;answers=[];sceneAnswers=[];phonicsResult=null;beginDailyPhonics()};
