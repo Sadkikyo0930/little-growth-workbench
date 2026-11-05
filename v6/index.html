@@ -493,7 +493,7 @@ function home(){
  ids.forEach(id=>{
   const el=$('island-'+id);if(!el)return;
   const completed=baselineSubjectDone(id);
-  const subRecords=(state.records||[]).filter(r=>r.subject===id && (!r.track||id!=='cn'||!r.learningDay));
+  const subRecords=(state.records||[]).filter(r=>r.subject===id && !r.learningDay && !r.week && !r.weeklyExam);
   const correct=subRecords.filter(r=>r.correct===true).length;
   el.textContent=completed?(subRecords.length?Math.round(correct/subRecords.length*100)+'%':'✓ 已完成'):subRecords.length?'进行中':'未测评';
  });
