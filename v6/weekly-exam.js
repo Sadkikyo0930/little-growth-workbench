@@ -100,14 +100,13 @@ sc:[
 ]};
 
 const ids=['cn','ma','en','sc'];
-let practice=false,current=null;
+let practice=false,current=null,previewSelection='2026-11-22';
 const FIRST_SUNDAY='2026-11-15',SECOND_SUNDAY='2026-11-22';
 function dayString(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function sunday(){return new Date().getDay()===0}
 function key(){const d=new Date();d.setDate(d.getDate()-d.getDay());return dayString(d)}
 function officialAllowed(){return sunday()&&key()>=FIRST_SUNDAY}
-function previewWeek(){return key()<FIRST_SUNDAY?FIRST_SUNDAY:key()<SECOND_SUNDAY?SECOND_SUNDAY:key()}
-function selectedWeek(){return practice?previewWeek():key()}
+function previewWeek(){return previewSelection}
 function store(){return state.weeklyExams||(state.weeklyExams={})}
 function saveExam(){if(!practice){store()[current.week]=current;save()}}
 function build(week){
@@ -128,12 +127,13 @@ function open(){
  $('weeklyIntro').textContent=canStart?'今天是'+week+'，正式四科合卷，每科6题，共24题。':'正式测评只在开课后的周日开放。可以先试做 '+previewWeek()+' 的卷子，试做不计入成绩。';
  $('weeklyStart').hidden=!canStart;
  $('weeklyStart').textContent=completed?(completed.finishedAt?'查看本周成绩':'继续本周测评'):'开始本周测评';
- $('weeklyPreview').textContent='🔎 家长试做 '+previewWeek()+'（不存分）';
+ $('weeklyPreview').textContent='🔎 试做 11月15日（第一周）';
+ $('weeklyPreviewSecond').textContent='🔎 试做 11月22日（第二周）';
  if(canStart&&completed&&completed.finishedAt){current=completed;practice=false;renderResult()}
 }
-function enter(preview){
+function enter(preview,requestedWeek){
  if(!preview&&!officialAllowed()){open();return}
- practice=preview;const week=preview?previewWeek():key();
+ practice=preview;const week=preview?(requestedWeek||SECOND_SUNDAY):key();
  current=preview?build(week):(store()[week]||build(week));
  saveExam();$('weeklyActions').hidden=true;
  current.finishedAt?renderResult():render();
@@ -142,7 +142,7 @@ function question(i){const ref=current.questions[i],pool=ref.bank==='week2'?WEEK
 function answeredCount(){return Object.keys(current.answers).length}
 function render(){const n=answeredCount();if(n>=current.questions.length){finish();return}
  const {ref,row}=question(n);$('weeklyPlay').hidden=false;$('weeklyResult').hidden=true;
- $('weeklyProgress').textContent='第 '+(n+1)+' / '+current.questions.length+' 题'+(practice?' · 家长试做':' · 本周正式测评');
+ $('weeklyProgress').textContent=(current.week===SECOND_SUNDAY?'11月22日 · 第二周':'11月15日 · 第一周')+' · 第 '+(n+1)+' / '+current.questions.length+' 题'+(practice?' · 家长试做':' · 本周正式测评');
  $('weeklyBar').style.width=Math.round(n/current.questions.length*100)+'%';$('weeklySubject').textContent=SUBJECTS[ref.id]+' · 知识挑战';$('weeklyQuestion').textContent=row[0];
  $('weeklyFeedback').textContent='';$('weeklyNext').hidden=true;
  $('weeklyListen').style.display='inline-block';$('weeklyListen').onclick=()=>speakPrompt(row[0],ref.id);
@@ -182,7 +182,7 @@ function finish(){current.finishedAt=current.finishedAt||new Date().toISOString(
 function renderResult(){const ans=Object.values(current.answers),score=ans.filter(a=>a.correct).length;
  $('weeklyActions').hidden=true;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=false;
  const el=$('weeklyResult');el.replaceChildren();
- const h=document.createElement('h2');h.textContent='🏆 '+(practice?'家长试做结果':'本周四科测评报告');el.appendChild(h);
+ const h=document.createElement('h2');h.textContent='🏆 '+current.week+' · '+(practice?'家长试做结果':'本周四科测评报告');el.appendChild(h);
  const p=document.createElement('p');p.style.fontSize='23px';p.style.fontWeight='900';p.textContent='总成绩：'+score+' / 24（'+Math.round(score/24*100)+'分）';el.appendChild(p);
  ids.forEach(id=>{const a=ans.filter(x=>x.subject===id),c=a.filter(x=>x.correct).length;const line=document.createElement('p');line.textContent=SUBJECTS[id]+'：'+c+' / 6 · '+Math.round(c/6*100)+'%';el.appendChild(line)});
  const wrong=ans.filter(x=>!x.correct);const sub=document.createElement('h3');sub.textContent='错题回顾（'+wrong.length+'题）';el.appendChild(sub);
@@ -190,9 +190,11 @@ function renderResult(){const ans=Object.values(current.answers),score=ans.filte
  wrong.forEach((x,i)=>{const p=document.createElement('p');p.style.cssText='padding:12px;border-bottom:1px solid #d6eaf6;line-height:1.8';p.textContent=(i+1)+'. 【'+SUBJECTS[x.subject]+'】'+x.question+'  你选：'+x.chosen+'。正确：'+x.answer+'。'+x.explanation;el.appendChild(p)});
  const b=document.createElement('button');b.type='button';b.className='primary';b.textContent='返回学习台';b.onclick=()=>openScreen('home');el.appendChild(b);
 }
-$('weeklyStart').onclick=()=>enter(false);$('weeklyPreview').onclick=()=>enter(true);$('weeklyBack').onclick=()=>{if(practice&&current)current=null;openScreen('home')};$('weeklyNext').onclick=()=>render();
+const secondPreview=document.createElement('button');secondPreview.id='weeklyPreviewSecond';secondPreview.type='button';secondPreview.style.cssText='margin:8px;padding:10px 14px;border:1px solid #9bc9e4;border-radius:12px;background:white;color:#174d78;font-weight:800';
+$('weeklyPreview').insertAdjacentElement('afterend',secondPreview);
+$('weeklyStart').onclick=()=>enter(false);$('weeklyPreview').onclick=()=>enter(true,FIRST_SUNDAY);secondPreview.onclick=()=>enter(true,SECOND_SUNDAY);$('weeklyBack').onclick=()=>{if(practice&&current)current=null;openScreen('home')};$('weeklyNext').onclick=()=>render();
 const former=$('goAssessment').onclick;$('goAssessment').onclick=()=>{open()};
 const nav=document.querySelector('[data-tab="assessment"]');if(nav)nav.onclick=()=>{if(sunday())open();else open()};
-const extra=document.createElement('button');extra.id='weeklyExamAccess';extra.type='button';extra.textContent='🏆 周日四科合卷'+(officialAllowed()?' · 开始测评':' · 家长预览');extra.style.cssText='display:block;margin:12px auto;padding:12px 20px;border:2px solid #98d2ee;border-radius:16px;background:#f1faff;color:#12548f;font-size:16px;font-weight:900';extra.onclick=open;
+const extra=document.createElement('button');extra.id='weeklyExamAccess';extra.type='button';extra.textContent='🏆 周日四科合卷 · 第一周 / 第二周'+(officialAllowed()?' · 正式测评':' · 家长预览');extra.style.cssText='display:block;margin:12px auto;padding:12px 20px;border:2px solid #98d2ee;border-radius:16px;background:#f1faff;color:#12548f;font-size:16px;font-weight:900';extra.onclick=open;
 $('home').prepend(extra);
 })();
