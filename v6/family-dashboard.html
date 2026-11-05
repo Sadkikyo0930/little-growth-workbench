@@ -45,7 +45,7 @@ function render(rows,member){
  $("data").style.display="block";
  var names={owner:"妈妈（所有者）",parent:"爸爸",grandparent:"外婆"};
  $("greeting").textContent="家庭学习记录 · "+(names[member.member_role]||"家庭成员");
- rows=rows.filter(x=>x&&x.family_id===FAMILY);
+ rows=rows.filter(x=>x&&x.family_id===FAMILY&&x.record_type!=="sync-test");
  rows.sort((a,b)=>String(b.learning_day||b.created_at||"").localeCompare(String(a.learning_day||a.created_at||"")));
  var days=new Set(rows.map(r=>r.learning_day).filter(Boolean)),subjects=new Set(rows.map(r=>r.subject).filter(Boolean));
  $("total").textContent=rows.length;$("days").textContent=days.size;$("subjects").textContent=subjects.size;
