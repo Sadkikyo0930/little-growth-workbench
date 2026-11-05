@@ -18,7 +18,7 @@ const activities={
 4:[
  {type:'picture',prompt:'看图选择小朋友正在做什么',scene:'running',options:['He is running.','He is sleeping.','He is reading.'],correct:0,explain:'He is running. 他正在跑步。'},
  {type:'order',prompt:'听句子，排列词块',tokens:['He','is','running'],explain:'He is running. 他正在跑步。'},
- {type:'listen',prompt:'听英语，选择正确动作',say:'Jump!',options:[['🏃','跑步'],['🦘','跳起来'],['😴','睡觉']],correct:1,explain:'Jump! 跳起来！'}
+ {type:'listen',prompt:'听英语，选择正确动作',say:'He is jumping.',options:[['🏃','跑步'],['🦘','跳跃'],['😴','睡觉']],correct:1,explain:'He is jumping. 他正在跳跃。'}
 ],
 5:[
  {type:'picture',prompt:'看图选择小朋友正在做什么',scene:'playing',options:['I am eating.','I am playing.','I am sleeping.'],correct:1,explain:'I am playing. 我正在玩耍。'},
@@ -61,12 +61,12 @@ function activityIllustration(kind){
 
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 const msg=add(host,'div','','scene-message');let resolved=false;
-function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.');host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
+function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.','en-US');host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
 if(task.type==='picture'||task.type==='listen'){
  if(task.type==='picture'){if(task.scene){const box=add(host,'div',undefined,'scene-art');box.innerHTML=activityIllustration(task.scene);box.querySelector('svg').style.cssText='width:100%;max-height:280px;border-radius:14px';}else art(host,task.emoji,task.caption);}
- else host.append(button('🔊 听英语指令',()=>say(task.say),'button soft'));
+ else add(host,'p','请点击下面的英文播放按钮，再选择正确答案。','muted');
  const choices=add(host,'div');task.options.forEach((item,i)=>{const label=Array.isArray(item)?item[0]+' '+item[1]:item;const b=button(label,()=>{if(resolved)return;choices.querySelectorAll('button').forEach(x=>x.disabled=true);b.classList.add(i===task.correct?'good':'bad');complete(i===task.correct,label)});choices.append(b);if(Array.isArray(item)){const hear=button('🔊 听选项',()=>say(item[1],'zh-CN'),'button soft');hear.style.fontSize='14px';hear.style.padding='8px';choices.append(hear)}});
- if(task.type==='listen')host.append(button('🔊 再听英语',()=>say(task.say),'button soft'));
+ if(task.type==='listen'){const listen=button('🔊 播放英文原句（点击听）',()=>say(task.say,'en-US'),'button soft');host.insertBefore(listen,choices);}
 }else if(task.type==='order'){
  const tokens=task.tokens,chosen=[],chosenBox=add(host,'div',undefined,'steps'),pool=add(host,'div',undefined,'steps');add(host,'p','听一听，再点词块组成句子。正确句子会在检查后显示。','muted');host.insertBefore(button('🔊 听完整句子',()=>say(tokens.join(' ')+'.'),'button soft'),chosenBox);
  const submit=button('检查句子',()=>{if(chosen.length!==tokens.length||resolved)return;complete(chosen.every((x,i)=>x===i),chosen.map(i=>tokens[i]).join(' '))},'button');submit.disabled=true;
