@@ -110,7 +110,7 @@ if(task.type==='fill'){
       const ok=i===task.correct, right=task.choices[task.correct];
       const reason=task.reasons&&task.reasons[word]?task.reasons[word]:(ok?'选择正确。':'这里应该选 '+right+'。');
       add(host,'p',(ok?'✅ 选对了！':'❌ 选错了，你选的是 '+word+'。正确答案是 '+right+'。')+' '+reason,'scene-message');
-      const explanation=(ok?'恭喜你，回答正确。':'哦哦，你选择的 '+word+' 不正确。正确答案是 '+right+'。')+reason;
+      const explanation=(ok?'为什么正确：':'为什么不对：')+reason;
       host.append(button('🔊 听老师讲解为什么',()=>say(explanation,'zh-CN'),'button soft'));
       host.append(button('🔊 听正确的完整英语句子',()=>say(task.say,'en-US'),'button soft'));
       host.append(button('🔊 听句子中文意思',()=>say(task.explain.slice(task.explain.indexOf('.')+1).trim(),'zh-CN'),'button soft'));
@@ -134,7 +134,7 @@ if(task.type==='fill'){
   });
 }else if(task.type==='sequence'){
   add(host,'p','先听三句英语，再按故事发生的顺序依次点选图片。','muted');
-  host.append(button('🔊 听完整小故事',()=>say(task.lines.map(x=>x[0]).join(' '),'en-US'),'button soft'));
+  host.append(button('🔊 慢速听完整小故事',()=>say(task.lines.map(x=>x[0]).join('  ').join(' '),'en-US',.58),'button soft'));
   const selected=[],slots=add(host,'div',undefined,'scene-sequence-slots'),tiles=add(host,'div',undefined,'scene-tile-grid');
   const status=add(host,'p','已排列 0 / 3 幅','muted');
   const visualOrder=[1,2,0];
@@ -153,7 +153,7 @@ if(task.type==='fill'){
     const b=button('',()=>{if(resolved||selected.includes(i))return;selected.push(i);refresh()},'scene-tile');b.dataset.sceneIndex=i;
     add(b,'span',task.lines[i][1],'symbol');add(b,'span',task.lines[i][2]);card.append(b);
     card.append(button('🔊 听中文',()=>say(task.lines[i][2],'zh-CN'),'button soft'));
-    card.append(button('🔊 听英语',()=>say(task.lines[i][0],'en-US'),'button soft'));
+    card.append(button('🔊 慢速听英语',()=>say(task.lines[i][0],'en-US',.64),'button soft'));
   });
   const submit=button('✅ 检查故事顺序',()=>{if(resolved||selected.length!==task.lines.length)return;tiles.querySelectorAll('button').forEach(b=>b.disabled=true);complete(selected.every((x,i)=>x===i),selected.map(i=>task.lines[i][2]).join(' → '))},'button');
   submit.disabled=true;host.append(submit);refresh();
