@@ -24,7 +24,7 @@ a{color:#1264ad}#data{display:none}
 <section class="card" id="data"><h2 id="greeting">家庭学习记录</h2>
 <div class="summary"><div class="metric"><b id="total">0</b><small>云端记录</small></div><div class="metric"><b id="days">0</b><small>学习日期</small></div><div class="metric"><b id="subjects">0</b><small>涉及学科</small></div></div>
 <div id="records"></div>
-<p class="muted">仅显示已上传至 CloudBase 的记录。孩子在 V6 浏览器中保存的本地成绩尚未自动上传，暂时显示空列表属于正常情况。</p></section>
+<p class="muted">仅显示已上传至 CloudBase 的记录。本机历史试做记录不会自动算作正式成绩；尚未同步时显示空列表属于正常情况。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-sync.html">妈妈云端同步中心</a> · <a href="./family-login-test.html">家庭登录诊断页</a></p>
 </main><script>
 (function(){"use strict";
@@ -53,15 +53,32 @@ function render(rows,member){
  if(!rows.length){var empty=document.createElement("div");empty.className="empty";empty.textContent="还没有上传到云端的学习记录。现有 V6 本地学习成绩不会因此消失。";list.appendChild(empty);return}
  rows.slice(0,100).forEach(function(r){
   var div=document.createElement("div");div.className="item";
-  var title=document.createElement("strong");title.textContent=String(field(r,"subject","未分类"))+" · "+String(field(r,"record_type","学习记录"));
-  var info=document.createElement("div");info.className="muted";info.textContent="学习日期："+String(field(r,"learning_day","未填写"))+" · 创建时间："+String(field(r,"created_at","未填写"));
+  var kind=String(field(r,"record_type",""));
+  var names={answer:"答题记录","course-complete":"课程已完成","weekly-exam":"四科周测","monthly-exam":"月末测评"};
+  var title=document.createElement("strong");
+  title.textContent=String(field(r,"subject","综合"))+" · "+(names[kind]||"学习记录");
+  var info=document.createElement("div");info.className="muted";
+  var d=field(r,"learning_day",null);
+  info.textContent=d!==null&&d!==""?"学习日：第 "+String(d)+" 天":"";
   var details=document.createElement("div");details.className="muted";
   var payload=r.record_data;
-  if(typeof payload==="string"){try{payload=JSON.parse(payload)}catch(e){}}
+  if(typeof payload==="string"){try{payload=JSON.parse(payload)}catch(e){payload=null}}
   if(payload&&typeof payload==="object"){
-   var text=JSON.stringify(payload);details.textContent=text.length>240?text.slice(0,240)+"…":text;
+   if(kind==="answer"&&payload.answer){
+    var a=payload.answer;details.textContent="练习："+String(a.skill||"日常练习")+" · "+(a.correct===true?"回答正确":a.correct===false?"需要复习":"已记录");
+   }else if(kind==="course-complete"){
+    details.textContent="已完成本科学习"+(payload.completed_at?" · "+String(payload.completed_at).slice(0,10):"");
+   }else if(kind==="weekly-exam"){
+    var answers=Object.values(payload.answers||{});
+    var correct=answers.filter(x=>x&&x.correct===true).length;
+    details.textContent="测评周："+String(payload.week||"")+" · 正确 "+correct+" / "+answers.length+" 题";
+   }else if(kind==="monthly-exam"){
+    details.textContent="月末测评已完成";
+   }else{
+    details.textContent="学习记录已保存";
+   }
   }
-  div.append(title,info,details);list.appendChild(div)
+  div.append(title,info,details);list.appendChild(div);
  });
  if(rows.length>100){var more=document.createElement("p");more.className="muted";more.textContent="仅展示最近 100 条，统计数字包含本次可读取的全部记录。";list.appendChild(more)}
 }
