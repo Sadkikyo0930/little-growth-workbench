@@ -96,7 +96,16 @@ if(task.type==='find'||task.type==='detect'){
 }else if(task.type==='choiceAudio'){
  add(host,'p','听完整句子，然后选择对应的中文意思。','muted');
  host.append(button('🔊 播放英文句子',()=>say(task.say,'en-US'),'button soft scene-audio-play'));
- const grid=add(host,'div');task.options.forEach((opt,i)=>grid.append(button(opt,()=>{if(resolved)return;grid.querySelectorAll('button').forEach(x=>x.disabled=true);complete(i===task.correct,opt)})));
+ const grid=add(host,'div');
+ task.options.forEach((opt,i)=>{
+   const group=add(grid,'div',undefined,'scene-translation-option');
+   group.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin:8px 0';
+   const choose=button('选择：'+opt,()=>{if(resolved)return;grid.querySelectorAll('.scene-translation-select').forEach(x=>x.disabled=true);complete(i===task.correct,opt)});
+   choose.classList.add('scene-translation-select');
+   const hear=button('🔊 听中文',()=>say(opt,'zh-CN'),'button soft');
+   hear.style.cssText='width:auto;min-width:103px;margin:0;padding:12px 8px;font-size:14px;background:#fff0bf;color:#6d4b12';
+   group.append(choose,hear);
+ });
 }else if(task.type==='picture'||task.type==='listen'){
  if(task.type==='picture'){if(task.scene){const box=add(host,'div',undefined,'scene-art');box.innerHTML=activityIllustration(task.scene);box.querySelector('svg').style.cssText='width:100%;max-height:280px;border-radius:14px';}else art(host,task.emoji,task.caption);}
  else add(host,'p','请点击下面的英文播放按钮，再选择正确答案。','muted');
