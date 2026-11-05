@@ -46,8 +46,8 @@ const activities={
  {type:'choiceAudio',prompt:'听对话 · 朋友说了什么？',say:'Where are you? I am here.',options:['你在哪里？我在这里。','你的汽车是什么颜色？','我们要吃什么？'],correct:0,explain:'Where are you? I am here. 你在哪里？我在这里。'}
 ],
 11:[
- {type:'fill',prompt:'句子修理站 · 把正确单词放进空格',say:'I am happy.',template:'I ___ happy.',choices:['are','am','at'],correct:1,explain:'I am happy. 我很开心。',hint:'I 表示我，am 表示是'},
- {type:'fill',prompt:'句子修理站 · 多位朋友来了',say:'We are here.',template:'We ___ here.',choices:['am','at','are'],correct:2,explain:'We are here. 我们在这里。',hint:'We 表示我们'},
+ {type:'fill',prompt:'句子修理站 · 把正确单词放进空格',say:'I am happy.',template:'I ___ happy.',choices:['are','am','at'],correct:1,explain:'I am happy. 我很开心。',hint:'I 表示我，am 表示是',reasons:{are:'are 通常与 you、we、they 等搭配；主语是 I，不能选 are。',at:'at 通常表示位置或指向，不是这里需要的 be 动词。',am:'I 要搭配 am，正确句子是 I am happy。'}},
+ {type:'fill',prompt:'句子修理站 · 多位朋友来了',say:'We are here.',template:'We ___ here.',choices:['am','at','are'],correct:2,explain:'We are here. 我们在这里。',hint:'We 表示我们',reasons:{am:'am 通常跟在 I 后面；主语是 We，应该选 are。',at:'at 表示位置等意思，但句子这里需要表示“是/在”的 are。',are:'We 要搭配 are，正确句子是 We are here。'}},
  {type:'choiceAudio',prompt:'听懂句子 · at 用在什么位置？',say:'Look at the cat.',options:['看看那只猫。','我有一只猫。','所有小猫都在睡觉。'],correct:0,explain:'Look at the cat. 看看那只猫。'}
 ],
 12:[
@@ -98,16 +98,27 @@ function activityIllustration(kind){
 
 function init(lesson,index,host,say,done){const task=(activities[lesson]||[])[index];if(!task){done({mode:'scene',correct:true,selected:'skip'});return}
 add(host,'h3',task.prompt,'question');const msg=add(host,'div','','scene-message');let resolved=false;
-function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;say(task.explain.split('.')[0]+'.','en-US');if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
+function complete(ok,selected){if(resolved)return;resolved=true;msg.textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 再记住这一句： ')+task.explain;if(task.type!=='fill')say(task.explain.split('.')[0]+'.','en-US');if(task.type==='order'){const meaning=task.explain.slice(task.explain.indexOf('.')+1).trim();host.append(button('🔊 听中文句意讲解',()=>say('这句话的意思是：'+meaning,'zh-CN'),'button soft'));try{const u=new SpeechSynthesisUtterance('这句话的意思是：'+meaning);u.lang='zh-CN';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}host.append(button('继续下一关 →',()=>done({mode:'scene-'+task.type,correct:ok,selected,expected:task.explain}),'button'))}
 if(task.type==='fill'){
-  add(host,'p','先听完整英文句子，再选合适的单词修理句子。','muted');
-  host.append(button('🔊 听完整英语',()=>say(task.say,'en-US'),'button soft'));
+  add(host,'p','先自己读句子，选择缺少的词。提交前不播放完整英文，也不会透露答案。','muted');
   add(host,'div',task.template,'scene-template');
   const grid=add(host,'div',undefined,'scene-tile-grid');
   task.choices.forEach((word,i)=>{
-    const b=button(word,()=>{if(resolved)return;grid.querySelectorAll('button').forEach(x=>x.disabled=true);complete(i===task.correct,word)},'scene-tile');grid.append(b)
+    const b=button(word,()=>{
+      if(resolved)return;
+      grid.querySelectorAll('button').forEach(x=>x.disabled=true);
+      const ok=i===task.correct, right=task.choices[task.correct];
+      const reason=task.reasons&&task.reasons[word]?task.reasons[word]:(ok?'选择正确。':'这里应该选 '+right+'。');
+      add(host,'p',(ok?'✅ 选对了！':'❌ 选错了，你选的是 '+word+'。正确答案是 '+right+'。')+' '+reason,'scene-message');
+      const explanation=(ok?'恭喜你，回答正确。':'哦哦，你选择的 '+word+' 不正确。正确答案是 '+right+'。')+reason;
+      host.append(button('🔊 听老师讲解为什么',()=>say(explanation,'zh-CN'),'button soft'));
+      host.append(button('🔊 听正确的完整英语句子',()=>say(task.say,'en-US'),'button soft'));
+      host.append(button('🔊 听句子中文意思',()=>say(task.explain.slice(task.explain.indexOf('.')+1).trim(),'zh-CN'),'button soft'));
+      // Give the explanation first, then read the now-revealed sentence as separate speech actions.
+      say(explanation,'zh-CN');
+      complete(ok,word);
+    },'scene-tile');grid.append(b)
   });
-  add(host,'p','小提示：'+task.hint,'muted');
 }else if(task.type==='color'){
   add(host,'p','听英文描述，再挑选正确的颜色。','muted');
   const model=add(host,'div',task.item,'scene-art');model.style.fontSize='70px';
