@@ -2,37 +2,45 @@
 <style>*{box-sizing:border-box}body{margin:0;background:#e8f5ff;color:#193e65;font:16px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:560px;margin:auto;padding:22px 16px 60px}h1{font-size:24px}p{line-height:1.65}.card{background:white;border-radius:19px;padding:20px;margin:16px 0;box-shadow:0 6px 18px #2356a31a}label{display:block;font-weight:700;margin:12px 0 6px}input{font:inherit;width:100%;padding:13px;border:1px solid #abc9dd;border-radius:11px}button{background:#1771ce;color:#fff;border:0;border-radius:12px;padding:14px;width:100%;font:inherit;font-weight:800;margin:8px 0}button:disabled{opacity:.42}.secondary{background:white;color:#176ab2;border:1px solid #b0cadd}.muted{font-size:13px;color:#5b7388}.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#eff7ff;padding:12px;border-radius:12px;margin-top:10px}.metric{font-size:22px;font-weight:800}a{color:#1672c0}</style></head><body><main>
 <h1>🏎️ V6 家庭云端同步中心</h1>
 <p>在孩子使用的浏览器中，妈妈登录后可把已完成的答题、正式课程和周测记录上传到腾讯云。未开始学习时，无需上传。</p>
-<section class="card"><h2>第一步 · 本机记录</h2><p id="local" class="status">正在查看本机……</p><p class="muted">此页面和 V6 正式版使用相同的数据键，不会清除或覆盖原有成绩。请在孩子平时使用的浏览器中打开。</p></section>
+<section class="card"><h2>第一步 · 本机记录</h2><p id="local" class="status">正在查看本机……</p><p id="baselineStatus" class="muted">正在检查正式同步起点……</p><button type="button" id="setBaseline" class="secondary">从现在起记录正式学习（保留之前试做数据）</button><p class="muted">如果孩子还没有正式开学，请先设置正式同步起点。已有试做与旧测评仍保留在本机，但不上传云端。这个操作只设置同步过滤标记，不会清空或修改任何学习成绩。</p></section>
 <section class="card"><h2>第二步 · 妈妈登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" value="growth_mom" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
 <button id="logout" class="secondary" type="button">退出账号</button><p id="status" class="status" role="status">正在加载云端组件……</p></section>
 <section class="card"><h2>第三步 · 上传新增记录</h2><p>待同步：<span class="metric" id="pending">—</span> 条；云端已有：<span class="metric" id="remote">—</span> 条</p>
 <button id="sync" disabled>上传尚未同步的记录</button><p class="muted">首次上传前会检查重复记录。只新增、绝不删除已有记录，也不覆盖云端数据。需要 CloudBase 数据库为妈妈账号授予 INSERT 权限及正确的 RLS 策略；如果权限未开放，页面会显示错误并停止上传。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-dashboard.html">家庭云端查看页</a></p>
 </main><script>(function(){"use strict";
-var FAMILY="little-growth-family-001",KEY="growth-workbench-v6-adaptive-2",app,auth,db,member,all=[],pending=[],remoteIds=new Set(),signed=false,working=false;
+var FAMILY="little-growth-family-001",KEY="growth-workbench-v6-adaptive-2",BASELINE_KEY="v6-family-sync-baseline-20261105",app,auth,db,member,all=[],pending=[],remoteIds=new Set(),signed=false,working=false;
 var $=id=>document.getElementById(id),subjectNames={cn:"语文",ma:"数学",en:"英语",sc:"科学"};
 var cdns=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
 function status(v){$("status").textContent=v}
 function err(e){return String(e&&(e.message||e.code||e.error_description)||e||"未知错误")}
 function localState(){try{var v=JSON.parse(localStorage.getItem(KEY)||"null");return v&&Array.isArray(v.records)?v:null}catch(e){return null}}
+function getBaseline(){try{var b=JSON.parse(localStorage.getItem(BASELINE_KEY)||"null");return b&&Number.isInteger(b.answerCount)&&b.answerCount>=0&&typeof b.start==="string"?b:null}catch(e){return null}}
+function drawBaseline(){var b=getBaseline();$("baselineStatus").textContent=b?"✅ 已设置正式同步起点："+new Date(b.start).toLocaleString()+"。设置时已有 "+b.answerCount+" 条历史答题保留本机、不上传。":"⚠️ 尚未设置正式同步起点。为避免把测试记录上传，上传功能暂时锁定。";$("setBaseline").textContent=b?"重新设置正式同步起点（慎用）":"从现在起记录正式学习（保留之前试做数据）"}
+$("setBaseline").onclick=function(){var s=localState();if(!s){alert("当前浏览器没有 V6 记录，请先从 V6 主页面打开。");return}
+ var current=getBaseline();if(current&&!confirm("已设置过正式同步起点。重新设置将跳过更多历史记录。确定继续吗？"))return;
+ if(!confirm("当前已有 "+s.records.length+" 条历史答题。确定把现在作为正式学习起点吗？\n这些历史数据仍保留本机，但不会加入后续云端上传。"))return;
+ try{localStorage.setItem(BASELINE_KEY,JSON.stringify({start:new Date().toISOString(),answerCount:s.records.length}));drawBaseline();update();status("✅ 正式同步起点已保存。原有成绩没有修改，历史试做记录不会上传。")}catch(e){alert("保存起点失败："+err(e))}
+};
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
 function makeRows(){
  var s=localState();if(!s){$("local").textContent="本浏览器暂无 V6 学习记录。孩子未开始正式学习时这是正常的。";return []}
+ var baseline=getBaseline();drawBaseline();if(!baseline){$("local").textContent="已找到 "+s.records.length+" 条本机历史答题。先设置正式同步起点，再上传。";return []}
  var items=[];
  // Each recorded answer is append-only; use a stable index, not changing payload content, as the identity.
- (s.records||[]).forEach(function(r,i){if(!r||typeof r!=="object")return;
+ (s.records||[]).forEach(function(r,i){if(i<baseline.answerCount||!r||typeof r!=="object")return;
   items.push({record_id:"v6-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
  });
  var course=s.v6Course||{},subjs=course.subjects||{};
  Object.keys(subjs).forEach(function(day){var n=Number(day);if(!Number.isInteger(n)||n<1||n>30)return;
   var map=subjs[day];if(!map||typeof map!=="object")return;
-  Object.keys(map).forEach(function(name){if(!map[name])return;items.push({record_id:"v6-course-"+n+"-"+({"语文":"cn","数学":"ma","英语":"en","科学":"sc"}[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:map[name]}})})
+  Object.keys(map).forEach(function(name){if(!map[name]||!Number.isFinite(Date.parse(map[name]))||Date.parse(map[name])<Date.parse(baseline.start))return;items.push({record_id:"v6-course-"+n+"-"+({"语文":"cn","数学":"ma","英语":"en","科学":"sc"}[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:map[name]}})})
  });
  var weekly=s.weeklyExams||{};
- Object.keys(weekly).forEach(function(week){var exam=weekly[week];if(!exam||!exam.finishedAt)return;
+ Object.keys(weekly).forEach(function(week){var exam=weekly[week];if(!exam||!exam.finishedAt||Date.parse(exam.finishedAt)<Date.parse(baseline.start))return;
   items.push({record_id:"v6-weekly-"+week,record_type:"weekly-exam",subject:"四科周测",learning_day:dayIndex(week),record_data:{version:1,source:"v6",week:week,finished_at:exam.finishedAt,answers:exam.answers||{}}})
  });
- if(course.englishMonthlyExam&&course.englishMonthlyExam.finishedAt){items.push({record_id:"v6-monthly-english",record_type:"monthly-exam",subject:"英语",learning_day:30,record_data:{version:1,source:"v6",exam:course.englishMonthlyExam}})}
+ if(course.englishMonthlyExam&&course.englishMonthlyExam.finishedAt&&Date.parse(course.englishMonthlyExam.finishedAt)>=Date.parse(baseline.start)){items.push({record_id:"v6-monthly-english",record_type:"monthly-exam",subject:"英语",learning_day:30,record_data:{version:1,source:"v6",exam:course.englishMonthlyExam}})}
  $("local").textContent="已找到 "+(s.records||[]).length+" 条答题、"+Object.values(subjs).reduce((n,m)=>n+Object.values(m||{}).filter(Boolean).length,0)+" 项正式课程完成记录、"+Object.values(weekly).filter(x=>x&&x.finishedAt).length+" 份已完成周测。\n可同步记录："+items.length+" 条。";
  return items;
 }
@@ -70,5 +78,5 @@ $("sync").onclick=async function(){if(!signed||working||!member||member.member_r
  finally{working=false;try{await refreshRemote()}catch(e){status($("status").textContent+"\n重新读取失败："+err(e))}update()}
 };
 $("logout").onclick=async function(){try{if(auth&&typeof auth.signOut==="function")await auth.signOut();signed=false;member=null;remoteIds.clear();update();status("已退出账号。")}catch(e){status("退出失败："+err(e))}};
-update();sdk(0);
+drawBaseline();update();sdk(0);
 })();</script></body></html>
