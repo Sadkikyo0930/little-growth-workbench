@@ -71,32 +71,46 @@ function playIsolatedSh(){
     }).catch(()=>panel.append(make('p','请再次点击播放，允许浏览器播放声音。','feedback')));
   }catch(e){panel.append(make('p','播放失败，请重试。','feedback'))}
 }
-let thAudioContext=null;
+// Reusable offline WAV sound for /θ/ avoids iPhone Safari AudioContext resume timing.
+// Synthesized friction only; it contains no spoken vowel or final consonant.
+let thSoundUrl=null;
+function buildThWavUrl(){
+  if(thSoundUrl)return thSoundUrl;
+  const rate=22050,duration=.85,n=Math.round(rate*duration);
+  const bytes=new ArrayBuffer(44+n*2),view=new DataView(bytes);
+  function textAt(offset,value){for(let j=0;j<value.length;j++)view.setUint8(offset+j,value.charCodeAt(j))}
+  textAt(0,'RIFF');view.setUint32(4,36+n*2,true);textAt(8,'WAVE');
+  textAt(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);
+  view.setUint16(22,1,true);view.setUint32(24,rate,true);
+  view.setUint32(28,rate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);
+  textAt(36,'data');view.setUint32(40,n*2,true);
+  let smooth=0;
+  for(let i=0;i<n;i++){
+    const noise=Math.random()*2-1;
+    smooth=.79*smooth+.21*noise;
+    const friction=noise-smooth;
+    const attack=Math.min(1,i/(rate*.09)),release=Math.min(1,(n-i-1)/(rate*.15));
+    const envelope=Math.max(0,Math.min(attack,release));
+    // More audible than the original 0.17 gain; avoid extreme amplitude.
+    const value=Math.max(-1,Math.min(1,friction*1.02*envelope));
+    view.setInt16(44+i*2,Math.round(value*30000),true);
+  }
+  thSoundUrl=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
+  return thSoundUrl;
+}
 function playIsolatedTh(){
-  // Voiceless dental /θ/: diffuse, relatively quiet friction, without the vowel /ɪ/ or final /n/.
-  // Not speech synthesis of "th", "thin" or "thing", which would introduce extra phonemes.
-  const AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC){panel.append(make('p','当前浏览器无法播放单独 th 音，请点击例词听完整发音。','feedback'));return}
   try{
-    if(chunkPlayer){chunkPlayer.pause();chunkPlayer=null}
-    if(!thAudioContext)thAudioContext=new AC();
-    const ctx=thAudioContext;
-    Promise.resolve(ctx.state==='suspended'?ctx.resume():undefined).then(()=>{
-      const dur=.9,n=Math.ceil(ctx.sampleRate*dur),buf=ctx.createBuffer(1,n,ctx.sampleRate),samples=buf.getChannelData(0);
-      // Gentle unvoiced broadband air noise; /θ/ has weaker, less concentrated hiss than /ʃ/.
-      for(let i=0;i<n;i++)samples[i]=Math.random()*2-1;
-      const source=ctx.createBufferSource();source.buffer=buf;
-      const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=1100;hp.Q.value=.5;
-      const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=7500;lp.Q.value=.5;
-      const gain=ctx.createGain(),t=ctx.currentTime;
-      gain.gain.setValueAtTime(.0001,t);
-      gain.gain.linearRampToValueAtTime(.17,t+.12);
-      gain.gain.setValueAtTime(.17,t+dur-.18);
-      gain.gain.linearRampToValueAtTime(.0001,t+dur);
-      source.connect(hp);hp.connect(lp);lp.connect(gain);gain.connect(ctx.destination);
-      source.start(t);source.stop(t+dur+.01);
-    }).catch(()=>panel.append(make('p','请再次点击 th 发音按钮，允许浏览器播放声音。','feedback')));
-  }catch(e){panel.append(make('p','th 发音播放失败，请重试。','feedback'))}
+    if(chunkPlayer){chunkPlayer.pause();chunkPlayer.currentTime=0}
+    // HTMLMediaElement.play is issued directly inside the button click: Safari gesture-compatible.
+    chunkPlayer=new Audio(buildThWavUrl());
+    chunkPlayer.volume=1;
+    const playing=chunkPlayer.play();
+    if(playing&&typeof playing.catch==='function')playing.catch(()=>{
+      panel.append(make('p','没有播放成功，请检查手机静音模式与媒体音量，然后再点一次。','feedback'));
+    });
+  }catch(e){
+    panel.append(make('p','th 音频播放失败，请重试或点击 thin 例词试听。','feedback'));
+  }
 }
 function playChunk(){if(chunk==='sh'){playIsolatedSh();return}if(chunk==='th'){playIsolatedTh();return}const key=chunk;const src=window.V6PhonicsAudio&&window.V6PhonicsAudio[key];if(!src){panel.append(make('p','组合音频暂时不可用，请打开原版 V4 练习。','feedback'));return}try{if(chunkPlayer){chunkPlayer.pause();chunkPlayer.currentTime=0}chunkPlayer=new Audio(src);chunkPlayer.play().catch(()=>{panel.append(make('p','请再次点击组合发音按钮，允许浏览器播放音频。','feedback'))})}catch(e){panel.append(make('p','此设备暂时无法播放组合发音。','feedback'))}}
 const panel=make('div',undefined,'phonics-panel');host.replaceChildren(panel);
