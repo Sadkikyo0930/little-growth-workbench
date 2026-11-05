@@ -66,19 +66,19 @@ const activities={
  {type:'choiceAudio',prompt:'购物任务 · 听懂完整句子的意思',say:'I want to eat an apple.',options:['我想吃一个苹果。','我有四辆汽车。','我想喝牛奶。'],correct:0,explain:'I want to eat an apple. 我想吃一个苹果。'}
 ],
 15:[
- {type:'room',prompt:'温暖小家 · 听线索找出房间',say:'He is in the bedroom.',options:[['🛏️','卧室','bedroom'],['🛋️','客厅','living room'],['🍽️','厨房','kitchen']],correct:0,explain:'He is in the bedroom. 他在卧室里。'},
- {type:'room',prompt:'温暖小家 · 找出正确的玩具',say:'He has a red car.',options:[['🚗','红色玩具车','red car'],['🧸','棕色小熊','brown bear'],['🚂','蓝色小火车','blue train']],correct:0,explain:'He has a red car. 他有一辆红色玩具车。'},
+ {type:'room',prompt:'温暖小家 · 听线索找出房间',say:'He is in the bedroom.',options:[['🛋️','客厅','living room'],['🛏️','卧室','bedroom'],['🍽️','厨房','kitchen']],correct:1,explain:'He is in the bedroom. 他在卧室里。'},
+ {type:'room',prompt:'温暖小家 · 找出正确的玩具',say:'He has a red car.',options:[['🧸','棕色小熊','brown bear'],['🚂','蓝色小火车','blue train'],['🚗','红色玩具车','red car']],correct:2,explain:'He has a red car. 他有一辆红色玩具车。'},
  {type:'fill',prompt:'我的喜好 · 看句子选择合适的词',say:'I like the car.',template:'I ___ the car.',choices:['into','he','like'],correct:2,explain:'I like the car. 我喜欢这辆汽车。',reasons:{into:'into 表示进入里面，不能表达喜欢。',he:'he 表示他，不能放在这里表示喜欢。',like:'I like ... 表示我喜欢……，所以这里选 like。'}}
 ],
 16:[
  {type:'compare',prompt:'超级观察员 · 找到新的汽车',say:'The car is new.',options:[['🚗','崭新的蓝色汽车','new',true],['🚙','旧旧的棕色汽车','old',false]],correct:0,explain:'The car is new. 这辆车是新的。'},
- {type:'compare',prompt:'超级观察员 · 哪幅画没有球？',say:'No ball is here.',options:[['🛝','滑梯旁没有球','no ball',true],['⚽','草地上有足球','ball',false]],correct:0,explain:'No ball is here. 这里没有球。'},
+ {type:'compare',prompt:'超级观察员 · 哪幅画没有球？',say:'No ball is here.',options:[['⚽','草地上有足球','ball',false],['🛝','滑梯旁没有球','no ball',true]],correct:1,explain:'No ball is here. 这里没有球。'},
  {type:'choiceAudio',prompt:'观察规则 · must 表示什么意思？',say:'You must stop now.',options:['你现在必须停下。','你现在可以出去玩。','你有一辆新汽车。'],correct:0,explain:'You must stop now. 你现在必须停下。'}
 ],
 17:[
  {type:'treasure',prompt:'灯塔宝藏 · 找到第一个线索',say:'Look on the table.',options:[['🪑','桌子上','on the table'],['🚪','门后面','behind the door'],['🌳','树下面','under the tree']],correct:0,explain:'Look on the table. 看桌子上面。',progress:1},
- {type:'treasure',prompt:'灯塔宝藏 · 找到下一步的路',say:'Please go out.',options:[['🚪','走到外面','go out'],['🛏️','回卧室睡觉','go to bed'],['🛑','留在这里','stay here']],correct:0,explain:'Please go out. 请走到外面去。',progress:2},
- {type:'treasure',prompt:'灯塔宝藏 · 打开最后的宝箱',say:'This is our treasure. Please open it.',options:[['🗝️','用钥匙打开宝箱','open it'],['🚗','开走小汽车','drive away'],['🎒','收好书包','pack a bag']],correct:0,explain:'This is our treasure. Please open it. 这是我们的宝藏，请打开它。',progress:3}
+ {type:'treasure',prompt:'灯塔宝藏 · 找到下一步的路',say:'Please go out.',options:[['🛏️','回卧室睡觉','go to bed'],['🛑','留在这里','stay here'],['🚪','走到外面','go out']],correct:2,explain:'Please go out. 请走到外面去。',progress:2},
+ {type:'treasure',prompt:'灯塔宝藏 · 打开最后的宝箱',say:'This is our treasure. Please open it.',options:[['🎒','收好书包','pack a bag'],['🗝️','用钥匙打开宝箱','open it'],['🚗','开走小汽车','drive away']],correct:1,explain:'This is our treasure. Please open it. 这是我们的宝藏，请打开它。',progress:3}
 ]};
 const styles=document.createElement('style');styles.textContent=`
 .scene-art{min-height:180px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border-radius:22px;background:linear-gradient(145deg,#e1f8ff,#fff6d9);border:3px solid #fff;box-shadow:0 6px 15px #2c75a51b;margin:12px 0;padding:15px}
