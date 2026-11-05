@@ -4,7 +4,7 @@
 (function(){
 'use strict';
 const MAIN='growth-workbench-v6-adaptive-2';
-const belongs=k=>k===MAIN||k.startsWith('v6_')||k.startsWith('v6-');
+const belongs=k=>{const syncInternal=k.startsWith('v6-family-sync-')||k.startsWith('v6-family-auto-sync-');return !syncInternal&&(k===MAIN||k.startsWith('v6_')||k.startsWith('v6-'))};
 function snapshot(){
  const items={};
  try{for(let i=0;i<localStorage.length;i++){
