@@ -7,25 +7,34 @@ function saveStatus(message){try{localStorage.setItem(STATUS,JSON.stringify({at:
 function readState(){try{var s=JSON.parse(localStorage.getItem(KEY)||"null");return s&&Array.isArray(s.records)?s:null}catch(e){return null}}
 function baseline(){try{var x=JSON.parse(localStorage.getItem(BASELINE)||"null");return x&&Number.isInteger(x.answerCount)&&x.answerCount>=0&&Number.isFinite(Date.parse(x.start))?x:null}catch(e){return null}}
 function error(e){return String(e&&(e.message||e.code||e.error_description)||e||"未知错误")}
+function deviceId(){
+ var key="v6-family-sync-device-id",v=localStorage.getItem(key);
+ if(v&&/^[a-f0-9]{16}$/.test(v))return v;
+ var bytes=new Uint8Array(8);if(!window.crypto||!crypto.getRandomValues)throw Error("设备不支持安全随机数");
+ crypto.getRandomValues(bytes);v=Array.from(bytes).map(x=>x.toString(16).padStart(2,"0")).join("");
+ localStorage.setItem(key,v);if(localStorage.getItem(key)!==v)throw Error("无法保存设备编号，已停止同步");return v
+}
+
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
 function build(s,b){
+ var prefix=deviceId();
  var arr=[],subjectNames={cn:"语文",ma:"数学",en:"英语",sc:"科学"},map={"语文":"cn","数学":"ma","英语":"en","科学":"sc"};
  (s.records||[]).forEach(function(r,i){if(i<b.answerCount||!r||typeof r!=="object")return;
-  arr.push({record_id:"v6-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
+  arr.push({record_id:"v6-"+prefix+"-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
  });
  var course=s.v6Course||{},subjs=course.subjects||{};
  Object.keys(subjs).forEach(function(day){var n=Number(day);if(!Number.isInteger(n)||n<1||n>30)return;
   var m=subjs[day];if(!m||typeof m!=="object")return;
   Object.keys(m).forEach(function(name){if(!m[name]||!Number.isFinite(Date.parse(m[name]))||Date.parse(m[name])<Date.parse(b.start))return;
-   arr.push({record_id:"v6-course-"+n+"-"+(map[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:m[name]}})
+   arr.push({record_id:"v6-"+prefix+"-course-"+n+"-"+(map[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:m[name]}})
   })
  });
  Object.keys(s.weeklyExams||{}).forEach(function(week){var exam=s.weeklyExams[week];
   if(!exam||!exam.finishedAt||!Number.isFinite(Date.parse(exam.finishedAt))||Date.parse(exam.finishedAt)<Date.parse(b.start))return;
-  arr.push({record_id:"v6-weekly-"+week,record_type:"weekly-exam",subject:"四科周测",learning_day:dayIndex(week),record_data:{version:1,source:"v6",week:week,finished_at:exam.finishedAt,answers:exam.answers||{}}})
+  arr.push({record_id:"v6-"+prefix+"-weekly-"+week,record_type:"weekly-exam",subject:"四科周测",learning_day:dayIndex(week),record_data:{version:1,source:"v6",week:week,finished_at:exam.finishedAt,answers:exam.answers||{}}})
  });
  if(course.englishMonthlyExam&&course.englishMonthlyExam.finishedAt&&Date.parse(course.englishMonthlyExam.finishedAt)>=Date.parse(b.start)){
-  arr.push({record_id:"v6-monthly-english",record_type:"monthly-exam",subject:"英语",learning_day:30,record_data:{version:1,source:"v6",exam:course.englishMonthlyExam}})
+  arr.push({record_id:"v6-"+prefix+"-monthly-english",record_type:"monthly-exam",subject:"英语",learning_day:30,record_data:{version:1,source:"v6",exam:course.englishMonthlyExam}})
  }
  return arr;
 }
