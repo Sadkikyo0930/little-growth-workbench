@@ -63,33 +63,90 @@ const screen=$('weeklyExam');if(!screen)return;
 // Retire the temporary English inspection page; formal English course and monthly exam remain intact.
 if($('englishPreviewMenu'))$('englishPreviewMenu').remove();
 if($('englishPreviewHomeBtn'))$('englishPreviewHomeBtn').parentElement.remove();
+
+/* 2026-11-22 第二次周测：四科各6题，区别于首周题库。 */
+const WEEK2_QUESTIONS={
+cn:[
+['听故事：小鹿看见乌云，先把晒着的衣服收回家。后来下雨了。小鹿为什么收衣服？',['因为快下雨了','因为要睡觉','因为衣服太新'],0,'乌云可能预示下雨，所以小鹿提前收好衣服。'],
+['“河”和“海”都有哪个偏旁？',['三点水','提手旁','口字旁'],0,'河、海都与水有关，偏旁是三点水。'],
+['“一去二三里”中的“三”一共有几画？',['两画','三画','四画'],1,'“三”是三条横线，共三画。'],
+['“举头望明月”中的“望”最接近哪个意思？',['看','跑','听'],0,'望明月，就是抬头看月亮。'],
+['下列哪个词语更适合形容秋天？',['落叶飘飘','烈日炎炎','冰天雪地'],0,'秋天树叶常变黄并飘落。'],
+['句子“小猫躲在桌子下面”，小猫在哪里？',['桌子下面','桌子上面','窗户外面'],0,'“下面”表示位置在桌子底下。']
+],
+ma:[
+['小明有9颗糖，妈妈又给他7颗，一共有几颗？',['15颗','16颗','17颗'],1,'9＋7＝16，可以先凑十。'],
+['14－6＝？',['7','8','9'],1,'14－4＝10，再减2，得8。'],
+['一个盒子里有12块积木，拿走3块又放回2块，现在有几块？',['10块','11块','12块'],1,'12－3＋2＝11。'],
+['从左往右数，小蓝排第4，从右往左数排第3，队伍一共有几人？',['6人','7人','8人'],0,'4＋3－1＝6，自己只能数一次。'],
+['哪个数比15大2？',['13','16','17'],2,'15＋2＝17。'],
+['桌上有4个三角形和3个圆形，一共有几个图形？',['6个','7个','8个'],1,'4＋3＝7。']
+],
+en:[
+['Which word means “小船”？',['ship','shop','sheep'],0,'ship 是船，shop 是商店，sheep 是羊。'],
+['选择与“我们的”意思相同的英文词。',['out','our','are'],1,'our 的意思是我们的，out 是出去。'],
+['Which word has the “ight” sound?',['light','lake','look'],0,'light 含固定拼读块 ight。'],
+['选择“她有一只猫”的正确英文句子。',['She has a cat.','He can run.','I see a dog.'],0,'She has a cat. 表示她有一只猫。'],
+['根据句意选词：I can ___ a kite.',['fly','apple','book'],0,'fly a kite 表示放风筝。'],
+['Choose the word for “夜晚”。',['night','right','bright'],0,'night 是夜晚，right 是正确或右边。']
+],
+sc:[
+['洗过的衣服晾在通风处更容易干，主要因为什么？',['水分蒸发得更快','衣服变成空气','风把衣服吃掉'],0,'空气流动可加快水的蒸发。'],
+['下列哪种材料通常更容易被磁铁吸住？',['铁回形针','塑料尺','纸杯'],0,'磁铁可以吸引许多铁制物品。'],
+['种子发芽后，通常先向下生长的是哪一部分？',['根','花朵','果实'],0,'根通常向下生长，帮助植物吸水。'],
+['看到闪电后才听到雷声，主要是因为什么？',['光传播得比声音快','闪电没有声音','雷声从地里长出来'],0,'光传播得比声音快，所以往往先看见闪电。'],
+['为什么雨后有时会出现彩虹？',['阳光经过空气中的小水滴','云变成七彩颜料','树叶发出彩光'],0,'阳光经过水滴发生折射和色散，能形成彩虹。'],
+['下面哪个做法更有利于保护环境？',['把可回收物分类','随手乱扔电池','把垃圾倒入河里'],0,'分类回收可以减少资源浪费和环境污染。']
+]};
+
 const ids=['cn','ma','en','sc'];
 let practice=false,current=null;
-function sunday(){const d=new Date();return d.getDay()===0}
-function key(){const d=new Date();const day=d.getDay();d.setDate(d.getDate()-day);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+const FIRST_SUNDAY='2026-11-15',SECOND_SUNDAY='2026-11-22';
+function dayString(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function sunday(){return new Date().getDay()===0}
+function key(){const d=new Date();d.setDate(d.getDate()-d.getDay());return dayString(d)}
+function officialAllowed(){return sunday()&&key()>=FIRST_SUNDAY}
+function previewWeek(){return key()<FIRST_SUNDAY?FIRST_SUNDAY:key()<SECOND_SUNDAY?SECOND_SUNDAY:key()}
+function selectedWeek(){return practice?previewWeek():key()}
 function store(){return state.weeklyExams||(state.weeklyExams={})}
-function exam(){return practice?current:store()[key()]}
-function saveExam(){if(!practice){store()[key()]=current;save()}}
-function build(){
- const week=key(),weekSeed=Number(week.replace(/-/g,'')),picked={};
- ids.forEach((id,index)=>{const pool=QUESTIONS[id];const start=(weekSeed+index*3)%pool.length;picked[id]=Array.from({length:6},(_,i)=>({id,idx:(start+i*2)%pool.length}));});
+function saveExam(){if(!practice){store()[current.week]=current;save()}}
+function build(week){
+ const isSecond=week===SECOND_SUNDAY,picked={};
+ if(isSecond){
+  ids.forEach(id=>{picked[id]=WEEK2_QUESTIONS[id].map((_,i)=>({id,idx:i,bank:'week2'}))});
+ }else{
+  const weekSeed=Number(week.replace(/-/g,''));
+  ids.forEach((id,index)=>{const pool=QUESTIONS[id];const start=(weekSeed+index*3)%pool.length;picked[id]=Array.from({length:6},(_,i)=>({id,idx:(start+i*2)%pool.length}))});
+ }
  const ordered=[];for(let r=0;r<6;r++)ids.forEach(id=>ordered.push(picked[id][r]));
  return {week,createdAt:new Date().toISOString(),questions:ordered,answers:{},finishedAt:null};
 }
-function open(){openScreen('weeklyExam');const completed=store()[key()];$('weeklyActions').hidden=false;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=true;$('weeklyIntro').textContent=sunday()?'今天是周日！四科学习成果，一张卷子来挑战。每科6题，共24题。':'四科合卷 · 共24题 · 每科6题。周日正式作答，其他时间可以家长试做。';
- $('weeklyStart').hidden=!sunday();$('weeklyStart').textContent=completed?(completed.finishedAt?'查看本周成绩':'继续本周测评'):'开始本周测评';
- if(sunday()&&completed&&completed.finishedAt){current=completed;practice=false;renderResult()}
+function open(){
+ openScreen('weeklyExam');
+ const week=key(),completed=store()[week],canStart=officialAllowed();
+ $('weeklyActions').hidden=false;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=true;
+ $('weeklyIntro').textContent=canStart?'今天是'+week+'，正式四科合卷，每科6题，共24题。':'正式测评只在开课后的周日开放。可以先试做 '+previewWeek()+' 的卷子，试做不计入成绩。';
+ $('weeklyStart').hidden=!canStart;
+ $('weeklyStart').textContent=completed?(completed.finishedAt?'查看本周成绩':'继续本周测评'):'开始本周测评';
+ $('weeklyPreview').textContent='🔎 家长试做 '+previewWeek()+'（不存分）';
+ if(canStart&&completed&&completed.finishedAt){current=completed;practice=false;renderResult()}
 }
-function enter(preview){practice=preview;current=preview?build():(store()[key()]||build());saveExam();$('weeklyActions').hidden=true;current.finishedAt?renderResult():render()}
-function question(i){const ref=current.questions[i];return {ref,row:QUESTIONS[ref.id][ref.idx]}}
+function enter(preview){
+ if(!preview&&!officialAllowed()){open();return}
+ practice=preview;const week=preview?previewWeek():key();
+ current=preview?build(week):(store()[week]||build(week));
+ saveExam();$('weeklyActions').hidden=true;
+ current.finishedAt?renderResult():render();
+}
+function question(i){const ref=current.questions[i],pool=ref.bank==='week2'?WEEK2_QUESTIONS:QUESTIONS;return {ref,row:pool[ref.id][ref.idx]}}
 function answeredCount(){return Object.keys(current.answers).length}
 function render(){const n=answeredCount();if(n>=current.questions.length){finish();return}
- const {ref,row}=question(n),answer=current.answers[n];$('weeklyPlay').hidden=false;$('weeklyResult').hidden=true;
+ const {ref,row}=question(n);$('weeklyPlay').hidden=false;$('weeklyResult').hidden=true;
  $('weeklyProgress').textContent='第 '+(n+1)+' / '+current.questions.length+' 题'+(practice?' · 家长试做':' · 本周正式测评');
  $('weeklyBar').style.width=Math.round(n/current.questions.length*100)+'%';$('weeklySubject').textContent=SUBJECTS[ref.id]+' · 知识挑战';$('weeklyQuestion').textContent=row[0];
  $('weeklyFeedback').textContent='';$('weeklyNext').hidden=true;
  $('weeklyListen').style.display='inline-block';$('weeklyListen').onclick=()=>speakPrompt(row[0],ref.id);
- const order=[0,1,2].sort((a,b)=>((a+n*7+ref.idx*3)%3)-((b+n*7+ref.idx*3)%3));
+ const order=[0,1,2].sort((a,b)=>((a+n*7+ref.idx*3+Number(current.week.replace(/-/g,'')))%3)-((b+n*7+ref.idx*3+Number(current.week.replace(/-/g,'')))%3));
  $('weeklyOptions').innerHTML='';
  order.forEach(choice=>{
  const text=row[1][choice],wrap=document.createElement('div');
@@ -134,8 +191,8 @@ function renderResult(){const ans=Object.values(current.answers),score=ans.filte
  const b=document.createElement('button');b.type='button';b.className='primary';b.textContent='返回学习台';b.onclick=()=>openScreen('home');el.appendChild(b);
 }
 $('weeklyStart').onclick=()=>enter(false);$('weeklyPreview').onclick=()=>enter(true);$('weeklyBack').onclick=()=>{if(practice&&current)current=null;openScreen('home')};$('weeklyNext').onclick=()=>render();
-const former=$('goAssessment').onclick;$('goAssessment').onclick=()=>{if(sunday())open();else if(former)former()};
+const former=$('goAssessment').onclick;$('goAssessment').onclick=()=>{open()};
 const nav=document.querySelector('[data-tab="assessment"]');if(nav)nav.onclick=()=>{if(sunday())open();else open()};
-const extra=document.createElement('button');extra.id='weeklyExamAccess';extra.type='button';extra.textContent='🏆 周日四科合卷'+(sunday()?' · 开始测评':' · 家长预览');extra.style.cssText='display:block;margin:12px auto;padding:12px 20px;border:2px solid #98d2ee;border-radius:16px;background:#f1faff;color:#12548f;font-size:16px;font-weight:900';extra.onclick=open;
+const extra=document.createElement('button');extra.id='weeklyExamAccess';extra.type='button';extra.textContent='🏆 周日四科合卷'+(officialAllowed()?' · 开始测评':' · 家长预览');extra.style.cssText='display:block;margin:12px auto;padding:12px 20px;border:2px solid #98d2ee;border-radius:16px;background:#f1faff;color:#12548f;font-size:16px;font-weight:900';extra.onclick=open;
 $('home').prepend(extra);
 })();
