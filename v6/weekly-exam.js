@@ -161,21 +161,40 @@ function render(){const n=answeredCount();if(n>=current.questions.length){finish
  $('weeklyOptions').appendChild(wrap);
 });
 }
+// Play mixed Chinese/English prompts in language-specific utterances.
+// iOS Safari can make crackling/garbled sounds when the Mandarin voice reads English words.
 function speakOption(message,id){
  if(!('speechSynthesis' in window))return;
- window.speechSynthesis.cancel();
- const u=new SpeechSynthesisUtterance(message);
- // 中文选项用普通话；英语学科中纯英文选项保持英语发音。
- u.lang=id==='en'&&!/[\u3400-\u9fff]/.test(message)?'en-US':'zh-CN';
- u.rate=u.lang==='zh-CN'?.82:.78;
- window.speechSynthesis.speak(u);
+ const synth=window.speechSynthesis;
+ synth.cancel();
+ const input=String(message||'');
+ const hasChinese=/[\u3400-\u9fff]/.test(input);
+ // Preserve whole natural English sentences as one utterance, so "means" is pronounced normally.
+ let parts;
+ if(!hasChinese){parts=[{text:input,lang:id==='en'?'en-US':'zh-CN'}]}
+ else{
+  const english=/[A-Za-z]+(?:[ \t'-]+[A-Za-z]+)*/g;
+  parts=[];let pos=0,match;
+  while((match=english.exec(input))!==null){
+   if(match.index>pos)parts.push({text:input.slice(pos,match.index),lang:'zh-CN'});
+   parts.push({text:match[0],lang:'en-US'});
+   pos=match.index+match[0].length;
+  }
+  if(pos<input.length)parts.push({text:input.slice(pos),lang:'zh-CN'});
+ }
+ parts.filter(p=>p.text.trim()).forEach(p=>{
+  const u=new SpeechSynthesisUtterance(p.text);
+  u.lang=p.lang;
+  u.rate=p.lang==='en-US'?.75:.82;
+  synth.speak(u);
+ });
 }
-function speakPrompt(message,id){speakOption(message,'cn')}
+function speakPrompt(message,id){speakOption(message,id)}
 function answerQuestion(index,choice){if(current.answers[index])return;const {ref,row}=question(index),ok=choice===row[2];
  current.answers[index]={subject:ref.id,selected:choice,correct:ok,question:row[0],chosen:row[1][choice],answer:row[1][row[2]],explanation:row[3]};
  saveExam();$('weeklyOptions').querySelectorAll('.weekly-choice').forEach(b=>{b.disabled=true;if(Number(b.dataset.choice)===row[2])b.style.background='#e2f7e9';else if(Number(b.dataset.choice)===choice&&!ok)b.style.background='#fff0e9'});
  $('weeklyFeedback').textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 这道题再记住：')+row[3];
- const u=new SpeechSynthesisUtterance(ok?'恭喜你回答正确':'哦哦，正确答案是：'+row[1][row[2]]);u.lang=ref.id==='en'&&!ok?'en-US':'zh-CN';u.rate=.78;if('speechSynthesis' in window){window.speechSynthesis.cancel();window.speechSynthesis.speak(u)}
+ speakOption(ok?'恭喜你回答正确':'哦哦，正确答案是：'+row[1][row[2]],ref.id);
  $('weeklyNext').hidden=false;$('weeklyNext').textContent=index+1===24?'查看四科成绩':'下一题 →';
 }
 function finish(){current.finishedAt=current.finishedAt||new Date().toISOString();saveExam();renderResult()}
