@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261106-sync-diagnostic-1';
+const VERSION='20261106-sync-live-2';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -62,6 +62,16 @@ self.addEventListener('fetch',event=>{
  if(req.method!=='GET'||!inScope(url))return;
  if(req.mode==='navigate'){
   event.respondWith(navigation(req));
+  return;
+ }
+ // Cloud sync code must not be stuck behind an old cache-first script.
+ if(url.pathname.endsWith('/family-auto-sync.js')){
+  event.respondWith((async()=>{
+   const key=new URL(url.pathname,ROOT.origin);
+   try{const fresh=await fetch(req,{cache:'no-store'});if(fresh.ok){await store(RUNTIME,key,fresh);return fresh}}
+   catch(e){}
+   return await caches.match(key,{ignoreSearch:true}) || new Response('同步脚本离线不可用',{status:503});
+  })());
   return;
  }
  event.respondWith((async()=>{
