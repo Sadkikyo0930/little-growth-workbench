@@ -91,8 +91,9 @@ async function run(){
   saveStatus("上传失败，本机成绩已保留："+error(e),{state:"error",pending:rows.length});
  }finally{running=false}
 }
-function schedule(){if(localStorage.getItem(ENABLED)==="yes")run()}
+function schedule(){try{if(localStorage.getItem(ENABLED)==="yes")Promise.resolve(run()).catch(function(e){saveStatus("自动同步执行异常："+error(e),{state:"error"})})}catch(e){saveStatus("自动同步初始化异常："+error(e),{state:"error"})}}
 window.addEventListener("online",schedule);document.addEventListener("visibilitychange",function(){if(!document.hidden)schedule()});
 window.addEventListener("pageshow",schedule);window.setInterval(schedule,20000);
+try{if(localStorage.getItem(ENABLED)==="yes")saveStatus(navigator.onLine?"同步脚本已启动，正在检查记录与会话":"同步脚本已启动；当前离线，记录留在本机",{state:"started",version:"20261106-sync-live-2"})}catch(e){}
 schedule();
 })();
