@@ -7,10 +7,10 @@ const $=id=>document.getElementById(id);
 const style=document.createElement('style');
 style.textContent=[
 '#home.clean-art-ready .home-artwork{aspect-ratio:3/4!important;background-size:100% 100%!important}',
-'#home.clean-art-ready .home-actual-overlay{display:none!important}',
-'#home.clean-art-ready #homeRealProgress{display:none!important}',
-'#home.clean-art-ready #goAssessment{left:5%!important;top:49%!important;width:43%!important;height:13%!important}',
-'#home.clean-art-ready #goLearning{left:51%!important;top:49%!important;width:44%!important;height:13%!important}',
+'#home .home-actual-overlay{display:none!important}',
+'#home #homeRealProgress{display:none!important}',
+'#home.clean-art-ready #goAssessment{left:51%!important;top:49%!important;width:43%!important;height:13%!important}',
+'#home.clean-art-ready #goLearning{left:5%!important;top:49%!important;width:44%!important;height:13%!important}',
 '#home.clean-art-ready #goRace{left:4%!important;top:71%!important;width:44%!important;height:13%!important}',
 '#home.clean-art-ready #goGarage{left:51%!important;top:71%!important;width:44%!important;height:13%!important}',
 '#home.clean-art-ready .image-tab{top:85%!important;height:14%!important}',
@@ -47,21 +47,15 @@ function baseline(id){
 function records(id){return (state.records||[]).filter(r=>r.subject===id&&!r.learningDay&&!r.week&&!r.weeklyExam)}
 const refreshCallbacks=[];
 window.v6CleanArtRefresh=function(){refreshCallbacks.forEach(fn=>fn())};
+// v6-home-no-overlays-v1: preserve original clean illustration and transparent hit targets.
 load('./v6-home-clean.jpg',()=>{
- const art=document.querySelector('#home .home-artwork');if(!art)return;
- art.style.setProperty('background-image','url("./v6-home-clean.jpg")','important');
- art.querySelectorAll('.home-actual-overlay').forEach(node=>node.remove());
- const overlay=surface(art);
- // Track occupies x=181-495, y=650-676 in the actual 768x1024 clean artwork.
- const fill=bar(overlay,185,653,307,20);
- // Star pill, not a separate blue badge. Baked-in text on the left card remains artwork.
- const count=label(overlay,572,664,24,'0/2');
- function update(){
-  if(typeof v6CourseDay!=='function'||typeof v6SubjectDone!=='function')return;
-  const day=v6CourseDay(),names=(V6_SUBJECT_DAYS[day-1]||[]),done=names.filter(n=>v6SubjectDone(day,n)).length;
-  fill(names.length?done/names.length*100:0);count.textContent=done+'/'+(names.length||2);
- }
- refreshCallbacks.push(update);$('home').classList.add('clean-art-ready');update();
+ const home=$('home');
+ const artwork=document.querySelector('#home .home-artwork');
+ if(!home||!artwork)return;
+ artwork.style.setProperty('background-image','url("./v6-home-clean.jpg")','important');
+ artwork.querySelectorAll('.home-actual-overlay').forEach(node=>node.remove());
+ artwork.querySelectorAll('.v6-native-live').forEach(node=>node.remove());
+ home.classList.add('clean-art-ready');
 });
 load('./v6-assessment-clean.jpg',()=>{
  const section=$('assessment');if(!section)return;
