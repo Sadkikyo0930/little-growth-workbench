@@ -25,6 +25,13 @@ export function makeR5Client(db, familyId = R5_FAMILY) {
     return unwrap(await db.rpc(name, { p_family_id: familyId, ...params }));
   }
   return Object.freeze({
+    publishToday: ({dayIndex, noTasks = false}) => {
+      if (!Number.isInteger(dayIndex) || dayIndex < 1 || dayIndex > 30 ||
+          typeof noTasks !== 'boolean') throw new Error('R5_INVALID_DAY');
+      return invoke('r5_publish_today', {
+        p_day_index: dayIndex, p_no_tasks: noTasks
+      });
+    },
     status: () => invoke('r5_status', {}),
     start: () => invoke('r5_game_action', { p_action: 'start' }),
     tick: () => invoke('r5_game_action', { p_action: 'tick' }),
