@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>R5 同步自检 · 家长用</title>
+<style>
+  body{margin:0;padding:18px;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f3f7fc;color:#12243d}
+  h1{font-size:19px;margin:0 0 4px}
+  p.sub{margin:0 0 16px;color:#5b7290;font-size:13px;line-height:1.6}
+  .card{background:#fff;border:1px solid #dbe6f3;border-radius:16px;padding:14px 16px;margin-bottom:12px}
+  .card h2{font-size:14px;margin:0 0 10px;color:#2f6fd0;letter-spacing:.5px}
+  pre{margin:0;font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-all;font-family:ui-monospace,Menlo,monospace}
+  button{border:0;border-radius:12px;padding:13px 18px;font-size:15px;font-weight:700;background:#e23b2e;color:#fff;margin-right:8px}
+  button.ghost{background:#eef4fb;color:#12243d}
+  .ok{color:#2fae6a;font-weight:700}.bad{color:#e23b2e;font-weight:700}
+</style>
+</head>
+<body>
+<h1>R5 同步自检</h1>
+<p class="sub">这个页面给家长排查用：孩子那台设备上的成绩有没有真的传到腾讯云。<br />
+请在与孩子学习时**同一台设备、同一个浏览器**里打开。</p>
+
+<div class="card"><h2>V6 → 云端</h2><pre id="diag">读取中…</pre></div>
+<div class="card"><h2>今天各科真实题量（本机）</h2><pre id="grading">读取中…</pre></div>
+<div class="card"><h2>云端判定</h2><pre id="cloud">读取中…</pre></div>
+<div class="card">
+  <button id="sync">立即同步一次</button>
+  <button class="ghost" id="reload">刷新</button>
+</div>
+<p class="sub" id="tip"></p>
+<script src="./r5-bridge.js"></script>
+<script>
+  function render() {
+    var d = window.R5Bridge ? window.R5Bridge.diagnose() : null;
+    document.getElementById('diag').textContent = d ? JSON.stringify({
+      today: d.today,
+      localDay: d.localDay,
+      subjects: d.subjects,
+      hasState: d.hasState,
+      records: d.records,
+      chineseDays: d.chineseDays,
+      courseKeys: d.courseKeys,
+    }, null, 2) : '桥接脚本未加载';
+    var g = document.getElementById('grading');
+    if (!d) { g.textContent = '桥接脚本未加载'; }
+    else if (!d.grading || !d.grading.length) { g.textContent = '今天还没有任何作答记录'; }
+    else {
+      g.textContent = d.grading.map(function (x) {
+        return x.subject + '：' + x.correct + ' / ' + x.total + ' 题（' + x.accuracy_pct + '%）'
+          + (x.passed ? ' ✓ 达标' : ' ✗ 未达标')
+          + '\n  逐题 ' + x.perQuestion + ' 条 · 题组折算 ' + x.aggregate + ' 条'
+          + '\n  来源：' + Object.keys(x.sources).map(function (k) { return k + '×' + x.sources[k]; }).join('、');
+      }).join('\n\n');
+    }
+    var c = d && d.cloud;
+    document.getElementById('cloud').textContent = c ? JSON.stringify(c, null, 2) : '还没有同步过';
+    var tip = document.getElementById('tip');
+    if (c && c.state === 'ok') tip.innerHTML = '同步正常：' + (c.allowed ? '<span class="ok">赛车已解锁</span>' : '<span class="bad">尚未达标</span>');
+    else if (c && c.state === 'error') tip.textContent = '同步失败：' + (c.message || c.error);
+    else if (c && c.message) tip.textContent = c.message;
+  }
+  document.getElementById('sync').addEventListener('click', function () {
+    window.R5Bridge.runNow().then(function () { setTimeout(render, 400); });
+  });
+  document.getElementById('reload').addEventListener('click', render);
+  render();
+  setInterval(render, 3000);
+</script>
+</body>
+</html>
