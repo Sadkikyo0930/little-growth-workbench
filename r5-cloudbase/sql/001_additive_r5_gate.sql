@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS public.r5_daily_plan (
  published boolean NOT NULL DEFAULT true,
  PRIMARY KEY(family_id,study_date)
 );
+CREATE TABLE IF NOT EXISTS public.r5_subject_template (
+ day_index integer PRIMARY KEY CHECK(day_index BETWEEN 1 AND 30),
+ subjects jsonb NOT NULL CHECK(jsonb_typeof(subjects)='array' AND jsonb_array_length(subjects)=2)
+);
 CREATE TABLE IF NOT EXISTS public.r5_parent_settings (
  family_id text PRIMARY KEY, enabled boolean NOT NULL DEFAULT true,
  daily_seconds integer NOT NULL DEFAULT 1800 CHECK (daily_seconds BETWEEN 60 AND 10800),
@@ -41,22 +45,21 @@ CREATE TABLE IF NOT EXISTS public.r5_daily_usage (
  PRIMARY KEY(family_id,play_date)
 );
 -- Private backend state. All access is through verified RPCs.
-REVOKE ALL ON public.r5_daily_plan, public.r5_parent_settings, public.r5_daily_usage
+REVOKE ALL ON public.r5_daily_plan, public.r5_subject_template, public.r5_parent_settings, public.r5_daily_usage
  FROM PUBLIC, anon, authenticated;
 ALTER TABLE public.r5_daily_plan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.r5_subject_template ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.r5_parent_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.r5_daily_usage ENABLE ROW LEVEL SECURITY;
 
--- The V6 published 30-day plan, starting November 9. Never overwrite edits.
+-- Snapshot of the V6 subject order. Study days advance by completion, NOT calendar days.
 WITH schedule AS (
  SELECT subjects, ordinality::integer AS day_index
  FROM jsonb_array_elements('[["英语","科学"],["语文","数学"],["数学","英语"],["语文","英语"],["数学","科学"],["语文","数学"],["语文","英语"],["英语","科学"],["语文","数学"],["数学","英语"],["语文","英语"],["数学","科学"],["语文","数学"],["语文","英语"],["英语","科学"],["语文","数学"],["数学","英语"],["语文","英语"],["数学","科学"],["语文","数学"],["语文","英语"],["英语","科学"],["语文","数学"],["数学","英语"],["语文","英语"],["数学","科学"],["语文","数学"],["语文","英语"],["英语","科学"],["语文","数学"]]'::jsonb)
  WITH ORDINALITY AS x(subjects,ordinality)
 )
-INSERT INTO public.r5_daily_plan(family_id,study_date,day_index,subjects,published)
-SELECT 'little-growth-family-001', date '2026-11-09'+(day_index-1),
-       day_index,subjects,true FROM schedule
-ON CONFLICT DO NOTHING;
+INSERT INTO public.r5_subject_template(day_index,subjects)
+SELECT day_index,subjects FROM schedule ON CONFLICT DO NOTHING;
 INSERT INTO public.r5_parent_settings(family_id)
 VALUES ('little-growth-family-001') ON CONFLICT DO NOTHING;
 
@@ -78,6 +81,37 @@ BEGIN
  END IF;
  RETURN uid;
 END $$;
+
+-- Publish the ACTUAL day assigned by V6, rather than assuming a calendar day.
+-- Never silently change a published plan. Explicit rest day requires a parent.
+CREATE OR REPLACE FUNCTION public.r5_publish_today(
+ p_family_id text,p_day_index integer,p_no_tasks boolean DEFAULT false)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public AS $
+DECLARE today_date date:=timezone('Asia/Shanghai',clock_timestamp())::date;
+ member_id text; expected jsonb; existing record; desired jsonb;
+BEGIN
+ member_id:=public.r5_assert_member(p_family_id,coalesce(p_no_tasks,false));
+ IF p_no_tasks IS NULL THEN RAISE EXCEPTION 'R5_INVALID_PLAN'; END IF;
+ IF p_no_tasks THEN
+  desired:='[]'::jsonb;
+  IF p_day_index NOT BETWEEN 1 AND 30 THEN RAISE EXCEPTION 'R5_INVALID_DAY'; END IF;
+ ELSE
+  SELECT subjects INTO expected FROM public.r5_subject_template WHERE day_index=p_day_index;
+  IF expected IS NULL THEN RAISE EXCEPTION 'R5_INVALID_DAY'; END IF;
+  desired:=expected;
+ END IF;
+ INSERT INTO public.r5_daily_plan(family_id,study_date,day_index,subjects,published)
+ VALUES(p_family_id,today_date,p_day_index,desired,true)
+ ON CONFLICT DO NOTHING;
+ SELECT * INTO existing FROM public.r5_daily_plan
+ WHERE family_id=p_family_id AND study_date=today_date;
+ IF existing.day_index<>p_day_index OR existing.subjects<>desired OR NOT existing.published THEN
+  RAISE EXCEPTION 'R5_TODAY_PLAN_ALREADY_PUBLISHED';
+ END IF;
+ RETURN jsonb_build_object('date',today_date,'study_day',p_day_index,
+  'subjects',desired,'published',true);
+END $;
 
 CREATE OR REPLACE FUNCTION public.r5_status(p_family_id text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
@@ -209,13 +243,15 @@ END $$;
 -- CloudBase RPC gateway does not consistently enforce EXECUTE grants.
 -- Every SECURITY DEFINER entrypoint checks JWT role + membership internally.
 REVOKE ALL ON FUNCTION public.r5_assert_member(text,boolean),
- public.r5_status(text),public.r5_game_action(text,text),
+ public.r5_status(text),public.r5_publish_today(text,integer,boolean),public.r5_game_action(text,text),
  public.r5_parent_update(text,boolean,integer,integer) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.r5_status(text),
+ public.r5_publish_today(text,integer,boolean),
  public.r5_game_action(text,text),
  public.r5_parent_update(text,boolean,integer,integer) TO authenticated;
 COMMIT;
 
 -- Read-only postflight, run separately after authorized deployment:
--- SELECT COUNT(*) FROM public.r5_daily_plan WHERE family_id='little-growth-family-001';
+-- SELECT COUNT(*) FROM public.r5_subject_template; -- expected 30
+-- SELECT * FROM public.r5_daily_plan; -- empty until authenticated V6 publishes
 -- SELECT proname,prosecdef FROM pg_proc WHERE proname LIKE 'r5_%';
