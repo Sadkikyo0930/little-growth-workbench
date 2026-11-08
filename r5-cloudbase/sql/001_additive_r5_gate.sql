@@ -207,7 +207,8 @@ BEGIN
   elapsed_ms:=least(20000,greatest(0,
     floor(extract(epoch FROM (now_ts-u.last_beat))*1000)::bigint));
  END IF;
- u.used_ms:=least(max_ms,u.used_ms+elapsed_ms);
+ -- Never reduce already-used time, even when a parent lowers today's limit.
+ u.used_ms:=u.used_ms+least(elapsed_ms,greatest(0,max_ms-u.used_ms));
  IF p_action='stop' THEN u.active:=false;
  ELSIF u.used_ms>=max_ms THEN u.active:=false;
  ELSIF (s->>'allowed')::boolean AND p_action IN ('start','tick') THEN u.active:=true;
