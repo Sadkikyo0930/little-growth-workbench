@@ -1,0 +1,1 @@
+/* Test pages do not register service workers or import formal backups. */

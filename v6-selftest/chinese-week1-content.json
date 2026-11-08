@@ -1,0 +1,97 @@
+{
+  "schema": "v6-chinese-story-content-v1",
+  "usage": "仅在原每日计划判定今日有语文时载入一篇；不得自动显示七天列表、不得更换首页或底部导航。",
+  "weekLessons": [
+    {
+      "sequence": 1,
+      "title": "消失的小水滴",
+      "knowledge": "水蒸发、凝结与降雨",
+      "words": [
+        "蒸发",
+        "凝结",
+        "降落"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    },
+    {
+      "sequence": 2,
+      "title": "蚂蚁为什么排队？",
+      "knowledge": "信息素和合作",
+      "words": [
+        "蚁巢",
+        "路线",
+        "合作"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    },
+    {
+      "sequence": 3,
+      "title": "会变长的影子",
+      "knowledge": "光照方向与影子变化",
+      "words": [
+        "照射",
+        "方向",
+        "观察"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    },
+    {
+      "sequence": 4,
+      "title": "一本书的旅行",
+      "knowledge": "借阅与公共资源",
+      "words": [
+        "借阅",
+        "归还",
+        "爱护"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    },
+    {
+      "sequence": 5,
+      "title": "种子里的秘密",
+      "knowledge": "萌发需要水、空气和适当温度",
+      "words": [
+        "发芽",
+        "嫩根",
+        "条件"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    },
+    {
+      "sequence": 6,
+      "title": "磁铁侦探社",
+      "knowledge": "磁铁吸引某些材料",
+      "words": [
+        "磁铁",
+        "材料",
+        "分类"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    },
+    {
+      "sequence": 7,
+      "title": "超市里的小侦探",
+      "knowledge": "购物预算与检查",
+      "words": [
+        "价格",
+        "剩余",
+        "核对"
+      ],
+      "audioFirst": true,
+      "pictureRequired": true,
+      "quizOptionsReadAloud": true
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="zh-CN"><head><script src="./isolation.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>11月23日语文·古诗小达人</title><style>*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:#edf7f4;color:#274753}main{width:min(100%,760px);margin:auto;padding:10px}.panel{background:white;border-radius:18px;overflow:hidden;padding:10px;margin-bottom:14px;box-shadow:0 4px 18px #77999933}.panel h2{font-size:20px;margin:8px 5px 12px}.image-wrap{position:relative}.image-wrap img{display:block;width:100%;height:auto;border-radius:12px}.overlay{position:absolute;inset:0}.overlay button{position:absolute;background:transparent;border:0;cursor:pointer;touch-action:manipulation}.overlay button:focus-visible{outline:3px solid #ffc65f;background:#ffe38d44}.hint{font-size:13px;color:#627e84;line-height:1.7;margin:8px 4px}.dialogBack{position:fixed;inset:0;background:#102c3bca;display:none;align-items:center;justify-content:center;padding:12px;z-index:900}.dialogBack.open{display:flex}.dialog{width:100%;max-width:560px;max-height:93dvh;overflow:auto;background:white;border-radius:19px;padding:16px}.dialog header{display:flex;align-items:start;justify-content:space-between;gap:10px}.dialog header h2{font-size:21px;margin:6px 0 12px}.close{width:42px;height:42px;border-radius:50%;border:0;font-size:25px;background:#eaf6f9}.dialogText{font-size:17px;line-height:1.9;white-space:pre-line;margin:8px 0 14px}.big,.choice{display:block;width:100%;border:0;border-radius:12px;background:#1599ba;color:white;padding:14px;font-size:16px;font-weight:700;cursor:pointer;margin:8px 0}.choice{background:#e8f8fd;border:2px solid #9dd8e6;color:#22506b}.answerRow{display:flex;gap:8px;align-items:stretch;margin:9px 0}.option{flex:1;text-align:left;background:#eafaff;border:2px solid #99d7e4;border-radius:12px;padding:14px;font-size:16px;min-width:0}.speakOption{flex:0 0 58px;border:2px solid #8acdda;background:#e9faff;border-radius:12px;font-size:24px}.feedback{color:#178a6b;font-weight:700}.traceArea{position:relative;width:100%;height:260px;border:2px solid #a0d9e5;border-radius:12px;background:linear-gradient(0deg,transparent 49.7%,#c2dde4 50%,transparent 50.3%),linear-gradient(90deg,transparent 49.7%,#c2dde4 50%,transparent 50.3%)}.traceArea span{position:absolute;inset:0;display:grid;place-items:center;font-size:145px;color:#d6e3e8;pointer-events:none}.traceArea canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}#dialogHint{font-size:14px;color:#64818c;line-height:1.7}.studyGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:4px 2px 10px}.studyCard{min-width:0;border-radius:17px;border:2px solid #c5e1d7;background:linear-gradient(180deg,#fff9ea,#f0fff8);padding:11px 7px;display:flex;flex-direction:column;align-items:center;gap:8px}.studyScene{font-size:31px}.studyChar{font-family:"KaiTi","STKaiti","Songti SC",serif;font-weight:700;font-size:clamp(54px,13vw,94px);line-height:1.1;color:#283c37}.studyPinyin{font-size:clamp(17px,4.5vw,26px);font-weight:750;color:#77492a}.studyParts{font-size:clamp(12px,3.2vw,17px);color:#536d62;min-height:25px;font-weight:650}.studyBtn{border:0;border-radius:12px;background:#198cad;color:white;width:100%;padding:11px 2px;font-size:clamp(11px,2.9vw,15px);font-weight:700;cursor:pointer;touch-action:manipulation}.studyBtn.listenBtn{background:#4c78b7}.studyBtn.writeBtn{background:#b97743}.studyBtn:focus-visible{outline:3px solid #ffc65f}@media(max-width:360px){.studyGrid{gap:5px}.studyCard{padding:8px 4px}}</style></head><body><main><section class="panel"><h2>一、古诗复习</h2><div class="image-wrap"><img src="./11-23_01_poems.jpg?v=1" alt="一、古诗复习"><div class="overlay"><button data-poem="0" aria-label="朗读画" style="left:2%;top:15%;width:31%;height:48%"></button><button data-poem="1" aria-label="朗读池上" style="left:34%;top:15%;width:31%;height:48%"></button><button data-poem="2" aria-label="朗读悯农" style="left:66%;top:15%;width:32%;height:48%"></button><button data-connect="3" aria-label="赠汪伦接句" style="left:26%;top:64%;width:55%;height:17%"></button><button data-connect="4" aria-label="古朗月行接句" style="left:26%;top:82%;width:55%;height:17%"></button></div></div><p class="hint">点击三首诗，听完整朗读；下面两首练习接句。</p></section><section class="panel"><h2>二、看图理解诗意</h2><div class="image-wrap"><img src="./11-23_02_meaning.jpg?v=1" alt="二、看图理解诗意"><div class="overlay"><button data-meaning="0" aria-label="画诗意" style="left:0;top:15%;width:100%;height:28%"></button><button data-meaning="1" aria-label="池上诗意" style="left:0;top:43%;width:100%;height:27%"></button><button data-meaning="2" aria-label="悯农诗意" style="left:0;top:70%;width:100%;height:30%"></button></div></div><p class="hint">点击不同古诗的画面，听诗意讲解。</p></section><section class="panel"><h2>三、古诗趣味闯关</h2><div class="image-wrap"><img src="./11-23_03_quiz.jpg?v=1" alt="三、古诗趣味闯关"><div class="overlay"><button data-quiz aria-label="打开古诗闯关" style="inset:0;width:100%;height:100%"></button></div></div><p class="hint">点击图片开始有声答题；题目和每一个选项均可单独朗读。</p></section><section class="panel"><h2>四、拼音拼读与手指描红</h2><p class="hint">这部分直接用互动学习卡，不再显示重复的古诗图片。按卡片上的按钮分别拼读、听音、描红。</p><div class="studyGrid"><article class="studyCard"><div class="studyScene" aria-hidden="true">⛰️</div><div class="studyChar">山</div><div class="studyPinyin">shān</div><div class="studyParts">sh + an</div><button class="studyBtn" data-blend="山">🧩 拼音闯关</button><button class="studyBtn listenBtn" data-say="山">🔊 听完整读音</button><button class="studyBtn writeBtn" data-trace="山">✍️ 手指描红</button></article><article class="studyCard"><div class="studyScene" aria-hidden="true">🌸</div><div class="studyChar">花</div><div class="studyPinyin">huā</div><div class="studyParts">h + u + a</div><button class="studyBtn" data-blend="花">🧩 拼音闯关</button><button class="studyBtn listenBtn" data-say="花">🔊 听完整读音</button><button class="studyBtn writeBtn" data-trace="花">✍️ 手指描红</button></article><article class="studyCard"><div class="studyScene" aria-hidden="true">🌾</div><div class="studyChar">禾</div><div class="studyPinyin">hé</div><div class="studyParts">h + e</div><button class="studyBtn" data-blend="禾">🧩 拼音闯关</button><button class="studyBtn listenBtn" data-say="禾">🔊 听完整读音</button><button class="studyBtn writeBtn" data-trace="禾">✍️ 手指描红</button></article></div></section></main><div id="modal" class="dialogBack"><div class="dialog"><header><h2 id="dialogTitle"></h2><button id="close" class="close" aria-label="关闭">×</button></header><p class="dialogText" id="dialogText"></p><div id="dialogControls"></div><p id="dialogHint"></p></div></div><script>(function lesson(){
+"use strict";
+const $=id=>document.getElementById(id);
+const poems=[
+{title:"《画》",author:"王维",lines:["远看山有色，近听水无声。","春去花还在，人来鸟不惊。"],explain:"这是一幅画中的山水花鸟。画里的水没有真实的流水声；花不会因为季节改变而凋谢，画里的鸟也不会被人惊动。"},
+{title:"《池上》",author:"白居易",lines:["小娃撑小艇，偷采白莲回。","不解藏踪迹，浮萍一道开。"],explain:"小孩子撑船去采白莲，不知道掩藏自己的踪迹，小船划过的地方，把水面的浮萍分成了一道。"},
+{title:"《悯农》（其二）",author:"李绅",lines:["锄禾日当午，汗滴禾下土。","谁知盘中餐，粒粒皆辛苦。"],explain:"农民在烈日下辛勤劳作，汗水落进土里。我们要珍惜每一粒粮食。"},
+{title:"《赠汪伦》",author:"李白",lines:["李白乘舟将欲行，忽闻岸上踏歌声。","桃花潭水深千尺，不及汪伦送我情。"]},
+{title:"《古朗月行》（节选）",author:"李白",lines:["小时不识月，呼作白玉盘。","又疑瑶台镜，飞在青云端。"]}
+];
+const questions=[
+["《画》中，为什么走近听不到水声？",["因为画上的水不会真的流动","因为水流得太快","因为小鸟不让水发声"],0],
+["《池上》中，什么暴露了小娃划船的踪迹？",["天空中的白云","水面被分开的浮萍","池边的大树"],1],
+["“谁知盘中餐”的下一句是？",["春去花还在","小时不识月","粒粒皆辛苦"],2],
+["《赠汪伦》主要表达什么感情？",["朋友之间的深厚情谊","对农田的喜爱","对月亮的好奇"],0]
+];
+const blends={山:{initial:"sh",final:"an",tone:1,full:"shān",word:"高山"},花:{initial:"h",medial:"u",final:"a",tone:1,full:"huā",word:"花朵"},禾:{initial:"h",final:"e",tone:2,full:"hé",word:"禾苗"}};
+let qi=0,answers=[],score=0,word="",step=0;
+function speak(v){if(!("speechSynthesis" in window))return;speechSynthesis.cancel();const a=new SpeechSynthesisUtterance(v);a.lang="zh-CN";a.rate=.78;speechSynthesis.speak(a)}
+function show(title,description,controls){$("dialogTitle").textContent=title;$("dialogText").textContent=description;$("dialogControls").replaceChildren(...controls);$("modal").classList.add("open")}
+function close(){speechSynthesis?.cancel();$("modal").classList.remove("open")}
+function button(label,fn,cls="big"){const b=document.createElement("button");b.textContent=label;b.className=cls;b.type="button";b.onclick=fn;return b}
+function poemRead(i){const p=poems[i],text=p.title+"，作者"+p.author+"。"+p.lines.join("");show(p.title+" · "+p.author,p.lines.join("\n"),[button("🔊 再听古诗",()=>speak(text)),...(p.explain?[button("🌿 听诗意讲解",()=>meaning(i))]:[])]);speak(text)}
+function meaning(i){const p=poems[i];show(p.title+" · 诗意理解",p.explain,[button("🔊 再听诗意",()=>speak(p.explain)),button("📖 再读古诗",()=>poemRead(i))]);speak(p.explain)}
+function connect(i,reveal=false){const p=poems[i];show(p.title+" · 听上句接下句",reveal?p.lines.join("\n"):p.lines[0],[button("🔊 听上句",()=>speak(p.lines[0])),button(reveal?"🔊 全诗朗读":"揭晓下句",()=>reveal?speak(p.lines.join("")):connect(i,true))]);speak(reveal?p.lines[1]:p.lines[0])}
+function startQuiz(){qi=0;score=0;answers=Array(questions.length).fill(null);renderQuestion()}
+function renderQuestion(){
+ if(qi>=questions.length){endQuiz();return}
+ const q=questions[qi],locked=answers[qi]!==null;
+ const controls=[button("🔊 朗读题目与全部选项",()=>speak(q[0]+"。"+q[1].map((o,j)=>"选项"+String.fromCharCode(65+j)+"，"+o).join("。")))];
+ q[1].forEach((o,j)=>{
+ const row=document.createElement("div");row.className="answerRow";
+ const choose=button(String.fromCharCode(65+j)+"．"+o,()=>pick(j),"option");choose.disabled=locked;
+ const audio=button("🔊",()=>speak(String.fromCharCode(65+j)+"，"+o),"speakOption");
+ row.append(choose,audio);controls.push(row)
+ });
+ if(locked){const p=document.createElement("p");p.className="feedback";p.textContent=answers[qi]===q[2]?"恭喜你回答正确！":"正确答案："+q[1][q[2]];controls.push(p);controls.push(button("下一题 →",()=>{qi++;renderQuestion()}))}
+ show("🏆 古诗闯关 · 第"+(qi+1)+" / "+questions.length+"题",q[0],controls)
+}
+function pick(j){if(answers[qi]!==null)return;answers[qi]=j;if(j===questions[qi][2])score++;renderQuestion();speak(j===questions[qi][2]?"恭喜你回答正确！":"哦哦，正确答案是"+questions[qi][1][questions[qi][2]])}
+function endQuiz(){
+ const msg="古诗闯关完成，答对"+score+"题，共四题";
+ show("🌟 古诗闯关完成",msg,[button("完成",close)]);
+ try{sessionStorage.setItem("poemDay13Quiz",JSON.stringify({score,total:4,at:new Date().toISOString()}))}catch(e){}
+ if(new URLSearchParams(location.search).get("embed")==="1"&&parent!==window)parent.postMessage({type:"v6-poem-quiz-complete",lessonDay:23,score,total:4},location.origin);speak(msg)
+}
+function steps(d){return[{key:"initial",name:"声母",vals:["sh","h","x"]},...(d.medial?[{key:"medial",name:"介母",vals:["u","i","ü"]}]:[]),{key:"final",name:"韵母",vals:["an","a","e"]},{key:"tone",name:"声调",vals:[1,2,3,4]}]}
+function openBlend(w){word=w;step=0;blendRender();speak(w+"。"+blends[w].word)}
+function blendRender(){
+ const d=blends[word],ss=steps(d);
+ if(step>=ss.length){show("🌟 拼读成功："+word,d.initial+" + "+(d.medial?d.medial+" + ":"")+d.final+" → "+d.full,[button("🔊 听整字和词语",()=>speak(word+"。"+d.word)),button("✍️ 手指描红",()=>trace(word)),button("🔁 再练一次",()=>openBlend(word))]);speak(word+"。"+d.word);return}
+ const st=ss[step];
+ const controls=st.vals.map(v=>button(st.key==="tone"?["","一声","二声","三声","四声"][v]:v,()=>{
+ if(v!==d[st.key]){document.getElementById("dialogHint").textContent="再想一想，选择正确的拼音部分。";return}step++;blendRender()
+ },"choice"));
+ controls.push(button("🔊 听整字",()=>speak(word+"。"+d.word)));
+ show("🔤 "+word+" · "+d.full,"第"+(step+1)+"步：请选择"+st.name,controls);
+ $("dialogHint").textContent="声母、韵母暂不使用不准确的字母语音。"
+}
+function trace(w){
+ show("✍️ "+w+" · 手指描红","请沿着浅色范字描写。",[button("清除重新写",()=>trace(w)),button("🔊 听汉字",()=>speak(w)),button("✅ 完成描红",close)]);
+ const region=document.createElement("div");region.className="traceArea";
+ const ch=document.createElement("span");ch.textContent=w;
+ const canvas=document.createElement("canvas");region.append(ch,canvas);
+ $("dialogControls").prepend(region);
+ const rect=canvas.getBoundingClientRect(),ratio=devicePixelRatio||1;canvas.width=Math.round(rect.width*ratio);canvas.height=Math.round(rect.height*ratio);
+ const ctx=canvas.getContext("2d");ctx.scale(ratio,ratio);ctx.strokeStyle="#ed5147";ctx.lineWidth=8;ctx.lineCap="round";ctx.lineJoin="round";let down=false;
+ canvas.onpointerdown=e=>{down=true;canvas.setPointerCapture(e.pointerId);const r=canvas.getBoundingClientRect();ctx.beginPath();ctx.moveTo(e.clientX-r.left,e.clientY-r.top)};
+ canvas.onpointermove=e=>{if(!down)return;const r=canvas.getBoundingClientRect();ctx.lineTo(e.clientX-r.left,e.clientY-r.top);ctx.stroke()};
+ canvas.onpointerup=()=>down=false;canvas.onpointercancel=()=>down=false
+}
+document.querySelectorAll("[data-poem]").forEach(x=>x.onclick=()=>poemRead(Number(x.dataset.poem)));
+document.querySelectorAll("[data-meaning]").forEach(x=>x.onclick=()=>meaning(Number(x.dataset.meaning)));
+document.querySelectorAll("[data-connect]").forEach(x=>x.onclick=()=>connect(Number(x.dataset.connect)));
+document.querySelector("[data-quiz]").onclick=startQuiz;
+document.querySelectorAll("[data-blend]").forEach(x=>x.onclick=()=>openBlend(x.dataset.blend));document.querySelectorAll("[data-trace]").forEach(x=>x.onclick=()=>trace(x.dataset.trace));document.querySelectorAll("[data-say]").forEach(x=>x.onclick=()=>speak(x.dataset.say+"。"+blends[x.dataset.say].word));
+$("close").onclick=close;$("modal").onclick=e=>{if(e.target===$("modal"))close()}
+})();</script><script src="./poem-speech-check.js?v=5" data-day="23" defer></script></body></html>
