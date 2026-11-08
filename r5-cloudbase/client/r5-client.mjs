@@ -97,8 +97,8 @@ export function createR5GameClock(client, {onState = () => {}, onDenied = () => 
   }
   function onPageHide() { leave().catch(() => {}); }
   function dispose() {
-    document.removeEventListener('visibilitychange', onVisibility);
-    window.removeEventListener('pagehide', onPageHide);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
+    if (typeof window !== 'undefined') window.removeEventListener('pagehide', onPageHide);
     if (timer !== null) { clearInterval(timer); timer = null; }
     active = false;
   }
