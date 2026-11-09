@@ -195,7 +195,10 @@ function render(){const n=answeredCount();if(n>=current.questions.length){finish
  const voice=document.createElement('button');voice.type='button';voice.className='weekly-option-audio';
  voice.setAttribute('aria-label','朗读选项：'+text);voice.title='朗读这个选项（不会提交答案）';voice.textContent='🔊';
  voice.style.cssText='flex:0 0 52px;min-height:56px;border:2px solid #b7d8ef;background:#ecf8ff;border-radius:14px;font-size:22px;touch-action:manipulation';
- voice.onclick=()=>speakOption(text,ref.id);wrap.appendChild(voice);
+ voice.onclick=()=>speakOption(text,ref.id);
+ // 拼音认读测评要求独立辨音，选项不提供朗读提示。
+ const isPinyinRecognition=ref.id==='cn'&&/拼音|音节|声母|韵母|认读/.test(row[0]);
+ if(!isPinyinRecognition)wrap.appendChild(voice);
  $('weeklyOptions').appendChild(wrap);
 });
 }
