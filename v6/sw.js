@@ -65,7 +65,7 @@ self.addEventListener('fetch',event=>{
   return;
  }
  // Cloud sync code must not be stuck behind an old cache-first script.
- if(url.pathname.endsWith('/family-auto-sync.js')){
+ if(url.pathname.endsWith('/family-auto-sync.js') || url.pathname.endsWith('/r5-bridge.js')){
   event.respondWith((async()=>{
    const key=new URL(url.pathname,ROOT.origin);
    try{const fresh=await fetch(req,{cache:'no-store'});if(fresh.ok){await store(RUNTIME,key,fresh);return fresh}}

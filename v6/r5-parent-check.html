@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>R5 同步自检 · 家长用</title>
+<title>R5 同步自检 · 家长用（v1.8.0-rc2）</title>
 <style>
   body{margin:0;padding:18px;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f3f7fc;color:#12243d}
   h1{font-size:19px;margin:0 0 4px}
@@ -14,34 +14,52 @@
   button{border:0;border-radius:12px;padding:13px 18px;font-size:15px;font-weight:700;background:#e23b2e;color:#fff;margin-right:8px}
   button.ghost{background:#eef4fb;color:#12243d}
   .ok{color:#2fae6a;font-weight:700}.bad{color:#e23b2e;font-weight:700}
+  .note{background:#fff8e6;border:1px solid #ffe0a3;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.7;color:#6b5320;margin-bottom:12px}
 </style>
 </head>
 <body>
-<h1>R5 同步自检</h1>
-<p class="sub">这个页面给家长排查用：孩子那台设备上的成绩有没有真的传到腾讯云。<br />
-请在与孩子学习时**同一台设备、同一个浏览器**里打开。</p>
+<h1>R5 同步自检 · v1.8.0-rc2</h1>
+<p class="sub">家长排查用：孩子那台设备上的成绩有没有真的传到云端。<br />
+请在与孩子学习时<strong>同一台设备、同一个浏览器</strong>里打开。</p>
 
+<div class="note" id="counter-note">
+  <strong>关于「待同步」计数：</strong>旧版把「云端已存在、本次去重跳过」误写成
+  <code>pending</code>，所以会出现 <code>pending=21 / uploaded=0</code> 让人以为 21 条没上传。
+  候选版已拆成四个字段：<code>synced_total</code>（云端已持久化总数）、
+  <code>uploaded</code>（本次新增）、<code>skipped_duplicates</code>（已有跳过）、
+  <code>pending</code>（真正待上传，同步成功时恒为 0）。
+</div>
+
+<div class="card"><h2>同步计数（v1.8.0-rc2）</h2><pre id="counters">读取中…</pre></div>
 <div class="card"><h2>V6 → 云端</h2><pre id="diag">读取中…</pre></div>
 <div class="card"><h2>今天各科真实题量（本机）</h2><pre id="grading">读取中…</pre></div>
-<div class="card"><h2>云端判定</h2><pre id="cloud">读取中…</pre></div>
+<div class="card"><h2>云端判定（r5_status）</h2><pre id="cloud">读取中…</pre></div>
 <div class="card">
   <button id="sync">立即同步一次</button>
   <button class="ghost" id="reload">刷新</button>
 </div>
 <p class="sub" id="tip"></p>
-<script src="./r5-bridge.js"></script>
+<script src="./r5-bridge.js?v=20261109-prodlink-rc2"></script>
 <script>
   function render() {
     var d = window.R5Bridge ? window.R5Bridge.diagnose() : null;
+    var c = d && d.cloud;
+    document.getElementById('counters').textContent = c ? [
+      '状态        : ' + (c.state || '–'),
+      '云端已持久化: ' + (c.synced_total == null ? '（旧版桥接器，无此字段）' : c.synced_total + ' 条'),
+      '本次新增    : ' + (c.uploaded == null ? '–' : c.uploaded + ' 条'),
+      '已有跳过    : ' + (c.skipped_duplicates == null ? '（旧版桥接器，无此字段）' : c.skipped_duplicates + ' 条'),
+      '真正待上传  : ' + (c.pending == null ? '–' : c.pending + ' 条'),
+      '云端已复核  : ' + (c.cloud_verified === true ? '是' : (c.cloud_verified == null ? '（旧版）' : '否')),
+      '说明        : ' + (c.message || '–'),
+    ].join('\n') : '还没有同步过';
+
     document.getElementById('diag').textContent = d ? JSON.stringify({
-      today: d.today,
-      localDay: d.localDay,
-      subjects: d.subjects,
-      hasState: d.hasState,
-      records: d.records,
-      chineseDays: d.chineseDays,
-      courseKeys: d.courseKeys,
+      today: d.today, localDay: d.localDay, subjects: d.subjects,
+      hasState: d.hasState, records: d.records,
+      chineseDays: d.chineseDays, courseKeys: d.courseKeys,
     }, null, 2) : '桥接脚本未加载';
+
     var g = document.getElementById('grading');
     if (!d) { g.textContent = '桥接脚本未加载'; }
     else if (!d.grading || !d.grading.length) { g.textContent = '今天还没有任何作答记录'; }
@@ -53,7 +71,6 @@
           + '\n  来源：' + Object.keys(x.sources).map(function (k) { return k + '×' + x.sources[k]; }).join('、');
       }).join('\n\n');
     }
-    var c = d && d.cloud;
     document.getElementById('cloud').textContent = c ? JSON.stringify(c, null, 2) : '还没有同步过';
     var tip = document.getElementById('tip');
     if (c && c.state === 'ok') tip.innerHTML = '同步正常：' + (c.allowed ? '<span class="ok">赛车已解锁</span>' : '<span class="bad">尚未达标</span>');

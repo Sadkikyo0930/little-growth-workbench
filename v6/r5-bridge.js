@@ -77,6 +77,20 @@
 
   function today() { return ymd(new Date()); }
 
+  /* v1.8.0-rc2 / r5-prodlink-date-fix
+   * 课件进度里的 at 是 new Date().toISOString()（UTC）。东八区 00:00-08:00 之间
+   * 用 at.slice(0,10) 取到的是「昨天」，会把当天成绩整批判成过期丢弃。
+   * 这里统一按本地时区解析；纯 YYYY-MM-DD 字符串原样返回。 */
+  function ymdOf(v) {
+    if (v == null || v === '') return '';
+    var s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return s.slice(0, 10);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+      + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   function readJson(key) {
     try {
       var v = JSON.parse(localStorage.getItem(key) || 'null');
@@ -309,7 +323,7 @@
       if (!Number.isInteger(dayNo) || dayNo < 1 || dayNo > CFG.maxDay) return;
       var pack = daily[k];
       if (!pack || !Array.isArray(pack.answers)) return;
-      var quizDate = String(pack.quizAt || '').slice(0, 10);
+      var quizDate = ymdOf(pack.quizAt);
       if (quizDate !== todayStr) return;
       pack.answers.forEach(function (a, i) {
         if (!a || typeof a.correct !== 'boolean') return;
@@ -367,7 +381,7 @@
         var rec = store[lessonKey];
         if (!rec || typeof rec !== 'object') return;
         var at = String(rec.at || '');
-        if (at.slice(0, 10) !== todayStr) return;     // 只采今天的
+        if (ymdOf(at) !== todayStr) return;     // 只采今天的（按本地时区）
         var list = spec.pick(rec);
         if (!list) return;
         list.forEach(function (item) {
@@ -403,7 +417,7 @@
         if (!q || typeof q !== 'object') return;
         if (!Number.isInteger(q.score) || !Number.isInteger(q.total) || q.total <= 0) return;
         if (q.score < 0 || q.score > q.total) return;
-        var at = String(q.at || '').slice(0, 10);
+        var at = ymdOf(q.at);
         if (at !== todayStr) return;
         quizzes.push({ name: name, score: q.score, total: q.total });
       });
@@ -411,7 +425,7 @@
       if (!quizzes.length && pack.cnPageQuiz) {
         var c = pack.cnPageQuiz;
         if (Number.isInteger(c.score) && Number.isInteger(c.total) && c.total > 0
-            && c.score >= 0 && c.score <= c.total && String(c.at || '').slice(0, 10) === todayStr) {
+            && c.score >= 0 && c.score <= c.total && ymdOf(c.at) === todayStr) {
           quizzes.push({ name: 'cnPageQuiz', score: c.score, total: c.total });
         }
       }
@@ -612,9 +626,14 @@
       var uploaded = await upload(rows, who);
       st = await cloudStatus(who);
 
+      /* v1.8.0-rc2 / r5-prodlink-status-fix
+       * upload() 成功返回即代表 rows 中「本次新增 + 云端已有」全部已持久化。
+       * 旧字段 pending = rows.length - uploaded 实际是「去重跳过」，会造成误读。 */
+      var skipped = rows.length - uploaded;
       saveStatus({
         state: 'ok',
-        message: '第 ' + cloudDay + ' 天 · 本次上传 ' + uploaded + ' 条',
+        message: '第 ' + cloudDay + ' 天 · 云端已持久化 ' + rows.length + ' 条'
+          + '（本次新增 ' + uploaded + ' 条，已有跳过 ' + skipped + ' 条）',
         cloud_day: cloudDay,
         subjects: (st && st.modules || []).map(function (m) {
           return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%') + (m.passed ? ' ✓' : ' ✗');
@@ -622,8 +641,12 @@
         grading: gradingOf(state, cloudDay, todayStr),
         allowed: !!(st && st.allowed),
         reason: st && st.reason,
-        pending: rows.length - uploaded,
+        // 真正的「待上传」：upload() 未抛错时为 0；保留字段名以兼容家长检查页。
+        pending: 0,
         uploaded: uploaded,
+        skipped_duplicates: skipped,
+        synced_total: rows.length,
+        cloud_verified: !!(st && Array.isArray(st.modules) && st.modules.length),
       });
       log('同步完成', cloudDay, '上传', uploaded, '条', st && st.reason);
       return readStatus();
@@ -750,7 +773,7 @@
   /* ------------------------------------------------------ 对外接口 & 触发器 */
 
   window.R5Bridge = {
-    version: '2026-11-08.2',
+    version: '2026-11-09.prodlink-rc2',
     run: run,
     runNow: function () { return run(true); },
     status: readStatus,
