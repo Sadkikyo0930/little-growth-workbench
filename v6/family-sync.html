@@ -32,10 +32,19 @@ function deviceId(){
 function localState(){try{var v=JSON.parse(localStorage.getItem(KEY)||"null");return v&&Array.isArray(v.records)?v:null}catch(e){return null}}
 function getBaseline(){try{var b=JSON.parse(localStorage.getItem(BASELINE_KEY)||"null");return b&&Number.isInteger(b.answerCount)&&b.answerCount>=0&&typeof b.start==="string"?b:null}catch(e){return null}}
 function drawBaseline(){var b=getBaseline();$("baselineStatus").textContent=b?"✅ 已设置正式同步起点："+new Date(b.start).toLocaleString()+"。设置时已有 "+b.answerCount+" 条历史答题保留本机、不上传。":"⚠️ 尚未设置正式同步起点。为避免把测试记录上传，上传功能暂时锁定。";$("setBaseline").textContent=b?"重新设置正式同步起点（慎用）":"从现在起记录正式学习（保留之前试做数据）"}
-$("setBaseline").onclick=function(){var s=localState();if(!s){alert("当前浏览器没有 V6 记录，请先从 V6 主页面打开。");return}
- var current=getBaseline();if(current&&!confirm("已设置过正式同步起点。重新设置将跳过更多历史记录。确定继续吗？"))return;
- if(!confirm("当前已有 "+s.records.length+" 条历史答题。确定把现在作为正式学习起点吗？\n这些历史数据仍保留本机，但不会加入后续云端上传。"))return;
- try{localStorage.setItem(BASELINE_KEY,JSON.stringify({start:new Date().toISOString(),answerCount:s.records.length}));drawBaseline();update();autoStatus();status("✅ 正式同步起点已保存。原有成绩没有修改，历史试做记录不会上传。")}catch(e){alert("保存起点失败："+err(e))}
+$("setBaseline").onclick=function(){
+ // 新设备第一次打开 V6 时，可能尚未产生 state.records；这不应阻止首次授权。
+ // 只设置同步起点，不创建或修改 V6 学习档案，不改动任何已有成绩。
+ var s=localState(),count=s&&Array.isArray(s.records)?s.records.length:0;
+ var current=getBaseline();
+ if(current&&!confirm("已设置过正式同步起点。重新设置将跳过更多历史记录。确定继续吗？"))return;
+ var note=s?"当前已有 "+count+" 条历史答题。":"这是尚无历史答题的新设备，将从 0 条开始记录。";
+ if(!confirm(note+"确定把现在作为正式学习起点吗？\n之前数据仍保留本机，不会加入后续云端上传。"))return;
+ try{
+  localStorage.setItem(BASELINE_KEY,JSON.stringify({start:new Date().toISOString(),answerCount:count}));
+  drawBaseline();update();autoStatus();
+  status("✅ 正式同步起点已保存（历史答题 "+count+" 条）。没有修改本机学习成绩。可以继续登录家庭账号。");
+ }catch(e){alert("保存起点失败："+err(e))}
 };
 var AUTO_KEY="v6-family-auto-sync-enabled",AUTO_STATUS_KEY="v6-family-auto-sync-status";
 function autoStatus(){
@@ -55,7 +64,7 @@ $("autoToggle").onclick=function(){
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
 function makeRows(){
  var prefix=deviceId();
- var s=localState();if(!s){$("local").textContent="本浏览器暂无 V6 学习记录。孩子未开始正式学习时这是正常的。";return []}
+ var s=localState();if(!s){drawBaseline();$("local").textContent="本浏览器尚无历史答题（0 条）。新设备可直接设置正式同步起点并登录家庭账号；孩子正式开始学习后才产生可上传记录。";return []}
  var baseline=getBaseline();drawBaseline();if(!baseline){$("local").textContent="已找到 "+s.records.length+" 条本机历史答题。先设置正式同步起点，再上传。";return []}
  var items=[];
  // Each recorded answer is append-only; use a stable index, not changing payload content, as the identity.
