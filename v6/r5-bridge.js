@@ -19,6 +19,8 @@
 (function () {
   'use strict';
 
+  var BRIDGE_BUILD = '2026-11-09.multidevice-4';
+
   var CFG = {
     familyId: 'little-growth-family-001',
     env: 'normal-goose-d5g4qyzr8bb389a4a',
@@ -537,11 +539,218 @@
     return set;
   }
 
+  /**
+   * 服务端原子抢占（首选路径，依赖 007_answer_dedupe.sql）。
+   *
+   * r5_answer_dedupe 的主键 (family_id, subject, answer_date, track, q_index) 就是
+   * 唯一约束，服务端用 INSERT ... ON CONFLICT DO NOTHING 完成抢占 —— 两台设备
+   * 同时上传同一道题时，只有一台能 RETURNING 到行，另一台拿到 duplicates。
+   * 这是数据库层的原子保证，不是「先查再判断」的时序假设。
+   *
+   * 服务端对「同一台设备 + 同一个 record_id」的重试会返回 reclaimed：
+   * 本机上次抢到了但 POST 失败时，10 分钟内重试不会被自己判成已同步。
+   *
+   * 返回 null 表示 RPC 不可用（未部署 / 网络失败 / 权限不足），
+   * 调用方降级到「读云端当天记录再过滤」，同步本身永不中断。
+   */
+  async function claimOnServer(items, who) {
+    var payload = items.map(function (r) {
+      var a = r.record_data && r.record_data.answer;
+      var c = r.record_data && r.record_data.completed_at;
+      return {
+        record_id: r.record_id,
+        subject: r.subject,
+        date: a ? ymdOf(a.date) : (c ? ymdOf(c) : ymdOf(new Date())),
+        track: a ? String(a.track || '') : '__course__',
+        index: a ? (Number(a.index) || 0) : 0,
+      };
+    });
+    try {
+      var out = await rpc('r5_claim_answers', { p_family_id: CFG.familyId, p_items: payload }, who);
+      var row = Array.isArray(out) ? out[0] : out;
+      if (!row || !Array.isArray(row.claimed)) return null;
+      return {
+        claimed: new Set(row.claimed.map(String)),
+        reclaimed: new Set((row.reclaimed || []).map(String)),
+        duplicates: new Set((row.duplicates || []).map(String)),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 降级路径：云端当天已有的「答题/完成指纹」集合。
+   * 指纹 = 学科|日期|关卡|题号；课程完成记录用 track='__course__', index=0。
+   * 读不到就返回 null，保持原有的按 record_id 去重。
+   * 注意：并发下两台设备可能同时读到空集合，这条路只做兜底，不作为并发保证。
+   */
+  async function cloudQuestionKeys(who, day) {
+    try {
+      var url = CFG.restBase + '/growth_learning_records'
+        + '?select=subject,learning_day,record_type,record_data'
+        + '&family_id=eq.' + encodeURIComponent(CFG.familyId)
+        + '&record_type=in.(answer,course-complete)'
+        + '&learning_day=eq.' + encodeURIComponent(String(day))
+        + '&limit=3000';
+      var res = await fetch(url, {
+        headers: { authorization: 'Bearer ' + who.token, accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      var rows = await res.json();
+      var set = {};
+      (rows || []).forEach(function (r) {
+        if (!r) return;
+        var a = r.record_data && r.record_data.answer;
+        if (a) {
+          set[r.subject + '|' + ymdOf(a.date) + '|' + String(a.track || '') + '|' + String(a.index)] = 1;
+          return;
+        }
+        var c = r.record_data && r.record_data.completed_at;
+        if (c) set[r.subject + '|' + ymdOf(c) + '|__course__|0'] = 1;
+      });
+      return set;
+    } catch (e) { return null; }
+  }
+
+  function fingerprint(r) {
+    var a = r.record_data && r.record_data.answer;
+    if (a) return r.subject + '|' + ymdOf(a.date) + '|' + String(a.track || '') + '|' + String(a.index);
+    var c = r.record_data && r.record_data.completed_at;
+    return r.subject + '|' + (c ? ymdOf(c) : ymdOf(new Date())) + '|__course__|0';
+  }
+
+  /** 按 record_id 精确回查：只查本机这批 id，不会因为历史记录多而被 limit 截断。 */
+  async function persistedIds(who, ids) {
+    if (!ids.length) return { ok: true, ids: {}, scanned: 0 };
+    try {
+      var list = ids.map(function (s) { return '"' + String(s).replace(/["\\]/g, '') + '"'; }).join(',');
+      var url = CFG.restBase + '/growth_learning_records'
+        + '?select=record_id'
+        + '&family_id=eq.' + encodeURIComponent(CFG.familyId)
+        + '&record_id=in.(' + list + ')'
+        + '&limit=' + (ids.length + 5);
+      var res = await fetch(url, {
+        headers: { authorization: 'Bearer ' + who.token, accept: 'application/json' },
+      });
+      if (!res.ok) return { ok: false, ids: {}, scanned: 0 };
+      var rows = await res.json();
+      var set = {};
+      (rows || []).forEach(function (r) { if (r && r.record_id) set[String(r.record_id)] = 1; });
+      return { ok: true, ids: set, scanned: (rows || []).length };
+    } catch (e) { return { ok: false, ids: {}, scanned: 0 }; }
+  }
+
+  /** 当天题目指纹（用于判断「别的设备已经传过这道题」），带截断标记。 */
+  async function dayFingerprints(who, day) {
+    var limit = 3000;
+    try {
+      var url = CFG.restBase + '/growth_learning_records'
+        + '?select=subject,learning_day,record_type,record_data'
+        + '&family_id=eq.' + encodeURIComponent(CFG.familyId)
+        + '&record_type=in.(answer,course-complete)'
+        + '&learning_day=eq.' + encodeURIComponent(String(day))
+        + '&limit=' + limit;
+      var res = await fetch(url, {
+        headers: { authorization: 'Bearer ' + who.token, accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      var rows = await res.json();
+      var fps = {};
+      (rows || []).forEach(function (r) {
+        if (!r) return;
+        var a = r.record_data && r.record_data.answer;
+        if (a) { fps[r.subject + '|' + ymdOf(a.date) + '|' + String(a.track || '') + '|' + String(a.index)] = 1; return; }
+        var c = r.record_data && r.record_data.completed_at;
+        if (c) fps[r.subject + '|' + ymdOf(c) + '|__course__|0'] = 1;
+      });
+      return { fps: fps, truncated: (rows || []).length >= limit };
+    } catch (e) { return null; }
+  }
+
+  /**
+   * 回读云端，逐条确认「本机认为应有成绩」的每一条是否真的落库。
+   *
+   * 为什么不能看 r5_status：r5_status 的 modules 只说明云端有这个科目的记录，
+   * 可能全部来自另一台设备；本机 POST 静默失败时它照样返回 modules。
+   * 所以 cloud_verified 只能建立在「按 record_id 或题目指纹能在正表里找到」之上。
+   *
+   * known=false 表示这次没能力判断（读不到 / 当天记录超过上限），
+   * 此时 pending 必须是 null，绝不能报 0。
+   */
+  async function verifyPersisted(rows, who, day) {
+    if (!rows.length) return { known: true, missing: [], confirmed: 0, scanned: 0 };
+    var ids = rows.map(function (r) { return r.record_id; });
+    var exact = await persistedIds(who, ids);
+    if (!exact.ok) return { known: false, missing: ids.slice(), confirmed: 0, scanned: 0 };
+
+    var needFp = [];
+    rows.forEach(function (r) { if (!exact.ids[r.record_id]) needFp.push(r); });
+    if (!needFp.length) return { known: true, missing: [], confirmed: rows.length, scanned: exact.scanned };
+
+    var dayIdx = await dayFingerprints(who, day);
+    if (!dayIdx) {
+      return { known: false, missing: needFp.map(function (r) { return r.record_id; }),
+        confirmed: rows.length - needFp.length, scanned: exact.scanned };
+    }
+    var missing = [];
+    needFp.forEach(function (r) {
+      if (!dayIdx.fps[fingerprint(r)]) missing.push(r.record_id);
+    });
+    if (missing.length && dayIdx.truncated) {
+      return { known: false, missing: missing, confirmed: rows.length - missing.length,
+        scanned: exact.scanned, truncated: true };
+    }
+    return { known: true, missing: missing, confirmed: rows.length - missing.length, scanned: exact.scanned };
+  }
+
+  function sleepMs(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+
+  /**
+   * 另一台设备可能正在写同一天的记录。给 0.6 秒再确认一次，
+   * 避免把「正在上传」误报成「没落库」——但绝不把「确认不到」当成已确认。
+   */
+  async function verifyWithRetry(rows, who, day) {
+    var vf = await verifyPersisted(rows, who, day);
+    if (!rows.length || (vf.known && !vf.missing.length)) return vf;
+    await sleepMs(600);
+    var again = await verifyPersisted(rows, who, day);
+    return again.known ? again : vf;
+  }
+
+  /**
+   * 上传。返回值是统计对象，不再是条数：
+   *   uploaded   本次真正写入的条数
+   *   already    云端本来就有（按 record_id）
+   *   duplicates 别的设备抢占在先（按题目指纹）
+   *   reclaimed  本机重试自己上次没落库的占位
+   */
   async function upload(rows, who) {
-    if (!rows.length) return 0;
+    var out = { uploaded: 0, already: 0, duplicates: 0, reclaimed: 0 };
+    if (!rows.length) return out;
     var have = await existingIds(who);
     var fresh = rows.filter(function (r) { return !have.has(r.record_id); });
-    if (!fresh.length) return 0;
+    out.already = rows.length - fresh.length;
+    if (!fresh.length) return out;
+
+    var claim = await claimOnServer(fresh, who);
+    if (claim) {
+      // ① 原子抢占：只上传本机抢到的，其余是别的设备已经传过的
+      out.reclaimed = claim.reclaimed.size;
+      fresh = fresh.filter(function (r) { return claim.claimed.has(r.record_id); });
+      out.duplicates += claim.duplicates.size;
+    } else {
+      // ② RPC 不可用：降级为读后过滤（不保证并发安全，但不阻塞同步）
+      var day = fresh[0].learning_day;
+      var seenQ = await cloudQuestionKeys(who, day);
+      if (seenQ) {
+        var before = fresh.length;
+        fresh = fresh.filter(function (r) { return !seenQ[fingerprint(r)]; });
+        out.duplicates += before - fresh.length;
+      }
+    }
+    if (!fresh.length) return out;
+
     var payload = fresh.map(function (r) {
       return Object.assign({}, r, { created_by: who.uid });
     });
@@ -559,7 +768,8 @@
       try { body = await res.text(); } catch (e) { body = ''; }
       throw new Error('WRITE_RECORDS_' + res.status + ':' + body.slice(0, 160));
     }
-    return fresh.length;
+    out.uploaded = fresh.length;
+    return out;
   }
 
   /* ------------------------------------------------------------- 主流程 */
@@ -623,17 +833,36 @@
           cloud_subjects: cloudSubjects, local_subjects: localSubjects });
       }
       var rows = collectAnswers(state, cloudDay, todayStr).concat(collectCompletions(state, cloudDay, todayStr));
-      var uploaded = await upload(rows, who);
+      var up = await upload(rows, who);
       st = await cloudStatus(who);
 
-      /* v1.8.0-rc2 / r5-prodlink-status-fix
-       * upload() 成功返回即代表 rows 中「本次新增 + 云端已有」全部已持久化。
-       * 旧字段 pending = rows.length - uploaded 实际是「去重跳过」，会造成误读。 */
-      var skipped = rows.length - uploaded;
+      /* 关键修正（r5-birthday-multidevice v4）：
+       * 不能再用「r5_status 有没有 modules」当 cloud_verified —— modules 可能全部
+       * 来自另一台设备，本机这条 POST 失败它照样有值。这里回读正表逐条确认：
+       *   先按 record_id 精确查本机这批（不会被历史条数截断），
+       *   查不到的再按「学科|日期|关卡|题号」指纹判断是否已被别的设备传过。
+       * 任何一步读不到 → pending 记 null（未知），绝不报 0。 */
+      var vf = await verifyWithRetry(rows, who, cloudDay);
+      var pending = vf.known ? vf.missing.length : null;
+      var noRows = rows.length === 0;
+      var allThere = vf.known && vf.missing.length === 0 && !noRows;
+      var stateName = !vf.known ? 'unverified' : (vf.missing.length ? 'partial' : 'ok');
+      var msg;
+      if (noRows) {
+        msg = '第 ' + cloudDay + ' 天 · 本机还没有需要上传的成绩';
+      } else if (stateName === 'ok') {
+        msg = '第 ' + cloudDay + ' 天 · 云端已确认落库 ' + rows.length + ' 条'
+          + '（本次新增 ' + up.uploaded + ' 条，云端已有 ' + up.already + ' 条）';
+      } else if (stateName === 'partial') {
+        msg = '第 ' + cloudDay + ' 天 · 还有 ' + vf.missing.length + ' 条没确认落库'
+          + '（已确认 ' + vf.confirmed + ' 条），本机成绩已保留，下次同步会自动重试';
+      } else {
+        msg = '第 ' + cloudDay + ' 天 · 成绩已提交，但没能回读确认'
+          + '（网络或当天记录超过查询上限），下次同步再核对';
+      }
       saveStatus({
-        state: 'ok',
-        message: '第 ' + cloudDay + ' 天 · 云端已持久化 ' + rows.length + ' 条'
-          + '（本次新增 ' + uploaded + ' 条，已有跳过 ' + skipped + ' 条）',
+        state: stateName,
+        message: msg,
         cloud_day: cloudDay,
         subjects: (st && st.modules || []).map(function (m) {
           return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%') + (m.passed ? ' ✓' : ' ✗');
@@ -641,21 +870,41 @@
         grading: gradingOf(state, cloudDay, todayStr),
         allowed: !!(st && st.allowed),
         reason: st && st.reason,
-        // 真正的「待上传」：upload() 未抛错时为 0；保留字段名以兼容家长检查页。
-        pending: 0,
-        uploaded: uploaded,
-        skipped_duplicates: skipped,
-        synced_total: rows.length,
-        cloud_verified: !!(st && Array.isArray(st.modules) && st.modules.length),
+        // pending：确认未落库的条数；null = 这次无法判断（不是 0）
+        pending: pending,
+        pending_known: vf.known,
+        uploaded: up.uploaded,
+        skipped_duplicates: up.already + up.duplicates,
+        reclaimed: up.reclaimed,
+        synced_total: vf.known ? rows.length - vf.missing.length : null,
+        cloud_verified: allThere,
+        cloud_verified_reason: noRows ? 'NO_LOCAL_ROWS'
+          : (!vf.known ? 'VERIFY_UNAVAILABLE' : (vf.missing.length ? 'MISSING_RECORDS' : 'ALL_RECORDS_PRESENT')),
+        cloud_checked: {
+          expected: rows.length,
+          confirmed: vf.confirmed,
+          missing_sample: vf.missing.slice(0, 5),
+          scanned: vf.scanned,
+          truncated: !!vf.truncated,
+        },
+        verified_at: new Date().toISOString(),
       });
-      log('同步完成', cloudDay, '上传', uploaded, '条', st && st.reason);
+      log('同步完成', cloudDay, '新增', up.uploaded, '条', '待确认', pending, st && st.reason);
       return readStatus();
     } catch (e) {
       var code = (e && (e.code || e.message)) || 'UNKNOWN';
       var hint = code === 'NO_SESSION' || code === 'NO_TOKEN'
         ? '这台设备还没有家长登录云端的凭证：请在「家庭同步」页登录一次（成绩仍安全保存在本机）。'
         : String(code);
-      saveStatus({ state: 'error', error: code, message: hint });
+      // 上传失败：本机这批一律算「待上传」，让家长看到真实的 pending
+      saveStatus({
+        state: 'error', error: code,
+        message: hint + ' 本机成绩已保留，下次同步会自动重试。',
+        pending: (typeof rows !== 'undefined' && rows) ? rows.length : null,
+        pending_known: false,
+        cloud_verified: false,
+        cloud_verified_reason: 'UPLOAD_FAILED',
+      });
       log('同步失败', code);
       return readStatus();
     } finally {
