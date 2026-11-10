@@ -479,7 +479,6 @@ function assessmentAccess(date=new Date()){
 function refreshAssessmentAccess(){
  const {weekly,monthly}=assessmentAccess(), locked=!weekly&&!monthly;
  document.querySelectorAll('#goAssessment,[data-tab="assessment"],[data-art-tab="assessment"]').forEach(button=>{
-  button.disabled=locked;
   button.setAttribute('aria-disabled',String(locked));
   button.title=locked?'测评仅在周日或月末开放':'进入测评';
  });
