@@ -5,7 +5,7 @@
 <section class="card"><h2>第一步 · 本机记录</h2><p id="local" class="status">正在查看本机……</p><p id="baselineStatus" class="muted">正在检查正式同步起点……</p><button type="button" id="setBaseline" class="secondary">从现在起记录正式学习（保留之前试做数据）</button><p class="muted">如果孩子还没有正式开学，请先设置正式同步起点。已有试做与旧测评仍保留在本机，但不上传云端。这个操作只设置同步过滤标记，不会清空或修改任何学习成绩。</p></section>
 <section class="card"><h2>第二步 · 家庭成员登录</h2><form id="form"><label for="username">家庭账号</label><input id="username" placeholder="growth_mom / growth_dad / growth_grandma" required autocomplete="username"><label for="password">登录密码</label><input id="password" type="password" required autocomplete="current-password"><button id="login" type="submit" disabled>登录并检查同步权限</button></form>
 <button id="logout" class="secondary" type="button">退出账号</button><p id="status" class="status" role="status">正在加载云端组件……</p></section>
-<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><p id="autoHistory" class="muted">尚未产生云端同步结果。</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button><p class="muted">每台学习设备只需授权一次。之后打开 V6 学习台、有网络且该家庭成员登录会话仍有效时，会尝试同步新增成绩；网络中断时保留本机数据等待补传。请勿在公共设备上保留家长会话。</p></section>
+<section class="card"><h2>第三步 · 自动同步设置</h2><p id="autoStatus" class="status">正在检查自动同步状态……</p><p id="autoHistory" class="muted">尚未产生云端同步结果。</p><button type="button" id="autoToggle" class="secondary">开启自动同步</button> <a href="./r5-parent-check.html" target="_self">返回同步诊断</a><p class="muted">每台学习设备只需授权一次。之后打开 V6 学习台、有网络且该家庭成员登录会话仍有效时，会尝试同步新增成绩；网络中断时保留本机数据等待补传。请勿在公共设备上保留家长会话。</p></section>
 <section class="card"><h2>云端写入诊断（不计成绩）</h2>
 <p>验证当前家庭账号是否真的具有 INSERT 和 SELECT 权限。只在你点击按钮并确认后，新增 1 条 <strong>sync-test</strong> 诊断记录；同一设备重复测试会读取原记录，不会连续新增。</p>
 <button id="testWrite" type="button" disabled>测试云端写入与读取</button>
@@ -99,7 +99,7 @@ $("form").addEventListener("submit",async function(e){e.preventDefault();if(!aut
  status("登录中……");var login=await auth.signInWithPassword({username:u,password:$("password").value});if(login&&login.error)throw login.error; if(typeof auth.getSession!=="function")throw Error("SDK 缺少会话校验接口");var sr=await auth.getSession();if(sr&&sr.error)throw sr.error;var session=sr&&sr.data&&sr.data.session;if(!session||!session.user||!session.user.id)throw Error("登录未建立有效会话，禁止上传");$("password").value="";
  var r=await db.from("growth_family_members").select("family_id,user_id,member_role");if(r&&r.error)throw r.error;
  var rows=r&&Array.isArray(r.data)?r.data:[];if(rows.length!==1||rows[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(rows[0].member_role)||String(rows[0].user_id)!==String(session.user.id))throw Error("家庭成员身份与登录账号不匹配，禁止上传。");
- member=rows[0];await refreshRemote();signed=true;if(new URLSearchParams(location.search).get("from")==="r5-parent-check"){location.replace("./r5-parent-check.html");return;}status("✅ 家庭成员已登录，云端读取正常。数据库允许 INSERT 后即可上传新增记录。");
+ member=rows[0];await refreshRemote();signed=true;status("✅ 家庭成员已登录，云端读取正常。数据库允许 INSERT 后即可上传新增记录。");
  }catch(e){status("❌ "+err(e));signed=false}finally{working=false;$("login").disabled=false;update()}
 });
 async function requireSession(){
