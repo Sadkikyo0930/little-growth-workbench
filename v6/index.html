@@ -488,7 +488,7 @@ function refreshAssessmentAccess(){
 function openScheduledAssessment(){
  const {weekly,monthly}=assessmentAccess();
  refreshAssessmentAccess();
- if(!weekly&&!monthly){document.getElementById('assessmentHoursNotice').hidden=false;return;}
+ if(!weekly&&!monthly){document.getElementById('assessmentHoursNotice').hidden=false;speak('今天是学习日，测评在周日或月末开放。','zh-CN');return;}
  if(monthly&&!weekly){openOfficialEnglishMonthly();return;}
  home();
 }
