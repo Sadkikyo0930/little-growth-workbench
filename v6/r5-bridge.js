@@ -19,6 +19,7 @@
 (function () {
   'use strict';
 
+  var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
   var BRIDGE_BUILD = '2026-11-09.multidevice-4';
 
   var CFG = {
@@ -793,6 +794,7 @@
       var rest = subs.length === 0;
 
       var st = await cloudStatus(who);
+      if ((!st || st.schedule_published !== true) && diagnostic) return saveStatus({ state: 'plan_unpublished', local_day: day, local_subjects: subs, message: '云端当天计划尚未发布，本次诊断未上传。' });
       if (!st || st.schedule_published !== true) {
         try {
           await publishPlan(who, day, rest);
@@ -833,6 +835,7 @@
           cloud_subjects: cloudSubjects, local_subjects: localSubjects });
       }
       var rows = collectAnswers(state, cloudDay, todayStr).concat(collectCompletions(state, cloudDay, todayStr));
+      if (diagnostic && !rows.length) return saveStatus({ state: 'no_local_records', cloud_day: cloudDay, cloud_subjects: cloudSubjects, local_day: day, local_subjects: localSubjects, message: '当前窗口没有匹配当天的真实成绩，没有上传。' });
       var up = await upload(rows, who);
       st = await cloudStatus(who);
 
@@ -1024,6 +1027,10 @@
   window.R5Bridge = {
     version: '2026-11-09.prodlink-rc2',
     run: run,
+    inspectCloud: async function () {
+      var st = await cloudStatus(await identity());
+      return { cloud_day: st && st.study_day, cloud_subjects: (st && st.modules || []).map(function(m){return m.subject;}), schedule_published: !!(st && st.schedule_published), reason: st && st.reason };
+    },
     runNow: function () { return run(true); },
     status: readStatus,
     installChineseCapture: attachChineseCapture,
@@ -1089,6 +1096,7 @@
     },
   };
 
+  if (diagnostic) return;
   // 打开页面 3 秒后跑一次，之后每 60 秒、回到前台、联网都再试
   setTimeout(function () { run(false); attachChineseCapture(); }, 3000);
   setInterval(function () { run(false); }, 60000);

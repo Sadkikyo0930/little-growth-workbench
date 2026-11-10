@@ -39,8 +39,18 @@
   <button class="ghost" id="reload">刷新</button>
 </div>
 <p class="sub" id="tip"></p>
-<script src="./r5-bridge.js?v=20261109-prodlink-rc2"></script>
+<p><a href="./" target="_self">返回 V6 首页</a> · <span id="windowType"></span></p>
+<pre id="liveCloud">正在查询云端计划…</pre>
+<script>const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];</script>
+<script src="./r5-bridge.js?v=20261110-parent-check" data-parent-check></script>
 <script>
+  document.getElementById('windowType').textContent =
+    (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '当前窗口：桌面全屏应用' : '当前窗口：普通浏览器';
+  async function inspect() {
+    var el = document.getElementById('liveCloud');
+    try { el.textContent = JSON.stringify(await window.R5Bridge.inspectCloud(), null, 2); }
+    catch (e) { el.textContent = '无法读取云端：' + (e.code || e.message || '未知错误'); }
+  }
   function render() {
     var d = window.R5Bridge ? window.R5Bridge.diagnose() : null;
     var c = d && d.cloud;
@@ -57,6 +67,7 @@
     document.getElementById('diag').textContent = d ? JSON.stringify({
       today: d.today, localDay: d.localDay, subjects: d.subjects,
       hasState: d.hasState, records: d.records,
+      todayAnswerCount: (d.grading || []).reduce(function(n, x){ return n + x.total; }, 0),
       chineseDays: d.chineseDays, courseKeys: d.courseKeys,
     }, null, 2) : '桥接脚本未加载';
 
@@ -78,10 +89,15 @@
     else if (c && c.message) tip.textContent = c.message;
   }
   document.getElementById('sync').addEventListener('click', function () {
-    window.R5Bridge.runNow().then(function () { setTimeout(render, 400); });
+    var button = this;
+    button.disabled = true;
+    Promise.resolve().then(function(){ return window.R5Bridge.runNow(); }).then(render)
+      .catch(function(e){ document.getElementById('tip').textContent = '同步失败：' + e.message; })
+      .finally(function(){ button.disabled = false; inspect(); });
   });
   document.getElementById('reload').addEventListener('click', render);
   render();
+  inspect();
   setInterval(render, 3000);
 </script>
 </body>
