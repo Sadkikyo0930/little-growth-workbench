@@ -35,6 +35,7 @@
 <div class="card"><h2>今天各科真实题量（本机）</h2><pre id="grading">读取中…</pre></div>
 <div class="card"><h2>云端判定（r5_status）</h2><pre id="cloud">读取中…</pre></div>
 <div class="card">
+  <p><a href="./family-sync.html?from=r5-parent-check" target="_self">家长登录云端</a></p>
   <button id="sync">立即同步一次</button>
   <button class="ghost" id="reload">刷新</button>
 </div>
@@ -56,10 +57,10 @@
     var c = d && d.cloud;
     document.getElementById('counters').textContent = c ? [
       '状态        : ' + (c.state || '–'),
-      '云端已持久化: ' + (c.synced_total == null ? '（旧版桥接器，无此字段）' : c.synced_total + ' 条'),
+      '云端已持久化: ' + (c.synced_total == null ? '（尚未取得）' : c.synced_total + ' 条'),
       '本次新增    : ' + (c.uploaded == null ? '–' : c.uploaded + ' 条'),
-      '已有跳过    : ' + (c.skipped_duplicates == null ? '（旧版桥接器，无此字段）' : c.skipped_duplicates + ' 条'),
-      '真正待上传  : ' + (c.pending == null ? '–' : c.pending + ' 条'),
+      '已有跳过    : ' + (c.skipped_duplicates == null ? '（尚未取得）' : c.skipped_duplicates + ' 条'),
+      '待云端确认  : ' + (c.pending == null ? '未知' : c.pending + ' 条'),
       '云端已复核  : ' + (c.cloud_verified === true ? '是' : (c.cloud_verified == null ? '（旧版）' : '否')),
       '说明        : ' + (c.message || '–'),
     ].join('\n') : '还没有同步过';
