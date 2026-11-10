@@ -408,7 +408,7 @@ function v6CourseRecord(){if(!state.v6Course||typeof state.v6Course!=='object')s
 function v6CourseDay(){const c=v6CourseRecord();for(let d=1;d<=30;d++)if(!c.completedDays[d])return d;return 30}
 function v6EnglishMonthlyUnlocked(){return v6CourseStarted()&&v6SubjectDone(29,'英语')}
 function v6EnglishMonthlyRecord(){const exam=v6CourseRecord().englishMonthlyExam;return exam&&typeof exam==='object'?exam:null}
-function openOfficialEnglishMonthly(){if(!v6EnglishMonthlyUnlocked()){alert('请先完成第29天的英语第17课，再参加月末测评。');return}openScreen('englishMonthlyExam');$('englishMonthlyFrame').src='./english-monthly-assessment.html?official=1&v=20261105-official-monthly1'}
+function openOfficialEnglishMonthly(){const {weekly,monthly}=assessmentAccess();if(!weekly&&!monthly){refreshAssessmentAccess();return;}if(!v6EnglishMonthlyUnlocked()){alert('请先完成第29天的英语第17课，再参加月末测评。');return}openScreen('englishMonthlyExam');$('englishMonthlyFrame').src='./english-monthly-assessment.html?official=1&v=20261105-official-monthly1'}
 function v6SubjectDone(d,name){return !!v6CourseRecord().subjects[d]?.[name]}
 function v6MarkSubject(d,name){if(!v6CourseStarted()){alert('11月9日前仅供预览，不计入正式学习记录。');return}if(d!==v6CourseDay())return;const c=v6CourseRecord();c.subjects[d]||(c.subjects[d]={});c.subjects[d][name]=new Date().toISOString();save();novRender();refreshHomeMode()}
 function v6FinishDay(d){if(!v6CourseStarted())return alert('正式学习尚未开始');if(d!==v6CourseDay())return;const subjects=V6_SUBJECT_DAYS[d-1];if(!subjects.every(name=>v6SubjectDone(d,name)))return alert('当天两科还没全部完成，学习进度会保留在第'+d+'天。');if(!confirm('两科学习都完成了，进入下一学习日吗？'))return;v6CourseRecord().completedDays[d]=new Date().toISOString();save();novSelected=v6CourseDay();novRender();refreshHomeMode()}
@@ -479,6 +479,7 @@ function assessmentAccess(date=new Date()){
 function refreshAssessmentAccess(){
  const {weekly,monthly}=assessmentAccess(), locked=!weekly&&!monthly;
  document.querySelectorAll('#goAssessment,[data-tab="assessment"],[data-art-tab="assessment"]').forEach(button=>{
+  button.disabled=locked;
   button.setAttribute('aria-disabled',String(locked));
   button.title=locked?'测评仅在周日或月末开放':'进入测评';
  });
@@ -511,7 +512,7 @@ function refreshHomeMode(){
 function today(){let d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function done(id){return id==='cn'?Object.keys(tracks).every(t=>!!state.finished['cn_'+t]):!!state.finished[id]}
 function count(){return Object.keys(bank).filter(done).length}
-function openScreen(id){if(id==='home')refreshHomeMode();document.body.classList.toggle('art-mode',id==='home'||id==='growth');document.querySelectorAll('.screen').forEach(e=>e.classList.toggle('active',e.id===id));document.querySelectorAll('[data-tab]').forEach(e=>e.classList.toggle('active',e.dataset.tab===id));window.scrollTo(0,0)}
+function openScreen(id){if(id==='assessment'||id==='englishMonthlyExam'){const {weekly,monthly}=assessmentAccess();if(!weekly&&!monthly){refreshAssessmentAccess();return;}}if(id==='home')refreshHomeMode();document.body.classList.toggle('art-mode',id==='home'||id==='growth');document.querySelectorAll('.screen').forEach(e=>e.classList.toggle('active',e.id===id));document.querySelectorAll('[data-tab]').forEach(e=>e.classList.toggle('active',e.dataset.tab===id));window.scrollTo(0,0)}
 function baselineDay(){return Math.max(0,Math.floor((new Date(today()+'T12:00:00')-new Date((state.started||today())+'T12:00:00'))/86400000))}
 function allowedSubjects(){return baselineDay()===0?['cn','ma']:['en','sc']}
 function baselineSubjectDone(id){
@@ -519,6 +520,8 @@ function baselineSubjectDone(id){
  return !!state.finished[id];
 }
 function home(){
+ const {weekly,monthly}=assessmentAccess();
+ if(!weekly&&!monthly){refreshAssessmentAccess();return;}
  openScreen('assessment');
  const ids=['cn','ma','en','sc'];
  const names={cn:'📖 语文',ma:'🔢 数学',en:'🔤 英语',sc:'🔬 科学'};
