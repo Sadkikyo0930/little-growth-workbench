@@ -1,0 +1,190 @@
+{
+  "suite": "sw-cache",
+  "total": 30,
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "failures": [],
+  "results": [
+    {
+      "id": "S1.1",
+      "title": "VERSION leaves 20261109-clean-home-daily1 behind",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S1.2",
+      "title": "november-subject-schedule.js is inside CORE_FILES",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S1.3",
+      "title": "core prefetch uses cache:reload (never the HTTP cache)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S1.4",
+      "title": "schedule is network-first with cache:no-store",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S1.5",
+      "title": "SW never touches localStorage / indexedDB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S1.6",
+      "title": "bridge script keeps network-first + explicit stale marker",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S1.7",
+      "title": "offline schedule fallback carries X-R5-Schedule-Stale",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.1",
+      "title": "install opens the new CORE cache",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.2",
+      "title": "install prefetches the schedule with cache:reload",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.3",
+      "title": "install calls skipWaiting",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.4",
+      "title": "activate deletes the previous core/runtime caches",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.5",
+      "title": "activate keeps the current core/runtime caches",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.6",
+      "title": "activate never deletes the selftest scope cache",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2.7",
+      "title": "activate calls clients.claim",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S3.1",
+      "title": "online schedule goes to the network with cache:no-store",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S3.2",
+      "title": "online schedule response carries no stale marker",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S3.3",
+      "title": "offline schedule is served only with an explicit stale marker",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S3.4",
+      "title": "offline schedule still attempted the network first",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S3.5",
+      "title": "offline without a cached schedule returns 503 (no fabricated schedule)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S4.1",
+      "title": "offline bridge fallback is explicitly marked stale",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S4.2",
+      "title": "offline bridge still tried the network first",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S5.1",
+      "title": "bridge keeps the local answer queue on stale/offline paths",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S5.2",
+      "title": "bridge aligns to STALE_DEVICE_DAY instead of local progress",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S5.3",
+      "title": "bridge never rewrites a record learning_day to the cloud day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S5.4",
+      "title": "a selftest-scope navigation is not handled by the formal SW",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S6.1",
+      "title": "selftest SW uses its own PREFIX",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S6.2",
+      "title": "selftest SW also prefetches the schedule",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S6.3",
+      "title": "selftest SW never touches localStorage / indexedDB",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S6.4",
+      "title": "selftest activate drops its own legacy cache and keeps the current one",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S6.5",
+      "title": "selftest activate never deletes a formal v6 cache",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

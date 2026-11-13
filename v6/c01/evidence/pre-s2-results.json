@@ -1,0 +1,100 @@
+{
+  "suite": "pre-s2",
+  "total": 15,
+  "passed": 15,
+  "failed": 0,
+  "skipped": 0,
+  "failures": [],
+  "results": [
+    {
+      "id": "P1",
+      "title": "010 never writes child records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P2",
+      "title": "020 never writes child records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P3",
+      "title": "rollback never writes child records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P4",
+      "title": "r5_publish_today keeps its exact 3-argument signature",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P5",
+      "title": "r5_gate_status_core keeps its exact 3-argument signature",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P6",
+      "title": "r5_status / r5_gate_status / r5_child_entry / r5_claim_answers are not redefined",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P7",
+      "title": "rollback restores the byte-identical production gate body",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P8",
+      "title": "the 1800s quota chain is untouched",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P9",
+      "title": "bridge keeps every legacy RPC name and parameter",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P10",
+      "title": "the stale-device gate runs before any upload call",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P11",
+      "title": "bridge never rewrites a learning_day to the cloud day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P12",
+      "title": "the two service workers use disjoint cache prefixes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P13",
+      "title": "rollback only drops objects this change creates",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P14",
+      "title": "candidate files contain no credentials or secrets",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P15",
+      "title": "the deliverable contains every deployment-candidate file",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

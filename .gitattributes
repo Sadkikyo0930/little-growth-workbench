@@ -1,0 +1,6 @@
+# C0.1 candidate: preserve exact bytes (SQL function-body md5 is asserted)
+v6/r5-bridge.js text eol=lf
+v6/sw.js text eol=lf
+v6-selftest/sw.js text eol=lf
+v6/sql/c01/** text eol=lf
+v6/c01/** text eol=lf

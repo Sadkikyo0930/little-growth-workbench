@@ -1,0 +1,400 @@
+{
+  "suite": "bridge",
+  "total": 65,
+  "passed": 65,
+  "failed": 0,
+  "skipped": 0,
+  "failures": [],
+  "results": [
+    {
+      "id": "B1.1",
+      "title": "build id is the C0.1 candidate id",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.2",
+      "title": "legacy entry points still exist",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.3",
+      "title": "diagnostic entry points still exist",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.4",
+      "title": "new read-only day inspector exists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.5",
+      "title": "bridge hardcodes no quota value",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1.6",
+      "title": "bridge never touches racing storage / gate html",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.1",
+      "title": "state is ok after a clean two-subject day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.2",
+      "title": "cloud day is reported",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.3",
+      "title": "all 12 rows (10 answers + 2 completions) were uploaded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.4",
+      "title": "cloud verification confirms every row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.5",
+      "title": "gate allows the racing unlock",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.6",
+      "title": "advance was requested exactly once",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.7",
+      "title": "next day is day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.8",
+      "title": "every uploaded row keeps learning_day = 2",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.9",
+      "title": "no row is written for another day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.10",
+      "title": "publish used the authoritative day and no_tasks=false",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.11",
+      "title": "two subjects reported with 100% accuracy",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2.12",
+      "title": "both completions are tagged with the course-complete type",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.1",
+      "title": "stale device is flagged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.2",
+      "title": "cloud day and local day are both reported",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.3",
+      "title": "stale device writes zero learning records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.4",
+      "title": "stale device publishes no plan",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.5",
+      "title": "stale device never advances the day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.6",
+      "title": "pending is reported as unknown, not zero",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3.7",
+      "title": "message explains the day skew",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.1",
+      "title": "device ahead is flagged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.2",
+      "title": "no learning record is written",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.3",
+      "title": "no plan is published from unverified local progress",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.4",
+      "title": "no advance is attempted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4.5",
+      "title": "message asks the parent to confirm",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.1",
+      "title": "nothing is uploaded for the new day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.2",
+      "title": "cloud row count is unchanged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.3",
+      "title": "state still reports the sync attempt honestly",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.4",
+      "title": "message says there is nothing to upload",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5.5",
+      "title": "no fabricated day-3 row exists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.1",
+      "title": "stale local answer rows are not uploaded under the new day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.2",
+      "title": "no English row is re-dated to day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.3",
+      "title": "no English row is uploaded as day 1 either (already old)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B6.4",
+      "title": "the report does not claim a verified unlock",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.1",
+      "title": "completion still uploads the course-complete row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.2",
+      "title": "pending score sync is surfaced for 数学",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.3",
+      "title": "no answer row is fabricated for the unsynced subject",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.4",
+      "title": "gate stays closed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7.5",
+      "title": "message explains the score is not synced yet",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.1",
+      "title": "regression is detected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.2",
+      "title": "previous and current cloud days are reported",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.3",
+      "title": "only one upload batch was sent",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B8.4",
+      "title": "no unlock is reported while regressed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.1",
+      "title": "a duplicate claimed by another device is skipped",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.2",
+      "title": "the duplicate is not re-posted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.3",
+      "title": "remaining rows still land",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B9.4",
+      "title": "sync still completes and verifies",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.1",
+      "title": "publish is called with the local (stale) day as a hint",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.2",
+      "title": "the cloud plan follows the authoritative day (3)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.3",
+      "title": "the bridge then refuses to upload",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.4",
+      "title": "final state is stale_device_day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B10.5",
+      "title": "message names the authoritative day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.1",
+      "title": "rejects a non-boolean correctness",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.2",
+      "title": "rejects an out-of-range day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.3",
+      "title": "rejects a day that is not the current course day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B11.4",
+      "title": "accepts a valid answer and appends it locally",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.1",
+      "title": "dayInfo reports alignment without writing",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.2",
+      "title": "dayInfo carries the build id",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.3",
+      "title": "diagnose still reports the local day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B12.4",
+      "title": "diagnose read the cloud cache written by the last run",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

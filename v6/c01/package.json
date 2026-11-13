@@ -1,0 +1,20 @@
+{
+  "name": "r5-v6-c01-authoritative-day-candidate",
+  "version": "0.1.0-candidate",
+  "private": true,
+  "type": "module",
+  "description": "V6 x R5 authoritative-learning-day candidate: bridge, service workers, SQL migration and independent test suites. NOT deployed.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node tests/run-all.mjs",
+    "test:unit": "node tests/unit/bridge.test.mjs && node tests/unit/sw.test.mjs",
+    "test:sql": "node tests/sql/e2e.test.mjs",
+    "test:pre-s2": "node tests/pre-s2.test.mjs",
+    "test:live": "node tests/live-assets.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16"
+  }
+}

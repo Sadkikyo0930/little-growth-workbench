@@ -1,0 +1,532 @@
+{
+  "suite": "sql-e2e",
+  "total": 87,
+  "passed": 87,
+  "failed": 0,
+  "skipped": 0,
+  "failures": [],
+  "results": [
+    {
+      "id": "K1",
+      "title": "legacy copy of r5_gate_status_core is byte-identical to production",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K2",
+      "title": "legacy copy of r5_publish_today is byte-identical to production",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K3",
+      "title": "new r5_gate_status_core differs from legacy (substitution added)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K4",
+      "title": "r5_publish_today keeps (text, integer, boolean)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K5",
+      "title": "r5_gate_status_core keeps (text, boolean, boolean)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K6",
+      "title": "r5_status / r5_child_entry / r5_claim_answers / r5_parent_waive are untouched",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K7",
+      "title": "candidate never issues DML against growth_learning_records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "K8",
+      "title": "candidate never alters r5_parent_settings or racing saves",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A1",
+      "title": "day 2 with both subjects at/above 80% unlocks",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A2",
+      "title": "day 2 modules report real accuracy",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A3",
+      "title": "quota is still 1800s + 1800 remaining",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A4",
+      "title": "authoritative_day is reported by r5_status",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A5",
+      "title": "first advance moves 2 -> 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A6",
+      "title": "same-day repeat advance is a no-op",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A7",
+      "title": "today's plan stays day 2 after the advance",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A8",
+      "title": "next day is exposed as authoritative_day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A9",
+      "title": "re-publishing today is locked (no silent rewrite)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A10",
+      "title": "next day publishes day 3 from the authoritative day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A11",
+      "title": "the stale client day is flagged, not obeyed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A12",
+      "title": "day-3 subjects come from the cloud template",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A13",
+      "title": "advance did not run twice on rollover",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "A14",
+      "title": "zero learning-record loss across the whole day transition",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1",
+      "title": "every stale publish resolves to day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2",
+      "title": "every stale publish is flagged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3",
+      "title": "stale publish is idempotent, not an error",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4",
+      "title": "exactly one plan row exists for today",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5",
+      "title": "no day-1 or day-2 plan was written",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B6",
+      "title": "a stale device cannot unlock day 3 with day-1 work",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7",
+      "title": "stale devices wrote zero learning records",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C1",
+      "title": "all five devices are answered with day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C2",
+      "title": "only the aligned device (3) is not flagged stale",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C3",
+      "title": "devices ahead (6, 9) are also refused, not obeyed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C4",
+      "title": "a single plan row survives five publishes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C5",
+      "title": "audit records the stale rejections",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C6",
+      "title": "no record row was created by publishes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C7",
+      "title": "authoritative day never moved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "C8",
+      "title": "the guard trigger blocks a direct stale plan insert",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D1",
+      "title": "one finished subject is not enough",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D2",
+      "title": "the finished subject shows 100%",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D3",
+      "title": "the missing subject is NOT_COMPLETED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D4",
+      "title": "two finished subjects unlock the gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D5",
+      "title": "reason is STUDY_PASSED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D6",
+      "title": "5/6 = 83.3% still passes the 80% rule",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D7",
+      "title": "both modules carry SCORED evidence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "D8",
+      "title": "advance is allowed after both subjects pass",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E1",
+      "title": "completed-but-unscored keeps its real state",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E2",
+      "title": "completed-but-unscored does not unlock",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E3",
+      "title": "credential status is PENDING_SCORE_SYNC",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E4",
+      "title": "pending reason names the missing score",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E5",
+      "title": "no answer row was fabricated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E6",
+      "title": "after the real score syncs, the subject clears",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E7",
+      "title": "the credential flips to VALID_SCORED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "E8",
+      "title": "gate still locked because 英语 is missing",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F1",
+      "title": "waiver without completion evidence is refused",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F2",
+      "title": "waiver is granted once a real completion exists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F3",
+      "title": "waived subject passes with COMPLETED_UNSCORED_WAIVED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F4",
+      "title": "waiver is reported as any_waived",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F5",
+      "title": "the other subject still blocks the unlock",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F6",
+      "title": "waived credential is VALID_WAIVED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F7",
+      "title": "waiver writes no learning record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F8",
+      "title": "waiver is audited",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F9",
+      "title": "an alias completion does not satisfy the exact-subject predicate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F10",
+      "title": "the alias waiver does not unlock the gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F11",
+      "title": "alias waiver is reported, never silently honoured",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "F12",
+      "title": "alias subject keeps its raw value for review",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G1",
+      "title": "migration initialises the day from published plans (max day = 2)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G2",
+      "title": "initialisation provenance is recorded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G3",
+      "title": "73 records produce exactly 4 credential groups",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G4",
+      "title": "no historical group is attributed to any authoritative day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G5",
+      "title": "every group is PENDING_VERIFICATION or PENDING_SCORE_SYNC",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G6",
+      "title": "ZERO groups are folded into day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G7",
+      "title": "the real scores are preserved as evidence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G8",
+      "title": "语文 78.7% is reported as below threshold, never rounded up",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G9",
+      "title": "the sync-test record is excluded from credentials",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G10",
+      "title": "mis-attributed history never unlocks today's gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G11",
+      "title": "gate modules carry no CREDENTIAL_FROM_HISTORY",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G12",
+      "title": "raw subject values are preserved for review",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G13",
+      "title": "73 records are byte-identical after derive + gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H1",
+      "title": "a failed transaction leaves no partial record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H2",
+      "title": "a rejected plan insert leaves no partial plan",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H3",
+      "title": "rollback restores the production gate function byte-for-byte",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H4",
+      "title": "rollback restores the production publish function byte-for-byte",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H5",
+      "title": "rollback drops every table created by 010",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H6",
+      "title": "rollback drops every helper function",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H7",
+      "title": "rollback drops the plan guard trigger",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H8",
+      "title": "zero learning-record loss across rollback",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H9",
+      "title": "after rollback the legacy gate still evaluates the same rows",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

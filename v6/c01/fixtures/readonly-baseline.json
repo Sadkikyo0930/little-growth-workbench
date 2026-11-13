@@ -1,0 +1,166 @@
+{
+  "scope": "C0 development preparation + isolated verification. Formal family: ZERO writes. CloudBase access was SELECT-only.",
+  "captured_at": "2026-11-14T04:44:54+08:00",
+  "d_impl": "2026-11-14",
+  "env_id": "normal-goose-d5g4qyzr8bb389a4a",
+  "schema": "public",
+  "code_baseline": {
+    "v6_repo": "Sadkikyo0930/little-growth-workbench",
+    "v6_main_sha": "1a593fc9771c72c9a6e0bf05e51004a237de41b9",
+    "v6_sw_blob_sha": "ac1aa8c207a716409e25e4b85963d834daf918f6",
+    "v6_selftest_sw_blob_sha": "62e56328a8fabee2c2fd1f3311342c058cb006d0",
+    "v6_schedule_blob_sha": "98dd697dd30b08fb2ccb23dcf4cb13f1c45b7b12",
+    "racing_repo": "Sadkikyo0930/little-racing-v2",
+    "racing_main_sha": "54012efe4e7d0555491050bde17318a0cbe4818c",
+    "pages": "main /docs (unchanged)"
+  },
+  "formal_family": {
+    "family_id": "little-growth-family-001",
+    "learning_records_count": 73,
+    "learning_records_fingerprint_md5": "45c6e9d338df99c7868200eeb37da2d2",
+    "fingerprint_definition": "md5(string_agg(record_id|subject|learning_day|record_data ORDER BY record_id)) - aggregate only; no record_data detail exported",
+    "plan_rows": 6,
+    "plan_today_rows_for_2026_11_14": 0,
+    "daily_seconds": 1800,
+    "bonus_seconds": 0,
+    "parent_control_enabled": true,
+    "member_rows": 3,
+    "members_fingerprint_md5": "562a7e167166e0a871a33b5f30031529",
+    "waiver_rows": 0,
+    "racing_saves_rows_total": 1,
+    "racing_saves_fingerprint_md5": "7ac3931420048a81256c1ee1533cd828",
+    "record_groups": [
+      {"subject": "科学", "learning_day": 1, "record_type": "answer", "n": 5, "correct": 5, "answer_date": "2026-11-11"},
+      {"subject": "科学", "learning_day": 1, "record_type": "course-complete", "n": 1, "completed_at": "2026-11-11T10:19:38.551Z"},
+      {"subject": "英语", "learning_day": 1, "record_type": "answer", "n": 14, "correct": 14, "answer_date": "2026-11-12"},
+      {"subject": "英语", "learning_day": 1, "record_type": "course-complete", "n": 1, "completed_at": "2026-11-12T11:27:49.852Z"},
+      {"subject": "数学", "learning_day": 6, "record_type": "answer", "n": 2, "correct": 2, "answer_date": "2026-11-06"},
+      {"subject": "语文", "learning_day": 9, "record_type": "answer", "n": 47, "correct": 37, "answer_date": "2026-11-09"},
+      {"subject": "系统检测", "learning_day": null, "record_type": "sync-test", "n": 3}
+    ],
+    "plans": [
+      {"study_date": "2026-11-08", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-09", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-10", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-11", "day_index": 2, "subjects": ["语文", "数学"]},
+      {"study_date": "2026-11-12", "day_index": 2, "subjects": ["语文", "数学"]},
+      {"study_date": "2026-11-13", "day_index": 1, "subjects": ["英语", "科学"]}
+    ]
+  },
+  "isolated_family": {
+    "family_id": "r5-selftest-family",
+    "learning_records_count": 53,
+    "plan_rows": 4,
+    "daily_seconds": 1800,
+    "bonus_seconds": 0,
+    "member_rows": 7,
+    "members_fingerprint_md5": "559399d97e863b353b1fc7615f472666",
+    "waiver_rows": 0,
+    "plans": [
+      {"study_date": "2026-11-08", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-09", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-11", "day_index": 2, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-13", "day_index": 3, "subjects": ["数学", "英语"]}
+    ],
+    "record_groups": [
+      {"subject": "chinese", "learning_day": 1, "record_type": "answer", "n": 2, "correct": 2, "answer_date": "2026-11-13"},
+      {"subject": "chinese", "learning_day": 1, "record_type": "course-complete", "n": 1, "completed_at": "2026-11-13T10:15:46"},
+      {"subject": "科学", "learning_day": 1, "record_type": "answer", "n": 5, "correct": 5, "answer_date": "2026-11-09"},
+      {"subject": "科学", "learning_day": 1, "record_type": "course-complete", "n": 1, "completed_at": "2026-11-08T16:42:44.977Z"},
+      {"subject": "英语", "learning_day": 1, "record_type": "answer", "n": 14, "correct": 13, "answer_date": "2026-11-09"},
+      {"subject": "英语", "learning_day": 1, "record_type": "course-complete", "n": 2},
+      {"subject": "科学", "learning_day": 2, "record_type": "answer", "n": 5, "correct": 5, "answer_date": "2026-11-11"},
+      {"subject": "科学", "learning_day": 2, "record_type": "course-complete", "n": 3},
+      {"subject": "英语", "learning_day": 2, "record_type": "answer", "n": 6, "correct": 6, "answer_date": "2026-11-11"},
+      {"subject": "英语", "learning_day": 2, "record_type": "course-complete", "n": 5},
+      {"subject": "数学", "learning_day": 2, "record_type": "course-complete", "n": 4, "unscored": true},
+      {"subject": "语文", "learning_day": 2, "record_type": "course-complete", "n": 2, "unscored": true},
+      {"subject": "英语", "learning_day": 3, "record_type": "course-complete", "n": 1, "unscored": true},
+      {"subject": "数学", "learning_day": 2, "record_type": "weekly-goal", "n": 1},
+      {"subject": "语文", "learning_day": 2, "record_type": "weekly-goal", "n": 1}
+    ],
+    "unscored_course_complete_groups": 3,
+    "unscored_course_complete_rows": 7,
+    "unscored_detail": "learning_day=2 数学 x4, learning_day=2 语文 x2, learning_day=3 英语 x1 - all have NO answer rows for that (learning_day, subject) pair"
+  },
+  "subject_template_days_1_to_6": {
+    "1": ["英语", "科学"],
+    "2": ["语文", "数学"],
+    "3": ["数学", "英语"],
+    "4": ["语文", "英语"],
+    "5": ["数学", "科学"],
+    "6": ["语文", "数学"]
+  },
+  "v6_schedule_version": "2026-11-04",
+  "v6_schedule_matches_cloud_template_days_1_to_6": true,
+  "gate_predicate": {
+    "function": "public.r5_gate_status_core(p_family_id, p_entry, p_ignore_override)",
+    "prosrc_md5": "f78aceeba9c934fa8f4b5c754daba101",
+    "prosecdef": true,
+    "key_lines": {
+      "3": "today_date date := timezone('Asia/Shanghai', clock_timestamp())::date;",
+      "19_20": "SELECT day_index, subjects, published INTO plan FROM public.r5_daily_plan WHERE family_id = p_family_id AND study_date = today_date;",
+      "21_24": "IF NOT FOUND OR NOT plan.published THEN all_pass := false; why := 'PLAN_UNPUBLISHED'; ELSIF jsonb_array_length(plan.subjects) = 0 THEN why := 'NO_TASKS_TODAY';",
+      "28_35": "total_count/correct_count FROM growth_learning_records WHERE record_type='answer' AND subject=subject_name AND learning_day=plan.day_index AND left(answer.date,10)=today_date AND correct IN ('true','false');",
+      "36_44": "finished := EXISTS(course-complete WHERE subject=subject_name AND learning_day=plan.day_index AND CASE WHEN completed_at ~ '^20[0-9]{2}-[0-9]{2}-[0-9]{2}T' THEN ((completed_at)::timestamptz AT TIME ZONE 'Asia/Shanghai')::date ELSE NULL END = today_date);",
+      "45": "item_pass := finished AND total_count > 0 AND correct_count * 100 >= 80 * total_count;",
+      "46_50": "IF NOT item_pass AND finished AND total_count = 0 THEN PERFORM 1 FROM public.r5_parent_waiver w WHERE w.family_id=p_family_id AND w.study_date=today_date AND w.subject=subject_name; IF FOUND THEN waived:=true; item_pass:=true; any_waived:=true; END IF; END IF;",
+      "58_63": "evidence: SCORED / COMPLETED_UNSCORED_WAIVED / SCORED_BELOW_THRESHOLD / COMPLETED_UNSCORED / NOT_COMPLETED",
+      "66_68": "why = STUDY_PASSED / STUDY_PASSED_WITH_WAIVER / STUDY_INCOMPLETE_OR_SCORE_UNVERIFIED",
+      "70_80": "quota chain: r5_daily_usage -> used_seconds; limit_seconds := cfg.daily_seconds + cfg.bonus_seconds; remaining := greatest(0, limit_seconds - used_seconds); study_ok := (all_pass AND why <> 'PLAN_UNPUBLISHED') OR override_active; permitted := (NOT cfg.enabled OR study_ok) AND remaining > 0;",
+      "81_85": "remaining=0 -> TIME_LIMIT_REACHED; NOT enabled -> PARENT_CONTROL_DISABLED; override -> STUDY_PASSED_WITH_WAIVER"
+    }
+  },
+  "waiver_creation_rule": {
+    "function": "public.r5_parent_waive(p_family_id, p_subject, p_reason, p_revoke)",
+    "prosrc_md5": "1230725f9add8135336d699d0d541d01",
+    "requires_real_completion": true,
+    "completion_condition": "EXISTS course-complete with subject = p_subject (exact string match) and completed_at Asia/Shanghai date = today_date; no learning_day filter",
+    "else_raises": "R5_NO_COMPLETION_EVIDENCE",
+    "comment_in_source": "Require real completion evidence: a waiver can never replace actually doing the lesson.",
+    "storage": "public.r5_parent_waiver(family_id, study_date, subject, reason, actor) ON CONFLICT (family_id,study_date,subject) DO UPDATE",
+    "current_rows": 0
+  },
+  "frozen_functions_prosrc_md5": {
+    "r5_assert_member": "f69530d39fe248eee97950fefb46f27a",
+    "r5_child_entry": "1bb9367ef5118b236ced97775c42885b",
+    "r5_claim_answers": "45ef62312ed179f299700946c9c7863d",
+    "r5_gate_status": "8044d55ecc72f87291627818ca19d52b",
+    "r5_gate_status_core": "f78aceeba9c934fa8f4b5c754daba101",
+    "r5_override_active": "470536538077c747e1535711b9854cf4",
+    "r5_parent_rest_day": "23059557194f9fa08722bf9055b8c170",
+    "r5_parent_update": "5cc19828bfaafe155bb82f076cbf596e",
+    "r5_parent_waive": "1230725f9add8135336d699d0d541d01",
+    "r5_publish_today": "b0d8d2deb58ab5240c9207e6b5081ea3",
+    "r5_session_beat": "2d0599984bca8b27d5755590488f9479",
+    "r5_session_close": "47061e6cbc0bbac690a7233f92030a65",
+    "r5_session_live": "92a594960a5b8f903bb7f6981518213b",
+    "r5_session_open": "7b1795ac1f6e74e556dbdd8960c92711",
+    "r5_status": "23aba2d6e510cf3b687557784cd3a8f2"
+  },
+  "s3_targets_still_absent": {
+    "r5_family_progress": true,
+    "r5_plan_audit": true,
+    "r5_course_credential": true,
+    "r5_daily_plan_audit_columns": true,
+    "note": "SELECT information_schema.tables returned only r5_daily_plan from the 4 checked names; no S3 migration has been applied"
+  },
+  "racing_pages_cr26": {
+    "base": "https://sadkikyo0930.github.io/little-racing-v2/",
+    "checked_paths": ["index.html", "gate.html", "manifest.webmanifest", "r5/paths.mjs", "r5/race-guard.mjs", "r5/config.mjs"],
+    "all_http_200": true,
+    "hash_match_method": "sha256(live bytes) == sha256(local main /docs bytes with CRLF normalised to LF)",
+    "all_hashes_match_after_crlf_normalisation": true,
+    "note": "Raw bytes differ only by CRLF/LF line endings; no content drift from main /docs."
+  },
+  "zero_write_guarantee": {
+    "formal_family_dml": 0,
+    "ddl_or_apply_migration": 0,
+    "create_or_replace_function": 0,
+    "github_writes": 0,
+    "pages_changes": 0,
+    "main_merges": 0,
+    "credential_values_printed": 0,
+    "record_data_details_exported": false
+  }
+}

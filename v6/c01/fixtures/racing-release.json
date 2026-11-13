@@ -1,0 +1,24 @@
+{
+  "note": "Traceable release manifest for the UNCHANGED racing (R5) site. Pinned to an explicit commit, not to a branch, so a later main move cannot silently change what C0.1 claims to have checked. Values are Git blob SHAs (content-addressed, immutable).",
+  "racing": {
+    "repo": "Sadkikyo0930/little-racing-v2",
+    "commit": "54012efe4e7d0555491050bde17318a0cbe4818c",
+    "branch_at_capture": "main",
+    "pages_source": "main /docs",
+    "pinned_at": "2026-11-14T05:35:00+08:00",
+    "files": {
+      "docs/index.html": { "blob": "64abddb95af65b885727353cbe7699f12901b7de", "size": 4430 },
+      "docs/gate.html": { "blob": "f01583940392a785c47cec9bbc45ad9aeb589911", "size": 25018 },
+      "docs/manifest.webmanifest": { "blob": "434a610c940c3cd427cea9db936b0a89cacea31b", "size": 917 },
+      "docs/r5/paths.mjs": { "blob": "01fd86462e19567f0606bdbcc6b5098c38d6771b", "size": 2690 },
+      "docs/r5/race-guard.mjs": { "blob": "578917f0cf0f0de55c2457ddbb1aa0667bb9db98", "size": 3441 },
+      "docs/r5/config.mjs": { "blob": "2ce0324d21775ba41a43ea61b4855d1724801a8c", "size": 1707 }
+    }
+  },
+  "v6": {
+    "repo": "Sadkikyo0930/little-growth-workbench",
+    "main_at_capture": "1a593fc9771c72c9a6e0bf05e51004a237de41b9",
+    "candidate_branch": "c01/authoritative-day-candidate",
+    "must_not_move_main": true
+  }
+}
