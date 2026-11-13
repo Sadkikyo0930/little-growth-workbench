@@ -1,0 +1,118 @@
+{
+  "suite": "init-day",
+  "total": 18,
+  "passed": 18,
+  "failed": 0,
+  "skipped": 0,
+  "failures": [],
+  "results": [
+    {
+      "id": "I1",
+      "title": "migration alone creates no progress row (no MAX(day_index) guess)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I2",
+      "title": "snapshot reports history max day 2 and a [2,3] confirmation window",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I3",
+      "title": "publish before initialisation raises R5_DAY_NOT_INITIALIZED and writes no plan",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I4",
+      "title": "parent confirms day 3: authoritative_day = 3, provenance parent_confirmed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I5",
+      "title": "re-initialisation is a no-op (stays 3, never auto-reaches day 4)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I6",
+      "title": "stale client day 1 publishes day 3 and is told it is stale",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I7",
+      "title": "no day-1 / day-2 plan was written for today (only day 3 exists)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I8",
+      "title": "auto-advance refuses on day mismatch (stays 3, no silent day 4)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I9",
+      "title": "init + publish + advance attempt leave every learning record byte-identical",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I10",
+      "title": "confirming day 4 over a day-2 history is rejected (no skipped day)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I11",
+      "title": "confirming day 2 over a day-3 history is rejected (would reopen a published day)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I12",
+      "title": "a stale snapshot fingerprint is rejected, the current one is accepted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I13",
+      "title": "a blank confirmer identity is rejected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I14",
+      "title": "device disagreement blocks initialisation (DEVICE_DAY_DISAGREEMENT)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I15",
+      "title": "records without any published plan block initialisation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I16",
+      "title": "only the accepted confirmation is persisted (refusals roll back cleanly)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I17",
+      "title": "a family with no history is created at day 1 and publishes normally",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "I18",
+      "title": "the new family really has a day-1 plan for today",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

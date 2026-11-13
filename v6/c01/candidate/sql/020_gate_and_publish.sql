@@ -81,8 +81,16 @@ END;
 $function$;
 
 -- -----------------------------------------------------------------------------
--- 2. r5_progress_ensure — create the row lazily, never overwrite
+-- 2. r5_progress_ensure — create the row lazily, never overwrite, never guess
 -- -----------------------------------------------------------------------------
+-- INTERNAL: no EXECUTE grant. Only reachable from the SECURITY DEFINER functions
+-- in this file (publish / advance), which authenticate first.
+--
+-- It may create day 1 for a brand-new family only (no plan row, no learning
+-- record). A family that already has history is NOT initialised here: guessing
+-- from history is exactly the C0.1 defect (real family: plans top out at day 2
+-- while the parent is on day 3). Such a family stops with R5_DAY_NOT_INITIALIZED
+-- until r5_initialize_authoritative_day() is run with a verified confirmation.
 CREATE OR REPLACE FUNCTION public.r5_progress_ensure(p_family_id text)
  RETURNS void
  LANGUAGE plpgsql
@@ -90,11 +98,24 @@ CREATE OR REPLACE FUNCTION public.r5_progress_ensure(p_family_id text)
  SET search_path TO 'pg_catalog', 'public'
 AS $function$
 BEGIN
+  IF EXISTS (SELECT 1 FROM public.r5_family_progress WHERE family_id = p_family_id) THEN
+    RETURN;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.r5_daily_plan WHERE family_id = p_family_id)
+     OR EXISTS (SELECT 1 FROM public.growth_learning_records WHERE family_id = p_family_id) THEN
+    RAISE EXCEPTION 'R5_DAY_NOT_INITIALIZED' USING ERRCODE = 'P0001',
+      DETAIL = 'family has plan/record history; the authoritative day must come from a verified parent confirmation, not from history';
+  END IF;
+
   INSERT INTO public.r5_family_progress (family_id, authoritative_day, initialized_from)
-  VALUES (p_family_id, 1, 'default_day_1')
+  VALUES (p_family_id, 1, 'new_family_day_1')
   ON CONFLICT (family_id) DO NOTHING;
 END;
 $function$;
+
+COMMENT ON FUNCTION public.r5_progress_ensure(text) IS
+  'C0.1 INTERNAL: creates day 1 for a brand-new family only. Existing history without a confirmation raises R5_DAY_NOT_INITIALIZED.';
 
 -- -----------------------------------------------------------------------------
 -- 3. r5_progress_maybe_advance — server-side advance on the first publish of a new date
@@ -169,6 +190,12 @@ $function$;
 -- -----------------------------------------------------------------------------
 -- 4. r5_advance_day — explicit, idempotent advance (bridge / parent retry)
 -- -----------------------------------------------------------------------------
+-- Client-facing, so it authenticates on its own:
+--   * membership is required (R5_MEMBER_DENIED otherwise);
+--   * the caller must be owner/parent — a grandparent or child session can no
+--     longer move the authoritative day (p_require_parent = true);
+--   * a family that is not initialised yet is refused with a result instead of
+--     being silently created here.
 CREATE OR REPLACE FUNCTION public.r5_advance_day(p_family_id text, p_expected_day integer DEFAULT NULL)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -179,13 +206,12 @@ DECLARE
   today_date date := timezone('Asia/Shanghai', clock_timestamp())::date;
   prog record; new_day integer;
 BEGIN
-  PERFORM public.r5_assert_member(p_family_id, false);
+  PERFORM public.r5_assert_member(p_family_id, true);
   SELECT * INTO prog FROM public.r5_family_progress
    WHERE family_id = p_family_id FOR UPDATE;
   IF NOT FOUND THEN
-    PERFORM public.r5_progress_ensure(p_family_id);
-    SELECT * INTO prog FROM public.r5_family_progress
-     WHERE family_id = p_family_id FOR UPDATE;
+    RETURN jsonb_build_object('result', 'day_not_initialized',
+                              'message', 'authoritative day has not been initialised for this family');
   END IF;
 
   IF p_expected_day IS NOT NULL AND p_expected_day <> prog.authoritative_day THEN
@@ -410,7 +436,7 @@ BEGIN
        AND auth_day IS NOT NULL THEN
       cred := NULL;
       SELECT * INTO cred
-        FROM public.r5_credential_derive(p_family_id) c
+        FROM public.r5_credential_derive_impl(p_family_id) c
        WHERE c.authoritative_day = auth_day
          AND c.subject_canonical = (item->>'subject')
          AND c.verification_status IN ('VALID_SCORED', 'VALID_WAIVED',
@@ -507,7 +533,7 @@ DECLARE
   r record;
 BEGIN
   PERFORM public.r5_assert_member(p_family_id, false);
-  FOR r IN SELECT * FROM public.r5_credential_derive(p_family_id) LOOP
+  FOR r IN SELECT * FROM public.r5_credential_derive_impl(p_family_id) LOOP
     INSERT INTO public.r5_credential_snapshot
       (family_id, snapshot_date, credential_key, verification_status, learning_day_raw,
        subject_canonical, record_date, authoritative_day, pending_reasons, payload)
@@ -526,5 +552,62 @@ BEGIN
   RETURN n;
 END;
 $function$;
+
+COMMENT ON FUNCTION public.r5_refresh_credential_snapshot(text) IS
+  'C0.1 INTERNAL: refreshes the audit-only credential snapshot. Membership-checked; no EXECUTE grant.';
+
+-- -----------------------------------------------------------------------------
+-- 9. Privileges — deny by default, grant the legacy client API only
+-- -----------------------------------------------------------------------------
+-- Production shipped these functions with the PostgreSQL default (EXECUTE to
+-- PUBLIC, which includes `anon`). That is what we are closing: an unauthenticated
+-- PostgREST call must not even reach the body. Authentication/authorisation
+-- inside the bodies is untouched — 1800s quota, fail-closed and override
+-- semantics still come from the verbatim legacy body.
+--
+-- Client-facing (GRANT authenticated):  r5_publish_today, r5_gate_status_core,
+--                                       r5_advance_day
+-- Internal (owner-only):                everything else, including the verbatim
+--                                       _legacy copies, the day-replay helper and
+--                                       the progress writers.
+DO $priv$
+DECLARE
+  fn text;
+  api_fns text[] := ARRAY[
+    'public.r5_publish_today(text,integer,boolean)',
+    'public.r5_gate_status_core(text,boolean,boolean)',
+    'public.r5_advance_day(text,integer)'
+  ];
+  internal_fns text[] := ARRAY[
+    'public.r5_gate_status_core_legacy(text,boolean,boolean)',
+    'public.r5_publish_today_legacy(text,integer,boolean)',
+    'public.r5_day_passed(text,date)',
+    'public.r5_progress_ensure(text)',
+    'public.r5_progress_maybe_advance(text)',
+    'public.r5_refresh_credential_snapshot(text)',
+    'public.r5_guard_plan_day()'
+  ];
+BEGIN
+  FOREACH fn IN ARRAY internal_fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', fn);
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM authenticated', fn);
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM anon', fn);
+    END IF;
+  END LOOP;
+
+  FOREACH fn IN ARRAY api_fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', fn);
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM anon', fn);
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', fn);
+    END IF;
+  END LOOP;
+END;
+$priv$;
 
 COMMIT;

@@ -31,7 +31,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-14.authoritative-day-c01';
+  var BRIDGE_BUILD = '2026-11-14.authoritative-day-c01.1';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -350,6 +350,24 @@
       }
       return { result: 'error', error: code };
     }
+  }
+
+  /* 云端还没为这个家庭确定权威学习日（C0.1 起不再按历史计划自动猜）。
+   * 这是「必须家长确认」的状态，不是网络错误：一次都不上传，也不落任何成绩。 */
+  function isDayNotInitialised(e) {
+    var code = String((e && (e.code || e.message)) || '');
+    return /R5_DAY_NOT_INITIALIZED/.test(code);
+  }
+
+  function dayNotInitialisedStatus(extra) {
+    var s = {
+      state: 'day_not_initialized',
+      message: '云端还没有为这个家庭设定权威学习日（需要家长确认一次当前进度），本次不上传任何成绩，本机记录原样保留。',
+      pending: null, pending_known: false,
+      cloud_verified: false, cloud_verified_reason: 'DAY_NOT_INITIALIZED',
+    };
+    if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) s[k] = extra[k]; } }
+    return saveStatus(s);
   }
 
   /* ------------------------------------------------------- 采集「今天的真实记录」 */
@@ -863,7 +881,12 @@
             local_subjects: subjectsFor(localDay),
             message: '云端当天计划尚未发布，本次诊断未上传。' });
         }
-        await publishPlan(who, localDay, subjectsFor(localDay).length === 0);
+        try {
+          await publishPlan(who, localDay, subjectsFor(localDay).length === 0);
+        } catch (e) {
+          if (isDayNotInitialised(e)) return dayNotInitialisedStatus({ local_day: localDay });
+          throw e;
+        }
         st = await cloudStatus(who);
         ds = readDayState(st);
       }
@@ -912,6 +935,7 @@
         try {
           await publishPlan(who, ds.today, subjectsFor(ds.today).length === 0);
         } catch (e) {
+          if (isDayNotInitialised(e)) return dayNotInitialisedStatus({ local_day: localDay, cloud_day: ds.today });
           if (e.code === 'R5_TODAY_PLAN_ALREADY_PUBLISHED') conflict = e;
           else throw e;
         }

@@ -31,11 +31,12 @@ const SUBJECT_DAYS = [
 
 class FakeCloud {
   constructor({ planDay = null, authDay = null, published = false, modules = null,
-    compute = false, afterUpload = null, serverDay = null } = {}) {
+    compute = false, afterUpload = null, serverDay = null, publishError = null } = {}) {
     this.planDay = planDay;
     this.authDay = authDay;
     this.published = published;
     this.serverDay = serverDay;
+    this.publishError = publishError;
     this.modules = modules;
     this.compute = compute;
     this.afterUpload = afterUpload;
@@ -105,6 +106,10 @@ class FakeCloud {
     if (p.endsWith('/r5_publish_today')) {
       const body = JSON.parse(opts.body || '{}');
       this.calls.publish.push(body);
+      if (this.publishError) {
+        return new Response(JSON.stringify({ message: this.publishError, code: 'P0001' }),
+          { status: 400, headers: { 'content-type': 'application/json' } });
+      }
       if (!this.published) {
         this.planDay = this.serverDay !== null ? this.serverDay
           : (this.authDay === null ? body.p_day_index : this.authDay);
@@ -228,7 +233,7 @@ function mount(state, cloud, { today = TODAY } = {}) {
 {
   const { api } = mount(makeState({ day: 2 }), new FakeCloud({ planDay: 2 }));
   suite.check('B1.1', 'build id is the C0.1 candidate id',
-    api.build === '2026-11-14.authoritative-day-c01' && api.version === api.build);
+    /^2026-11-14\.authoritative-day-c01(\.\d+)?$/.test(api.build) && api.version === api.build);
   suite.check('B1.2', 'legacy entry points still exist',
     typeof api.run === 'function' && typeof api.runNow === 'function' && typeof api.status === 'function');
   suite.check('B1.3', 'diagnostic entry points still exist',
@@ -457,11 +462,45 @@ function mount(state, cloud, { today = TODAY } = {}) {
   const { api } = mount(makeState({ day: 3 }), cloud);
   const info = await api.dayInfo();
   suite.check('B12.1', 'dayInfo reports alignment without writing', info.aligned === true && info.cloud_day === 3);
-  suite.check('B12.2', 'dayInfo carries the build id', info.build === '2026-11-14.authoritative-day-c01');
+  suite.check('B12.2', 'dayInfo carries the build id', info.build === '2026-11-14.authoritative-day-c01.1');
   const diag = api.diagnose();
   suite.check('B12.3', 'diagnose still reports the local day', diag.localDay === 3 && diag.build === info.build);
   suite.check('B12.4', 'diagnose read the cloud cache written by the last run',
     diag.cloud === null || typeof diag.cloud === 'object');
+}
+
+/* ---- B13 C0.1: the cloud has no authoritative day yet -------------------- */
+/* The migration deliberately initialises nobody: a family with history needs a
+ * verified parent confirmation first. Until then publish raises
+ * R5_DAY_NOT_INITIALIZED and the bridge must stop BEFORE any upload. */
+{
+  const cloud = new FakeCloud({ planDay: null, authDay: null, published: false,
+    publishError: 'R5_DAY_NOT_INITIALIZED' });
+  const state = makeState({ day: 2, records: answers('数学', 2, 5) });
+  const { api, sandbox } = mount(state, cloud);
+  const st = await api.runNow();
+  suite.check('B13.1', 'a cloud without an authoritative day is reported, not crashed',
+    st.state === 'day_not_initialized', st.state);
+  suite.check('B13.2', 'nothing was uploaded and no answer was claimed',
+    cloud.calls.post.length === 0 && cloud.calls.claim === 0,
+    `post=${cloud.calls.post.length} claim=${cloud.calls.claim}`);
+  suite.check('B13.3', 'the message asks the parent to confirm, and says nothing was lost',
+    /家长确认/.test(st.message) && /原样保留/.test(st.message), st.message);
+  suite.check('B13.4', 'the local records are untouched',
+    JSON.parse(sandbox.localStorage.getItem('growth-workbench-v6-adaptive-2')).records.length === 5);
+  suite.check('B13.5', 'the status is marked unverified so no UI claims success',
+    st.cloud_verified === false && st.cloud_verified_reason === 'DAY_NOT_INITIALIZED');
+}
+
+/* same failure on the "today's plan is not published yet" path */
+{
+  const cloud = new FakeCloud({ planDay: 3, authDay: 3, published: false,
+    publishError: 'R5_DAY_NOT_INITIALIZED' });
+  const { api } = mount(makeState({ day: 3, records: answers('数学', 3, 5) }), cloud);
+  const st = await api.runNow();
+  suite.check('B13.6', 'the publish-while-unpublished path stops the same way',
+    st.state === 'day_not_initialized' && cloud.calls.post.length === 0,
+    `${st.state}/${cloud.calls.post.length}`);
 }
 
 const summary = suite.print();

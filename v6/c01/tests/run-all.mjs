@@ -20,6 +20,8 @@ const SUITES = [
   { id: 'bridge', file: 'tests/unit/bridge.test.mjs', needsDb: false },
   { id: 'sw-cache', file: 'tests/unit/sw.test.mjs', needsDb: false },
   { id: 'sql-e2e', file: 'tests/sql/e2e.test.mjs', needsDb: true },
+  { id: 'init-day', file: 'tests/sql/init-day.test.mjs', needsDb: true },
+  { id: 'security', file: 'tests/sql/security.test.mjs', needsDb: true },
   { id: 'live-assets', file: 'tests/live-assets.mjs', needsDb: false },
 ];
 

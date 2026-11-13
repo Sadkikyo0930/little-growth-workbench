@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-11-13T21:25:37.476Z",
+  "started_at": "2026-11-13T22:06:22.212Z",
   "node": "v22.22.2",
   "pglite": true,
   "suites": [
@@ -7,8 +7,8 @@
       "suite": "pre-s2",
       "status": "PASS",
       "exit_code": 0,
-      "total": 15,
-      "passed": 15,
+      "total": 23,
+      "passed": 23,
       "failed": 0,
       "skipped": 0,
       "verified": null,
@@ -18,8 +18,8 @@
       "suite": "bridge",
       "status": "PASS",
       "exit_code": 0,
-      "total": 65,
-      "passed": 65,
+      "total": 71,
+      "passed": 71,
       "failed": 0,
       "skipped": 0,
       "verified": null,
@@ -40,8 +40,30 @@
       "suite": "sql-e2e",
       "status": "PASS",
       "exit_code": 0,
-      "total": 87,
-      "passed": 87,
+      "total": 90,
+      "passed": 90,
+      "failed": 0,
+      "skipped": 0,
+      "verified": null,
+      "failures": []
+    },
+    {
+      "suite": "init-day",
+      "status": "PASS",
+      "exit_code": 0,
+      "total": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "verified": null,
+      "failures": []
+    },
+    {
+      "suite": "security",
+      "status": "PASS",
+      "exit_code": 0,
+      "total": 27,
+      "passed": 27,
       "failed": 0,
       "skipped": 0,
       "verified": null,
@@ -54,17 +76,17 @@
       "total": 13,
       "passed": 13,
       "failed": 0,
-      "skipped": 0,
-      "verified": true,
+      "skipped": 9,
+      "verified": false,
       "failures": []
     }
   ],
   "totals": {
-    "total": 210,
-    "passed": 210,
+    "total": 272,
+    "passed": 272,
     "failed": 0,
-    "skipped": 0
+    "skipped": 9
   },
   "verdict": "PASS",
-  "finished_at": "2026-11-13T21:25:48.276Z"
+  "finished_at": "2026-11-13T22:06:37.500Z"
 }

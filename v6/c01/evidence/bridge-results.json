@@ -1,7 +1,7 @@
 {
   "suite": "bridge",
-  "total": 65,
-  "passed": 65,
+  "total": 71,
+  "passed": 71,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -393,6 +393,42 @@
     {
       "id": "B12.4",
       "title": "diagnose read the cloud cache written by the last run",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13.1",
+      "title": "a cloud without an authoritative day is reported, not crashed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13.2",
+      "title": "nothing was uploaded and no answer was claimed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13.3",
+      "title": "the message asks the parent to confirm, and says nothing was lost",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13.4",
+      "title": "the local records are untouched",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13.5",
+      "title": "the status is marked unverified so no UI claims success",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13.6",
+      "title": "the publish-while-unpublished path stops the same way",
       "pass": true,
       "detail": ""
     }

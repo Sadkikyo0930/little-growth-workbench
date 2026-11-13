@@ -1,0 +1,172 @@
+{
+  "suite": "security",
+  "total": 27,
+  "passed": 27,
+  "failed": 0,
+  "skipped": 0,
+  "failures": [],
+  "results": [
+    {
+      "id": "S1",
+      "title": "parent still publishes with the unchanged 3-argument signature",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S2",
+      "title": "parent can derive its own credentials",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S3",
+      "title": "a member still gets a full gate status (quota untouched)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S4",
+      "title": "cross-family credential derivation is denied (R5_MEMBER_DENIED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S5",
+      "title": "a session without JWT claims cannot derive (R5_AUTH_REQUIRED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S6",
+      "title": "r5_status / r5_gate_status_core refuse a foreign family",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S7",
+      "title": "advancing a foreign family is denied",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S8",
+      "title": "the foreign family is untouched by the attempt",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S9",
+      "title": "a grandparent session cannot move the authoritative day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S10",
+      "title": "a grandparent can still publish a normal plan and sync answers",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S11",
+      "title": "all ten internal helpers reject a direct call from `authenticated`",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S12",
+      "title": "all four new tables deny direct read and write to `authenticated`",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S13",
+      "title": "RLS is enabled on all four new tables",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S14",
+      "title": "`anon` cannot execute the client API at all",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S15",
+      "title": "no candidate function carries a PUBLIC EXECUTE grant",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S16",
+      "title": "every SECURITY DEFINER function pins search_path",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S17",
+      "title": "the five client-facing functions are granted to `authenticated`",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S18",
+      "title": "old client signatures are byte-for-byte unchanged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S19",
+      "title": "the untouched production functions keep their signatures",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S20",
+      "title": "parent advance after a passing day moves exactly one day",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S21",
+      "title": "a second advance on the same day is idempotent (stays 3)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S22",
+      "title": "a failed day cannot be advanced even by a parent",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S23",
+      "title": "the whole security sweep leaves every learning record byte-identical",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S24",
+      "title": "a logged-in member still gets status, child entry and answer claiming",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S25",
+      "title": "the claim registered exactly one dedupe row and wrote no learning record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S26",
+      "title": "the initialiser refuses an app session even when EXECUTE would be granted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S27",
+      "title": "the refusal did not create a progress row anywhere",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

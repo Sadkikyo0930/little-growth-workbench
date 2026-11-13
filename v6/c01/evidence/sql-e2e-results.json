@@ -1,7 +1,7 @@
 {
   "suite": "sql-e2e",
-  "total": 87,
-  "passed": 87,
+  "total": 90,
+  "passed": 90,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -398,13 +398,13 @@
     },
     {
       "id": "G1",
-      "title": "migration initialises the day from published plans (max day = 2)",
+      "title": "re-running the migration initialises nobody (no MAX(day_index) value)",
       "pass": true,
       "detail": ""
     },
     {
       "id": "G2",
-      "title": "initialisation provenance is recorded",
+      "title": "the snapshot demands a verified confirmation instead of guessing (history max 2, window [2,3])",
       "pass": true,
       "detail": ""
     },
@@ -469,6 +469,18 @@
       "detail": ""
     },
     {
+      "id": "G14",
+      "title": "a verified confirmation of day 3 initialises the real family at 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "G15",
+      "title": "even after initialising at 3, no historical group is folded into day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "id": "G13",
       "title": "73 records are byte-identical after derive + gate",
       "pass": true,
@@ -525,6 +537,12 @@
     {
       "id": "H9",
       "title": "after rollback the legacy gate still evaluates the same rows",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H10",
+      "title": "rollback restores the production PUBLIC EXECUTE default on both functions",
       "pass": true,
       "detail": ""
     }

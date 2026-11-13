@@ -6,9 +6,11 @@
 -- Properties:
 --   * Touches no child data: growth_learning_records, growth_family_members,
 --     r5_parent_settings, r5_racing_saves, r5_parent_waiver are not modified.
---   * Drops only tables that 010 created (progress / audit / snapshot).
---     Losing them is safe: authoritative_day is re-derived from published plans,
---     and the audit table is informational. Child records are never affected.
+--   * Drops only tables that 010 created (progress / audit / snapshot /
+--     day-confirmation). Losing them is safe for the child's data: the tables hold
+--     no learning record, and a re-deploy re-initialises through the verified
+--     parent confirmation — never by re-deriving from published plans.
+--     Child records are never affected.
 --   * Re-creates r5_gate_status_core and r5_publish_today from the verbatim
 --     production bodies (md5 f78aceeba9c934fa8f4b5c754daba101 / b0d8d2deb58ab5240c9207e6b5081ea3).
 --
@@ -173,20 +175,32 @@ BEGIN
   'subjects',desired,'published',true);
 END $function$;
 
--- 4. drop C0.1 helper functions
+-- 4. drop C0.1 helper functions (deepest dependency first: the SQL-language
+--    *_impl bodies depend on r5_subject_canonical and on the 010 tables)
 DROP FUNCTION IF EXISTS public.r5_refresh_credential_snapshot(text);
+DROP FUNCTION IF EXISTS public.r5_initialize_authoritative_day(text, integer, text, text);
+DROP FUNCTION IF EXISTS public.r5_initialization_snapshot(text);
+DROP FUNCTION IF EXISTS public.r5_initialization_snapshot_impl(text);
+DROP FUNCTION IF EXISTS public.r5_credential_derive(text, jsonb);
+DROP FUNCTION IF EXISTS public.r5_credential_derive_impl(text, jsonb);
 DROP FUNCTION IF EXISTS public.r5_advance_day(text, integer);
 DROP FUNCTION IF EXISTS public.r5_progress_maybe_advance(text);
 DROP FUNCTION IF EXISTS public.r5_progress_ensure(text);
 DROP FUNCTION IF EXISTS public.r5_day_passed(text, date);
-DROP FUNCTION IF EXISTS public.r5_credential_derive(text, jsonb);
 DROP FUNCTION IF EXISTS public.r5_subject_canonical(text);
 DROP FUNCTION IF EXISTS public.r5_publish_today_legacy(text, integer, boolean);
 DROP FUNCTION IF EXISTS public.r5_gate_status_core_legacy(text, boolean, boolean);
 
 -- 5. drop C0.1 tables (no child data inside)
+DROP TABLE IF EXISTS public.r5_day_confirmation;
 DROP TABLE IF EXISTS public.r5_credential_snapshot;
 DROP TABLE IF EXISTS public.r5_plan_audit;
 DROP TABLE IF EXISTS public.r5_family_progress;
+
+-- 6. restore the production default privilege (EXECUTE to PUBLIC) on the two
+--    functions this candidate hardened, so a rollback leaves the instance in
+--    exactly the state S3 found it in
+GRANT EXECUTE ON FUNCTION public.r5_publish_today(text, integer, boolean) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.r5_gate_status_core(text, boolean, boolean) TO PUBLIC;
 
 COMMIT;

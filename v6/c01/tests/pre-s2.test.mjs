@@ -93,6 +93,83 @@ suite.check('P15', 'the deliverable contains every deployment-candidate file',
   required.every((f) => fs.existsSync(path.join(ROOT, f))),
   required.filter((f) => !fs.existsSync(path.join(ROOT, f))).join(','));
 
+/* ---------------------------------------------------------------------------
+ * P16–P22 — the two blockers from the independent review, as static gates.
+ * These run before anything is deployed, so a regression cannot reach S3.
+ * ------------------------------------------------------------------------- */
+
+const ALL_SQL = M010 + M020;
+
+/* P16 — the migration must never decide the day by itself. Every write into
+ * r5_family_progress has to be a literal VALUES (a parameter or the constant 1),
+ * never a SELECT that aggregates plan history. MAX(day_index) may still appear as
+ * a *reported* snapshot field; what is forbidden is turning it into authority. */
+{
+  const inserts = [...ALL_SQL.matchAll(/INSERT\s+INTO\s+public\.r5_family_progress[\s\S]{0,240}/gi)]
+    .map((m) => m[0]);
+  const selectDriven = inserts.filter((s) => !/VALUES\s*\(/i.test(s));
+  suite.check('P16', '010 never initialises authoritative_day from plan history',
+    inserts.length >= 2 && selectDriven.length === 0
+    && !/latest_published_plan_max_day|initialized_from\s*,\s*[^)]*day_index/i.test(ALL_SQL),
+    `inserts=${inserts.length} select_driven=${selectDriven.length}`);
+}
+
+/* P17 — every SECURITY DEFINER function must pin search_path. */
+{
+  const definers = [...ALL_SQL.matchAll(/CREATE OR REPLACE FUNCTION ([\s\S]*?)\$function\$/g)]
+    .map((m) => m[1])
+    .filter((body) => /SECURITY DEFINER/i.test(body));
+  const unpinned = definers.filter((body) => !/SET search_path TO 'pg_catalog', 'public'/i.test(body));
+  suite.check('P17', 'every SECURITY DEFINER function pins search_path',
+    definers.length >= 10 && unpinned.length === 0,
+    `definers=${definers.length} unpinned=${unpinned.length}`);
+}
+
+/* P18 — no function or table may be opened to PUBLIC. */
+suite.check('P18', 'no candidate statement grants anything to PUBLIC except the rollback restore',
+  !/GRANT\s+[A-Z ,]+\s+ON\s+(FUNCTION|TABLE|SEQUENCE)[\s\S]{0,80}?\sTO\s+PUBLIC/i.test(ALL_SQL)
+  && /REVOKE ALL ON FUNCTION %s FROM PUBLIC/.test(M010)
+  && /REVOKE ALL ON FUNCTION %s FROM PUBLIC/.test(M020));
+
+/* P19 — RLS must be enabled on all four new tables, never disabled. */
+{
+  const enabled = [...ALL_SQL.matchAll(/ALTER TABLE (public\.\w+)\s+ENABLE ROW LEVEL SECURITY/gi)].map((m) => m[1]);
+  suite.check('P19', 'RLS is enabled on every new table and never disabled',
+    enabled.length === 4
+    && ['r5_family_progress', 'r5_plan_audit', 'r5_credential_snapshot', 'r5_day_confirmation']
+      .every((t) => enabled.includes('public.' + t))
+    && !/DISABLE ROW LEVEL SECURITY/i.test(ALL_SQL),
+    enabled.join(','));
+}
+
+/* P20 — the identity of the caller must be checked in every client-facing body. */
+suite.check('P20', 'every client-facing function authenticates before touching a family',
+  /CREATE OR REPLACE FUNCTION public\.r5_credential_derive\([\s\S]{0,3000}?PERFORM public\.r5_assert_member/.test(M010)
+  && /CREATE OR REPLACE FUNCTION public\.r5_advance_day\([\s\S]{0,1200}?r5_assert_member\(p_family_id, true\)/.test(M020)
+  && /RAISE EXCEPTION 'R5_AUTH_REQUIRED'/.test(M020));
+
+/* P21 — the privileged initialiser must stay out of the client API. */
+suite.check('P21', 'r5_initialize_authoritative_day is never granted to authenticated/anon',
+  !/GRANT EXECUTE ON FUNCTION public\.r5_initialize_authoritative_day/i.test(ALL_SQL)
+  && /public\.r5_initialize_authoritative_day\(text,integer,text,text\)/.test(M010)
+  && /internal_fns text\[\] := ARRAY\[[\s\S]*?r5_initialize_authoritative_day/.test(M010));
+
+/* P22 — a family with history must fail closed, not be created at day 1. */
+suite.check('P22', 'progress_ensure refuses to invent a day for a family that already has history',
+  /R5_DAY_NOT_INITIALIZED/.test(M020)
+  && /FROM public\.r5_daily_plan WHERE family_id = p_family_id/.test(M020)
+  && /FROM public\.growth_learning_records WHERE family_id = p_family_id/.test(M020));
+
+/* P23 — the rollback must remove everything the candidate adds. */
+{
+  const mustDrop = ['r5_initialize_authoritative_day', 'r5_initialization_snapshot',
+    'r5_initialization_snapshot_impl', 'r5_credential_derive_impl', 'r5_day_confirmation'];
+  suite.check('P23', 'rollback drops every new function and table, and restores the PUBLIC default',
+    mustDrop.every((n) => new RegExp(`DROP (FUNCTION|TABLE) IF EXISTS public\\.${n}`, 'i').test(M900))
+    && /GRANT EXECUTE ON FUNCTION public\.r5_publish_today\(text, integer, boolean\) TO PUBLIC/.test(M900),
+    mustDrop.filter((n) => !new RegExp(`DROP (FUNCTION|TABLE) IF EXISTS public\\.${n}`, 'i').test(M900)).join(','));
+}
+
 const summary = suite.print();
 writeJson(path.join(ROOT, 'evidence/pre-s2-results.json'), { ...summary, results: suite.results });
 if (summary.failed > 0) process.exitCode = 1;

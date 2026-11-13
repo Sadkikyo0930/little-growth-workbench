@@ -1,7 +1,7 @@
 {
   "suite": "pre-s2",
-  "total": 15,
-  "passed": 15,
+  "total": 23,
+  "passed": 23,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -93,6 +93,54 @@
     {
       "id": "P15",
       "title": "the deliverable contains every deployment-candidate file",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P16",
+      "title": "010 never initialises authoritative_day from plan history",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P17",
+      "title": "every SECURITY DEFINER function pins search_path",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P18",
+      "title": "no candidate statement grants anything to PUBLIC except the rollback restore",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P19",
+      "title": "RLS is enabled on every new table and never disabled",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P20",
+      "title": "every client-facing function authenticates before touching a family",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P21",
+      "title": "r5_initialize_authoritative_day is never granted to authenticated/anon",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P22",
+      "title": "progress_ensure refuses to invent a day for a family that already has history",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P23",
+      "title": "rollback drops every new function and table, and restores the PUBLIC default",
       "pass": true,
       "detail": ""
     }

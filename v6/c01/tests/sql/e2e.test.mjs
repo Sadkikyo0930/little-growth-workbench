@@ -395,11 +395,17 @@ async function derive(db, id) {
   const before = await fingerprint(db, id);
   const T = await today(db);
 
-  /* re-run 010 now that the family + plans exist: init must take MAX(day_index) */
+  /* re-run 010 now that the family + plans exist: it must NOT initialise anyone.
+   * (The old draft took MAX(day_index) here, which is exactly the defect.) */
   await db.exec(M010);
   const prog = (await db.query('SELECT authoritative_day, initialized_from FROM r5_family_progress WHERE family_id=$1', [id])).rows[0];
-  suite.check('G1', 'migration initialises the day from published plans (max day = 2)', prog.authoritative_day === 2, JSON.stringify(prog));
-  suite.check('G2', 'initialisation provenance is recorded', prog.initialized_from === 'latest_published_plan_max_day');
+  suite.check('G1', 're-running the migration initialises nobody (no MAX(day_index) value)',
+    prog === undefined, JSON.stringify(prog));
+  const snap = (await db.query('SELECT public.r5_initialization_snapshot($1) AS s', [id])).rows[0].s;
+  suite.check('G2', 'the snapshot demands a verified confirmation instead of guessing (history max 2, window [2,3])',
+    snap.plan_max_day === 2 && snap.allowed_min_day === 2 && snap.allowed_max_day === 3
+    && snap.confirmation_required === true,
+    JSON.stringify({ max: snap.plan_max_day, win: [snap.allowed_min_day, snap.allowed_max_day] }));
 
   const creds = await derive(db, id);
   suite.check('G3', '73 records produce exactly 4 credential groups', creds.length === 4, creds.length);
@@ -428,6 +434,23 @@ async function derive(db, id) {
     s.modules.every((m) => m.evidence !== 'CREDENTIAL_FROM_HISTORY'));
   suite.check('G12', 'raw subject values are preserved for review',
     creds.every((c) => Array.isArray(c.subject_raw) && c.subject_raw.length >= 1));
+
+  /* now the operator path: a verified parent confirmation of day 3.
+   * The snapshot is re-read because today's plan was published in G10 — the
+   * fingerprint is meant to change whenever the evidence does. */
+  const snapNow = (await db.query('SELECT public.r5_initialization_snapshot($1) AS s', [id])).rows[0].s;
+  await db.exec('RESET request.jwt.claims');   // operator session, not an app session
+  await db.query("SELECT public.r5_initialize_authoritative_day($1,3,'u-parent',$2)",
+    [id, snapNow.snapshot_fingerprint]);
+  await asParent(db);
+  const prog3 = (await db.query('SELECT authoritative_day, initialized_from FROM r5_family_progress WHERE family_id=$1', [id])).rows[0];
+  const creds3 = await derive(db, id);
+  suite.check('G14', 'a verified confirmation of day 3 initialises the real family at 3',
+    prog3.authoritative_day === 3 && prog3.initialized_from === 'parent_confirmed', JSON.stringify(prog3));
+  suite.check('G15', 'even after initialising at 3, no historical group is folded into day 3',
+    creds3.every((c) => c.authoritative_day === null && c.attributed === false),
+    JSON.stringify(creds3.map((c) => c.authoritative_day)));
+
   const after = await fingerprint(db, id);
   suite.check('G13', '73 records are byte-identical after derive + gate',
     after.n === 73 && after.fp === before.fp, `${after.n}/${before.n}`);
@@ -475,11 +498,13 @@ async function derive(db, id) {
     restoredPub === PROD_PUB_MD5, restoredPub);
 
   const gone = await db.query(`SELECT count(*)::int AS n FROM information_schema.tables
-    WHERE table_schema='public' AND table_name IN ('r5_family_progress','r5_plan_audit','r5_credential_snapshot')`);
+    WHERE table_schema='public' AND table_name IN ('r5_family_progress','r5_plan_audit','r5_credential_snapshot','r5_day_confirmation')`);
   suite.check('H5', 'rollback drops every table created by 010', gone.rows[0].n === 0, gone.rows[0].n);
   const leftover = await db.query(`SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='public' AND p.proname IN ('r5_day_passed','r5_advance_day','r5_subject_canonical',
-    'r5_credential_derive','r5_progress_ensure','r5_progress_maybe_advance','r5_guard_plan_day',
+    'r5_credential_derive','r5_credential_derive_impl','r5_progress_ensure','r5_progress_maybe_advance',
+    'r5_guard_plan_day','r5_initialization_snapshot','r5_initialization_snapshot_impl',
+    'r5_initialize_authoritative_day','r5_refresh_credential_snapshot',
     'r5_gate_status_core_legacy','r5_publish_today_legacy')`);
   suite.check('H6', 'rollback drops every helper function', leftover.rows[0].n === 0, leftover.rows[0].n);
   const trig = await db.query(`SELECT count(*)::int AS n FROM pg_trigger WHERE tgname='r5_daily_plan_day_guard'`);
@@ -489,6 +514,13 @@ async function derive(db, id) {
   const s = await status(db, id);
   suite.check('H9', 'after rollback the legacy gate still evaluates the same rows',
     s.study_day === 3 && s.allowed === false, `${s.study_day}/${s.reason}`);
+  const pubAcl = (await db.query(`SELECT proacl::text AS acl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.proname='r5_publish_today'`)).rows[0].acl;
+  const gateAcl = (await db.query(`SELECT proacl::text AS acl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.proname='r5_gate_status_core'`)).rows[0].acl;
+  suite.check('H10', 'rollback restores the production PUBLIC EXECUTE default on both functions',
+    /(^|,)=[A-Z]*\//.test(pubAcl || '') && /(^|,)=[A-Z]*\//.test(gateAcl || ''),
+    `${pubAcl} | ${gateAcl}`);
   await db.close();
 }
 
