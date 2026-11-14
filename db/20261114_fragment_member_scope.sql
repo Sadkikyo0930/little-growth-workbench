@@ -1,25 +1,35 @@
 -- ============================================================================
--- 20261114_fragment_member_scope.sql
+-- 20261114_fragment_member_scope.sql  (v2)
 -- 「按登录身份读/组装碎片」的服务端封装 —— **未执行**，等家长批准后再 apply
 --
 -- 为什么需要它
---   现在线上三个碎片函数（r5_fragment_snapshot / claim / assemble）都是
+--   线上三个碎片函数（r5_fragment_snapshot / claim / assemble）都是
 --   SECURITY DEFINER 且对 anon 可执行，参数里带 p_family。也就是说：
 --   **谁能直接调这些函数，谁就能指定任何一个 family_id。**
---   前端这一轮已经把「家庭从哪来」改成只认成长成员表（RLS 自读），但那只约束
---   我们自己的页面；真正把口子关掉，必须让服务端自己从 JWT 推家庭。
+--   这个文件把「家庭从哪来」搬到服务端函数内部：从 JWT 反查成员表，
+--   客户端连一个 family 参数都递不进来。
+--
+-- 成员模型（重要，别搞反）
+--   public.growth_family_members 主键 = (family_id, user_id)
+--   → 一个家庭可以有**多名成员**（爸爸 owner / 妈妈 parent / 外婆 grandparent 都合法）；
+--   → 约束是「**每个登录账号的家庭归属唯一**」：同一个 user_id 只能落在 1 个 family_id 上，
+--     落到 2 个家庭时本函数拒绝（AMBIGUOUS_MEMBER），不替家长二选一。
+--   本文件**不 INSERT / UPDATE / DELETE 任何成员行**，三名家长的成员资格原样保留。
 --
 -- 这个文件做的事
---   1. r5_fragment_member_snapshot()  只读，不接受任何 family 参数
---   2. r5_fragment_member_assemble(v) 组装，成本由函数内的白名单决定，不接受客户端传成本
---   3. 两者都只授权给 authenticated，anon 无权限
---   4. 不修改任何既有表、既有函数、既有数据（纯新增 + 授权）
+--   1. r5_fragment_member_snapshot()       只读，不接受任何 family 参数，返回 member_role
+--   2. r5_fragment_member_assemble(v)      组装，成本由函数内白名单决定，不接受客户端传成本
+--   3. 两者都只授权给 authenticated，anon 无执行权，PUBLIC 先全部收回
 --
 -- 应用前提（家长批准后）
 --   · 在正式环境 normal-goose-d5g4qyzr8bb389a4a 执行；
---   · 执行前先跑本文末尾的「预检」两条 SQL，确认成员表里正式家庭只有一个成员行；
---   · 前端把 member-fragments.mjs 里的 RPC 名换成 member_ 版本即可，不需要改页面。
---   · 回滚：DROP FUNCTION 两个新函数即可，既有函数与数据不受影响。
+--   · 先跑文末「预检」两条 SQL，确认三名家长都在、且每个账号只挂一个家庭；
+--   · 前端 member-fragments.mjs 已切换到这两个函数（本轮已完成），不需要改页面。
+--   · 回滚：DROP FUNCTION 两个新函数即可；既有函数、既有数据、成员表都不受影响。
+--
+-- 注意：本文件**不能**单独堵住旧函数的 p_family 口子 ——
+--   旧函数仍然接受调用方传 family。那一层由同目录的
+--   20261114_fragment_scope_guard.sql 负责。两件事要分开批准。
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -30,19 +40,23 @@ RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public', 'pg_temp'
+SET search_path TO 'public'
 AS $function$
 DECLARE
-  v_uid   text;
-  v_fams  text[];
+  v_uid    text;
+  v_fams   text[];
   v_family text;
+  v_role   text;
 BEGIN
-  v_uid := auth.jwt() ->> 'sub';
-  IF v_uid IS NULL OR v_uid = '' THEN
+  v_uid := NULLIF(auth.jwt() ->> 'sub', '');
+  IF v_uid IS NULL THEN
     RETURN jsonb_build_object('status', 'UNAUTHENTICATED');
   END IF;
 
-  SELECT array_agg(m.family_id) INTO v_fams
+  -- 同一账号在同一家庭只能有一行（主键约束），这里仍用 DISTINCT：
+  -- 防的是「一个账号挂多个家庭」，不是「一个家庭有多名成员」。
+  SELECT array_agg(DISTINCT m.family_id)
+    INTO v_fams
     FROM public.growth_family_members m
    WHERE m.user_id = v_uid
      AND m.member_role IN ('owner', 'parent', 'grandparent');
@@ -52,17 +66,28 @@ BEGIN
   END IF;
   IF array_length(v_fams, 1) <> 1 THEN
     -- 一个账号挂多个家庭时不替用户选，交给家长入口处理
-    RETURN jsonb_build_object('status', 'AMBIGUOUS_MEMBER');
+    RETURN jsonb_build_object('status', 'AMBIGUOUS_MEMBER', 'families', to_jsonb(v_fams));
   END IF;
 
   v_family := v_fams[1];
+  IF v_family IS NULL OR v_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN
+    RETURN jsonb_build_object('status', 'BAD_FAMILY');
+  END IF;
+
+  -- role 只用于页面标注「以什么身份查看」，不参与授权判断（授权只看成员行是否存在）
+  SELECT m.member_role INTO v_role
+    FROM public.growth_family_members m
+   WHERE m.user_id = v_uid AND m.family_id = v_family;
 
   -- 只读：直接复用既有快照函数，不在这里重新算余额
   RETURN public.r5_fragment_snapshot(v_family)
     || jsonb_build_object(
          'status', 'OK',
          'family_id', v_family,
-         'family_source', 'growth_family_members'
+         'family_source', 'growth_family_members',
+         'member_role', v_role,
+         'member_uid', v_uid,
+         'zero_write', true
        );
 END;
 $function$;
@@ -74,7 +99,7 @@ CREATE OR REPLACE FUNCTION public.r5_fragment_member_assemble(p_vehicle_id text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public', 'pg_temp'
+SET search_path TO 'public'
 AS $function$
 DECLARE
   v_uid    text;
@@ -83,12 +108,12 @@ DECLARE
   v_cost   jsonb;
   v_device text;
 BEGIN
-  v_uid := auth.jwt() ->> 'sub';
-  IF v_uid IS NULL OR v_uid = '' THEN
+  v_uid := NULLIF(auth.jwt() ->> 'sub', '');
+  IF v_uid IS NULL THEN
     RETURN jsonb_build_object('status', 'UNAUTHENTICATED', 'zero_write', true);
   END IF;
 
-  SELECT array_agg(m.family_id) INTO v_fams
+  SELECT array_agg(DISTINCT m.family_id) INTO v_fams
     FROM public.growth_family_members m
    WHERE m.user_id = v_uid
      AND m.member_role IN ('owner', 'parent', 'grandparent');
@@ -100,6 +125,14 @@ BEGIN
     RETURN jsonb_build_object('status', 'AMBIGUOUS_MEMBER', 'zero_write', true);
   END IF;
   v_family := v_fams[1];
+  IF v_family IS NULL OR v_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN
+    RETURN jsonb_build_object('status', 'BAD_FAMILY', 'zero_write', true);
+  END IF;
+
+  -- 车辆 ID 形态先过一遍（与旧函数同一套正则），避免把奇怪字符串带进事件 ID
+  IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN
+    RETURN jsonb_build_object('status', 'BAD_VEHICLE_ID', 'zero_write', true);
+  END IF;
 
   -- 目录白名单：只有这两辆碎片车，成本写死在服务端
   CASE p_vehicle_id
@@ -128,19 +161,33 @@ GRANT EXECUTE ON FUNCTION public.r5_fragment_member_assemble(text) TO authentica
 -- ---------------------------------------------------------------------------
 -- 4. 预检（只读，跑完看清楚再决定是否继续）
 -- ---------------------------------------------------------------------------
--- 4.1 正式家庭的成员与角色（应当只有 1 行，且角色属于 owner/parent/grandparent）
--- SELECT family_id, member_role, count(*)
+-- 4.1 正式家庭的成员：**应当是 3 行**（owner / parent / grandparent），
+--     并且每个 user_id 只能出现在 1 个家庭里。期望输出：
+--       little-growth-family-001 | owner       | 1
+--       little-growth-family-001 | parent      | 1
+--       little-growth-family-001 | grandparent | 1
+--       (0 rows)  ← 第二段「一个账号挂多个家庭」必须是空
+--
+-- SELECT family_id, member_role, count(*) AS members
 --   FROM public.growth_family_members
 --  WHERE family_id = 'little-growth-family-001'
---  GROUP BY 1, 2;
+--  GROUP BY 1, 2 ORDER BY 2;
+--
+-- SELECT user_id, count(DISTINCT family_id) AS families
+--   FROM public.growth_family_members
+--  GROUP BY 1 HAVING count(DISTINCT family_id) > 1;
 --
 -- 4.2 正式家庭当前的碎片/车辆（应当是 0 片、无车）
 -- SELECT public.r5_fragment_snapshot('little-growth-family-001');
 --
--- 5. 可选但建议（需要单独批准，会影响现有调用方）：
---    收紧既有三个函数的 anon 执行权，让「直接传 p_family」这条路彻底走不通。
---    REVOKE EXECUTE ON FUNCTION public.r5_fragment_snapshot(text) FROM anon;
---    REVOKE EXECUTE ON FUNCTION public.r5_fragment_claim(text,text,text,jsonb) FROM anon;
---    REVOKE EXECUTE ON FUNCTION public.r5_fragment_assemble(text,text,text,jsonb) FROM anon;
---    执行前必须确认 r5-gateway / r5-racing-save 用的是 service_role 身份，
---    否则赛车游戏里的「去组装」会跟着一起坏掉。
+-- 4.3 应用后自检：两个新函数的权限（anon 必须没有）
+-- SELECT p.proname,
+--        has_function_privilege('anon', p.oid, 'EXECUTE')          AS anon_can,
+--        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_can
+--   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+--  WHERE n.nspname = 'public'
+--    AND p.proname IN ('r5_fragment_member_snapshot','r5_fragment_member_assemble');
+--
+-- 5. 旧函数的 p_family 口子：**不在本文件处理**，见
+--    20261114_fragment_scope_guard.sql（同样未执行，需要单独批准）。
+-- ============================================================================
