@@ -1,0 +1,2873 @@
+{
+  "node": "v24.22.1",
+  "pglite": "0.5.16",
+  "generated_at": "2026-11-14T09:59:00.876Z",
+  "migrations": [
+    "6320a0726a562cc871c6456de8b04d371ff6da4b317707c8fd64a5388ad787c0",
+    "495809a832a67228636da434f614687fc705b6cc9937b9785e6cf92ae9e01812",
+    "7fa3f30f68319adac0f6b7c20d0ffc71abb3aa25d43277aa9440a0f77c88a133"
+  ],
+  "passed": 4,
+  "failed": 0,
+  "results": [
+    {
+      "stage": 1,
+      "status": "PASS",
+      "injected_sqlstate": "22012",
+      "aborted_sqlstate": "25P02",
+      "before_sha256": "89566bcd55d0216d78fe1268135e3daa3c56369e47eadb6d1efd0691602fb472",
+      "after_sha256": "89566bcd55d0216d78fe1268135e3daa3c56369e47eadb6d1efd0691602fb472",
+      "proof": {
+        "catalog": {
+          "counts": {
+            "drops": 0,
+            "saves": 2,
+            "events": 0,
+            "members": 7,
+            "records": 8
+          },
+          "tables": [
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_family_members",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_learning_records",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": null,
+              "rls": true,
+              "name": "r5_device",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": false,
+              "name": "r5_fragment_drops",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": false,
+              "name": "r5_fragment_state",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_events",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_saves",
+              "owner": "postgres",
+              "force_rls": false
+            }
+          ],
+          "policies": [
+            {
+              "cmd": "SELECT",
+              "qual": "(user_id = (auth.jwt() ->> 'sub'::text))",
+              "roles": "{authenticated}",
+              "tablename": "growth_family_members",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_members_self_select",
+              "with_check": null
+            },
+            {
+              "cmd": "SELECT",
+              "qual": "(family_id IN ( SELECT m.family_id\n   FROM growth_family_members m\n  WHERE (m.user_id = (auth.jwt() ->> 'sub'::text))))",
+              "roles": "{authenticated}",
+              "tablename": "growth_learning_records",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_records_family_select",
+              "with_check": null
+            }
+          ],
+          "functions": [
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_assemble(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_assemble(p_family text, p_device text, p_vehicle_id text, p_cost jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_owned jsonb; v_rev bigint; v_bal jsonb; v_deficit jsonb := '{}'::jsonb;\n  v_k text; v_q int; v_have bigint; v_n int := 0; v_cost_ok boolean;\nBEGIN\n  -- 车辆 ID：小写字母开头，允许数字 / 短横线 / 下划线（占位车带下划线）\n  IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN\n    RETURN jsonb_build_object('status','BAD_VEHICLE_ID','zero_write',true);\n  END IF;\n\n  -- 生日 / 限定车：永久隔离\n  IF p_vehicle_id IN ('birthday-star-6','six-star-supercar-2026')\n     OR p_vehicle_id LIKE 'pink-newyear%' OR p_vehicle_id LIKE 'pink-new-year%' THEN\n    RETURN jsonb_build_object('status','BIRTHDAY_VEHICLE_FORBIDDEN','zero_write',true);\n  END IF;\n\n  -- 既有取得方式的车辆：金币购买 / 剧情解锁。碎片系统不得提供第二条路径\n  IF p_vehicle_id IN ('moto','turtle') THEN\n    RETURN jsonb_build_object('status','COIN_VEHICLE_FORBIDDEN','zero_write',true);\n  END IF;\n\n  -- v1 遗留槽位已冻结\n  IF p_vehicle_id = 'scholar' THEN\n    RETURN jsonb_build_object('status','LEGACY_SLOT_RETIRED','zero_write',true);\n  END IF;\n\n  -- 成本：非空对象，键必须是 frag_*，值必须是 1..200 的整数，条目数 1..4。\n  IF p_cost IS NULL OR jsonb_typeof(p_cost) <> 'object' OR p_cost = '{}'::jsonb THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n  SELECT bool_and(c.k ~ '^frag_[a-z0-9_]{1,40}$' AND c.v ~ '^[0-9]{1,3}$'), count(*)\n    INTO v_cost_ok, v_n\n    FROM jsonb_each_text(p_cost) AS c(k, v);\n  IF NOT COALESCE(v_cost_ok, false) OR v_n < 1 OR v_n > 4 THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n  IF EXISTS (SELECT 1 FROM jsonb_each_text(p_cost) AS c(k, v) WHERE c.v::int < 1 OR c.v::int > 200) THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n\n  SELECT s.owned, s.revision INTO v_owned, v_rev FROM public.r5_racing_saves s\n   WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;\n\n  IF v_owned ? p_vehicle_id THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_OWNED','vehicle_id',p_vehicle_id,'zero_write',true);\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.r5_racing_events e WHERE e.family_id = p_family AND e.event_id = 'asm:' || p_vehicle_id) THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_ASSEMBLED','vehicle_id',p_vehicle_id,'zero_write',true);\n  END IF;\n\n  SELECT COALESCE(jsonb_object_agg(t.k, t.q), '{}'::jsonb) INTO v_bal FROM (\n    SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n    FROM public.r5_racing_events x\n    WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n      AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n    GROUP BY 1\n  ) t;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP\n    v_have := COALESCE((v_bal->>v_k)::bigint, 0);\n    IF v_have < v_q THEN\n      v_deficit := v_deficit || jsonb_build_object(v_k, v_q - v_have);\n    END IF;\n  END LOOP;\n\n  IF v_deficit <> '{}'::jsonb THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','INSUFFICIENT_FRAGMENTS','vehicle_id',p_vehicle_id,'required',p_cost,'deficit',v_deficit,'zero_write',true);\n  END IF;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'asm:' || p_vehicle_id || ':' || v_k, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_k, 'quantity_delta', -v_q, 'source', 'assemble', 'vehicle_id', p_vehicle_id),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END LOOP;\n\n  INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n  VALUES (p_family, 'asm:' || p_vehicle_id, 'grant', 0,\n    jsonb_build_object('vehicle_id', p_vehicle_id, 'source', 'fragment-assembly', 'cost', p_cost),\n    COALESCE(p_device, ''), now(), NULL)\n  ON CONFLICT (family_id, event_id) DO NOTHING;\n\n  UPDATE public.r5_racing_saves s\n     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id, jsonb_build_object('at', (extract(epoch from now())*1000)::bigint, 'source', 'fragment-assembly', 'note', '碎片组装')),\n         revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ASSEMBLED','vehicle_id',p_vehicle_id,'cost',p_cost,'zero_write',false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_claim(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_claim(p_family text, p_device text, p_record_id text, p_cfg jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_day date := COALESCE((p_cfg->>'record_day')::date, (now() AT TIME ZONE 'Asia/Shanghai')::date);\n  v_cap int := GREATEST(1, COALESCE((p_cfg->>'daily_cap')::int, 2));\n  v_pity_target int := GREATEST(2, COALESCE((p_cfg->>'pity_target')::int, 5));\n  v_frag text := NULLIF(p_cfg->>'fragment_id', '');\n  v_rare_frag text := NULLIF(p_cfg->>'rare_fragment_id', '');\n  v_want_rare boolean := COALESCE((p_cfg->>'rare')::boolean, false);\n  v_pity_exempt boolean := COALESCE((p_cfg->>'pity_exempt')::boolean, false);\n  v_want text := CASE WHEN p_cfg->>'want' = 'drop' THEN 'drop' ELSE 'none' END;\n  v_kind text := COALESCE(p_cfg->>'record_kind', '');\n  v_subject text := COALESCE(p_cfg->>'subject', '');\n  v_prev public.r5_fragment_drops;\n  v_state public.r5_fragment_state;\n  v_pity int; v_daily int; v_daily_rare int; v_capped boolean;\n  v_outcome text; v_count int := 0; v_rare_count int := 0; v_pity_after int;\n  v_daily_index int := 0; v_rev bigint;\nBEGIN\n  IF p_family IS NULL OR p_family = '' THEN RETURN jsonb_build_object('status','BAD_FAMILY'); END IF;\n  IF p_record_id IS NULL OR p_record_id = '' OR length(p_record_id) > 160 THEN RETURN jsonb_build_object('status','BAD_RECORD_ID'); END IF;\n\n  SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n  IF FOUND THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'fragment_id',v_prev.fragment_id,'rare_fragment_id',v_prev.rare_fragment_id,'pity_points',COALESCE((SELECT pity_points FROM public.r5_fragment_state WHERE family_id = p_family),0),'claimed_at',v_prev.created_at,'zero_write',true);\n  END IF;\n\n  SELECT s.revision INTO v_rev FROM public.r5_racing_saves s WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;\n\n  INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family) ON CONFLICT (family_id) DO NOTHING;\n  SELECT * INTO v_state FROM public.r5_fragment_state st WHERE st.family_id = p_family FOR UPDATE;\n\n  IF v_state.daily_day = v_day THEN\n    v_pity := v_state.pity_points; v_daily := v_state.daily_normal_count; v_daily_rare := v_state.daily_rare_count;\n  ELSE\n    v_pity := v_state.pity_points; v_daily := 0; v_daily_rare := 0;\n  END IF;\n\n  v_capped := v_daily >= v_cap;\n  IF v_capped THEN v_outcome := 'capped';\n  ELSIF v_want = 'none' THEN v_outcome := 'none';\n  ELSE v_outcome := 'drop'; END IF;\n\n  IF v_outcome = 'drop' THEN\n    v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;\n  ELSIF v_outcome = 'none' THEN\n    IF v_pity_exempt THEN\n      v_pity_after := v_pity;\n    ELSE\n      v_pity_after := v_pity + 1;\n      IF v_pity_after >= v_pity_target THEN\n        v_outcome := 'pity'; v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;\n      END IF;\n    END IF;\n  ELSE\n    v_pity_after := v_pity;\n  END IF;\n\n  IF v_want_rare AND v_rare_frag IS NOT NULL AND v_daily_rare < 1 THEN\n    v_rare_count := 1;\n  END IF;\n\n  INSERT INTO public.r5_fragment_drops (family_id, source_record_id, record_day, record_kind, subject, outcome, fragment_id, fragment_count, rare_fragment_id, rare_count, pity_before, pity_after, daily_index, device)\n  VALUES (p_family, p_record_id, v_day, v_kind, v_subject, v_outcome,\n    CASE WHEN v_count > 0 THEN v_frag ELSE NULL END, v_count,\n    CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END, v_rare_count,\n    v_pity, v_pity_after, v_daily_index, COALESCE(p_device, ''))\n  ON CONFLICT (family_id, source_record_id) DO NOTHING;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'zero_write',true);\n  END IF;\n\n  IF v_count > 0 AND v_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_frag, 'quantity_delta', v_count, 'source', 'study', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text, 'outcome', v_outcome, 'pity_after', v_pity_after),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  IF v_rare_count > 0 AND v_rare_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id || ':rare', 'fragment_change', 0,\n      jsonb_build_object('item_id', v_rare_frag, 'quantity_delta', v_rare_count, 'source', 'study-rare', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  UPDATE public.r5_fragment_state st\n     SET pity_points = v_pity_after,\n         pity_total = st.pity_total + CASE WHEN v_outcome = 'pity' THEN 1 ELSE 0 END,\n         daily_day = v_day,\n         daily_normal_count = v_daily + v_count,\n         daily_rare_count = v_daily_rare + v_rare_count,\n         updated_at = now()\n   WHERE st.family_id = p_family;\n\n  UPDATE public.r5_racing_saves s\n     SET revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','CLAIMED','outcome',v_outcome,'granted_normal',v_count,'granted_rare',v_rare_count,'fragment_id',CASE WHEN v_count > 0 THEN v_frag ELSE NULL END,'rare_fragment_id',CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END,'pity_points',v_pity_after,'pity_before',v_pity,'daily_normal_count',v_daily + v_count,'daily_rare_count',v_daily_rare + v_rare_count,'daily_index',v_daily_index,'record_day',v_day::text,'zero_write',false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_snapshot(text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot(p_family text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  SELECT jsonb_build_object(\n    'fragments', COALESCE((\n      SELECT jsonb_object_agg(t.k, t.q) FROM (\n        SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n        FROM public.r5_racing_events x\n        WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n          AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n        GROUP BY 1\n      ) t), '{}'::jsonb),\n    'owned', COALESCE((SELECT s.owned FROM public.r5_racing_saves s WHERE s.family_id = p_family), '{}'::jsonb),\n    'revision', COALESCE((SELECT s.revision FROM public.r5_racing_saves s WHERE s.family_id = p_family), 0),\n    'pity_points', COALESCE((SELECT st.pity_points FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'pity_total', COALESCE((SELECT st.pity_total FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_day', COALESCE((SELECT st.daily_day::text FROM public.r5_fragment_state st WHERE st.family_id = p_family), ''),\n    'daily_normal_count', COALESCE((SELECT st.daily_normal_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_rare_count', COALESCE((SELECT st.daily_rare_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'drops_total', COALESCE((SELECT count(*) FROM public.r5_fragment_drops d WHERE d.family_id = p_family), 0)\n  );\n$function$\n"
+            }
+          ]
+        },
+        "privileges": {
+          "roles": [
+            {
+              "name": "anon",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "authenticated",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_checkpoint",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_create_subscription",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_database_owner",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_execute_server_program",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_maintain",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_monitor",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_settings",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_stats",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_autovacuum_worker",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_backend",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_stat_scan_tables",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_use_reserved_connections",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "postgres",
+              "login": true,
+              "super": true,
+              "inherit": true,
+              "bypassrls": true
+            },
+            {
+              "name": "service_role",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": true
+            }
+          ],
+          "columns": [
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "user_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "member_role"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "joined_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_type"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "learning_day"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_data"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_by"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "device_uid"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "label"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_by"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "revoked_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "last_seen"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "source_record_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "outcome"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_before"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_after"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "daily_index"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_points"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_total"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_normal_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "event_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "coin_delta"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "payload"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "applied_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "result_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "schema_version"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "revision"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_coins"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_source"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coins_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "owned"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "current_vehicle"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter1_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter2_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "story"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "study"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "achievements"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "reward_ledger"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "claims"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coin_rewards"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "items"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "fragments"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_by_device"
+            }
+          ],
+          "schemas": [
+            {
+              "acl": "{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres}",
+              "name": "auth",
+              "owner": "postgres"
+            },
+            {
+              "acl": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}",
+              "name": "public",
+              "owner": "pg_database_owner"
+            }
+          ],
+          "defaults": null
+        },
+        "data": {
+          "growth_family_members": {
+            "count": 7,
+            "sha256": "0c3fb6601cc2e81befbff5da266c25844e525ee8475d716876342523f1f18eb4"
+          },
+          "growth_learning_records": {
+            "count": 8,
+            "sha256": "3527b442bfbcc125474a783f629f228714add45af8790392cc4611dd3b952b45"
+          },
+          "r5_device": {
+            "count": 5,
+            "sha256": "d8b2b18a9b3c170f6f9b57e4c56dc8e5efceaa9e517c138147e296d240e400e7"
+          },
+          "r5_fragment_drops": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_fragment_state": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_events": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_saves": {
+            "count": 2,
+            "sha256": "34d417b0cf3865a0bed73043fd526de000ba6d8ff28078a10cbf91e8bb06a474"
+          }
+        }
+      }
+    },
+    {
+      "stage": 2,
+      "status": "PASS",
+      "injected_sqlstate": "22012",
+      "aborted_sqlstate": "25P02",
+      "before_sha256": "6b60f436fc89059f0d507c0c8a1e22d1275cab52d4ddbec3b6e891485a315344",
+      "after_sha256": "6b60f436fc89059f0d507c0c8a1e22d1275cab52d4ddbec3b6e891485a315344",
+      "proof": {
+        "catalog": {
+          "counts": {
+            "drops": 0,
+            "saves": 2,
+            "events": 0,
+            "members": 7,
+            "records": 8
+          },
+          "tables": [
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_family_members",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_learning_records",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": null,
+              "rls": true,
+              "name": "r5_device",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": false,
+              "name": "r5_fragment_drops",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": false,
+              "name": "r5_fragment_state",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_events",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_saves",
+              "owner": "postgres",
+              "force_rls": false
+            }
+          ],
+          "policies": [
+            {
+              "cmd": "SELECT",
+              "qual": "(user_id = (auth.jwt() ->> 'sub'::text))",
+              "roles": "{authenticated}",
+              "tablename": "growth_family_members",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_members_self_select",
+              "with_check": null
+            },
+            {
+              "cmd": "SELECT",
+              "qual": "(family_id IN ( SELECT m.family_id\n   FROM growth_family_members m\n  WHERE (m.user_id = (auth.jwt() ->> 'sub'::text))))",
+              "roles": "{authenticated}",
+              "tablename": "growth_learning_records",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_records_family_select",
+              "with_check": null
+            }
+          ],
+          "functions": [
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_assemble(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_assemble(p_family text, p_device text, p_vehicle_id text, p_cost jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_owned jsonb; v_rev bigint; v_bal jsonb; v_deficit jsonb := '{}'::jsonb;\n  v_k text; v_q int; v_have bigint; v_n int := 0; v_cost_ok boolean;\nBEGIN\n  -- 车辆 ID：小写字母开头，允许数字 / 短横线 / 下划线（占位车带下划线）\n  IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN\n    RETURN jsonb_build_object('status','BAD_VEHICLE_ID','zero_write',true);\n  END IF;\n\n  -- 生日 / 限定车：永久隔离\n  IF p_vehicle_id IN ('birthday-star-6','six-star-supercar-2026')\n     OR p_vehicle_id LIKE 'pink-newyear%' OR p_vehicle_id LIKE 'pink-new-year%' THEN\n    RETURN jsonb_build_object('status','BIRTHDAY_VEHICLE_FORBIDDEN','zero_write',true);\n  END IF;\n\n  -- 既有取得方式的车辆：金币购买 / 剧情解锁。碎片系统不得提供第二条路径\n  IF p_vehicle_id IN ('moto','turtle') THEN\n    RETURN jsonb_build_object('status','COIN_VEHICLE_FORBIDDEN','zero_write',true);\n  END IF;\n\n  -- v1 遗留槽位已冻结\n  IF p_vehicle_id = 'scholar' THEN\n    RETURN jsonb_build_object('status','LEGACY_SLOT_RETIRED','zero_write',true);\n  END IF;\n\n  -- 成本：非空对象，键必须是 frag_*，值必须是 1..200 的整数，条目数 1..4。\n  IF p_cost IS NULL OR jsonb_typeof(p_cost) <> 'object' OR p_cost = '{}'::jsonb THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n  SELECT bool_and(c.k ~ '^frag_[a-z0-9_]{1,40}$' AND c.v ~ '^[0-9]{1,3}$'), count(*)\n    INTO v_cost_ok, v_n\n    FROM jsonb_each_text(p_cost) AS c(k, v);\n  IF NOT COALESCE(v_cost_ok, false) OR v_n < 1 OR v_n > 4 THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n  IF EXISTS (SELECT 1 FROM jsonb_each_text(p_cost) AS c(k, v) WHERE c.v::int < 1 OR c.v::int > 200) THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n\n  SELECT s.owned, s.revision INTO v_owned, v_rev FROM public.r5_racing_saves s\n   WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;\n\n  IF v_owned ? p_vehicle_id THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_OWNED','vehicle_id',p_vehicle_id,'zero_write',true);\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.r5_racing_events e WHERE e.family_id = p_family AND e.event_id = 'asm:' || p_vehicle_id) THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_ASSEMBLED','vehicle_id',p_vehicle_id,'zero_write',true);\n  END IF;\n\n  SELECT COALESCE(jsonb_object_agg(t.k, t.q), '{}'::jsonb) INTO v_bal FROM (\n    SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n    FROM public.r5_racing_events x\n    WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n      AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n    GROUP BY 1\n  ) t;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP\n    v_have := COALESCE((v_bal->>v_k)::bigint, 0);\n    IF v_have < v_q THEN\n      v_deficit := v_deficit || jsonb_build_object(v_k, v_q - v_have);\n    END IF;\n  END LOOP;\n\n  IF v_deficit <> '{}'::jsonb THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','INSUFFICIENT_FRAGMENTS','vehicle_id',p_vehicle_id,'required',p_cost,'deficit',v_deficit,'zero_write',true);\n  END IF;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'asm:' || p_vehicle_id || ':' || v_k, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_k, 'quantity_delta', -v_q, 'source', 'assemble', 'vehicle_id', p_vehicle_id),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END LOOP;\n\n  INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n  VALUES (p_family, 'asm:' || p_vehicle_id, 'grant', 0,\n    jsonb_build_object('vehicle_id', p_vehicle_id, 'source', 'fragment-assembly', 'cost', p_cost),\n    COALESCE(p_device, ''), now(), NULL)\n  ON CONFLICT (family_id, event_id) DO NOTHING;\n\n  UPDATE public.r5_racing_saves s\n     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id, jsonb_build_object('at', (extract(epoch from now())*1000)::bigint, 'source', 'fragment-assembly', 'note', '碎片组装')),\n         revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ASSEMBLED','vehicle_id',p_vehicle_id,'cost',p_cost,'zero_write',false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_claim(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_claim(p_family text, p_device text, p_record_id text, p_cfg jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_day date := COALESCE((p_cfg->>'record_day')::date, (now() AT TIME ZONE 'Asia/Shanghai')::date);\n  v_cap int := GREATEST(1, COALESCE((p_cfg->>'daily_cap')::int, 2));\n  v_pity_target int := GREATEST(2, COALESCE((p_cfg->>'pity_target')::int, 5));\n  v_frag text := NULLIF(p_cfg->>'fragment_id', '');\n  v_rare_frag text := NULLIF(p_cfg->>'rare_fragment_id', '');\n  v_want_rare boolean := COALESCE((p_cfg->>'rare')::boolean, false);\n  v_pity_exempt boolean := COALESCE((p_cfg->>'pity_exempt')::boolean, false);\n  v_want text := CASE WHEN p_cfg->>'want' = 'drop' THEN 'drop' ELSE 'none' END;\n  v_kind text := COALESCE(p_cfg->>'record_kind', '');\n  v_subject text := COALESCE(p_cfg->>'subject', '');\n  v_prev public.r5_fragment_drops;\n  v_state public.r5_fragment_state;\n  v_pity int; v_daily int; v_daily_rare int; v_capped boolean;\n  v_outcome text; v_count int := 0; v_rare_count int := 0; v_pity_after int;\n  v_daily_index int := 0; v_rev bigint;\nBEGIN\n  IF p_family IS NULL OR p_family = '' THEN RETURN jsonb_build_object('status','BAD_FAMILY'); END IF;\n  IF p_record_id IS NULL OR p_record_id = '' OR length(p_record_id) > 160 THEN RETURN jsonb_build_object('status','BAD_RECORD_ID'); END IF;\n\n  SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n  IF FOUND THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'fragment_id',v_prev.fragment_id,'rare_fragment_id',v_prev.rare_fragment_id,'pity_points',COALESCE((SELECT pity_points FROM public.r5_fragment_state WHERE family_id = p_family),0),'claimed_at',v_prev.created_at,'zero_write',true);\n  END IF;\n\n  SELECT s.revision INTO v_rev FROM public.r5_racing_saves s WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;\n\n  INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family) ON CONFLICT (family_id) DO NOTHING;\n  SELECT * INTO v_state FROM public.r5_fragment_state st WHERE st.family_id = p_family FOR UPDATE;\n\n  IF v_state.daily_day = v_day THEN\n    v_pity := v_state.pity_points; v_daily := v_state.daily_normal_count; v_daily_rare := v_state.daily_rare_count;\n  ELSE\n    v_pity := v_state.pity_points; v_daily := 0; v_daily_rare := 0;\n  END IF;\n\n  v_capped := v_daily >= v_cap;\n  IF v_capped THEN v_outcome := 'capped';\n  ELSIF v_want = 'none' THEN v_outcome := 'none';\n  ELSE v_outcome := 'drop'; END IF;\n\n  IF v_outcome = 'drop' THEN\n    v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;\n  ELSIF v_outcome = 'none' THEN\n    IF v_pity_exempt THEN\n      v_pity_after := v_pity;\n    ELSE\n      v_pity_after := v_pity + 1;\n      IF v_pity_after >= v_pity_target THEN\n        v_outcome := 'pity'; v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;\n      END IF;\n    END IF;\n  ELSE\n    v_pity_after := v_pity;\n  END IF;\n\n  IF v_want_rare AND v_rare_frag IS NOT NULL AND v_daily_rare < 1 THEN\n    v_rare_count := 1;\n  END IF;\n\n  INSERT INTO public.r5_fragment_drops (family_id, source_record_id, record_day, record_kind, subject, outcome, fragment_id, fragment_count, rare_fragment_id, rare_count, pity_before, pity_after, daily_index, device)\n  VALUES (p_family, p_record_id, v_day, v_kind, v_subject, v_outcome,\n    CASE WHEN v_count > 0 THEN v_frag ELSE NULL END, v_count,\n    CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END, v_rare_count,\n    v_pity, v_pity_after, v_daily_index, COALESCE(p_device, ''))\n  ON CONFLICT (family_id, source_record_id) DO NOTHING;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'zero_write',true);\n  END IF;\n\n  IF v_count > 0 AND v_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_frag, 'quantity_delta', v_count, 'source', 'study', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text, 'outcome', v_outcome, 'pity_after', v_pity_after),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  IF v_rare_count > 0 AND v_rare_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id || ':rare', 'fragment_change', 0,\n      jsonb_build_object('item_id', v_rare_frag, 'quantity_delta', v_rare_count, 'source', 'study-rare', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  UPDATE public.r5_fragment_state st\n     SET pity_points = v_pity_after,\n         pity_total = st.pity_total + CASE WHEN v_outcome = 'pity' THEN 1 ELSE 0 END,\n         daily_day = v_day,\n         daily_normal_count = v_daily + v_count,\n         daily_rare_count = v_daily_rare + v_rare_count,\n         updated_at = now()\n   WHERE st.family_id = p_family;\n\n  UPDATE public.r5_racing_saves s\n     SET revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','CLAIMED','outcome',v_outcome,'granted_normal',v_count,'granted_rare',v_rare_count,'fragment_id',CASE WHEN v_count > 0 THEN v_frag ELSE NULL END,'rare_fragment_id',CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END,'pity_points',v_pity_after,'pity_before',v_pity,'daily_normal_count',v_daily + v_count,'daily_rare_count',v_daily_rare + v_rare_count,'daily_index',v_daily_index,'record_day',v_day::text,'zero_write',false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_snapshot(text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot(p_family text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  SELECT jsonb_build_object(\n    'fragments', COALESCE((\n      SELECT jsonb_object_agg(t.k, t.q) FROM (\n        SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n        FROM public.r5_racing_events x\n        WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n          AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n        GROUP BY 1\n      ) t), '{}'::jsonb),\n    'owned', COALESCE((SELECT s.owned FROM public.r5_racing_saves s WHERE s.family_id = p_family), '{}'::jsonb),\n    'revision', COALESCE((SELECT s.revision FROM public.r5_racing_saves s WHERE s.family_id = p_family), 0),\n    'pity_points', COALESCE((SELECT st.pity_points FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'pity_total', COALESCE((SELECT st.pity_total FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_day', COALESCE((SELECT st.daily_day::text FROM public.r5_fragment_state st WHERE st.family_id = p_family), ''),\n    'daily_normal_count', COALESCE((SELECT st.daily_normal_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_rare_count', COALESCE((SELECT st.daily_rare_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'drops_total', COALESCE((SELECT count(*) FROM public.r5_fragment_drops d WHERE d.family_id = p_family), 0)\n  );\n$function$\n"
+            }
+          ]
+        },
+        "privileges": {
+          "roles": [
+            {
+              "name": "anon",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "authenticated",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_checkpoint",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_create_subscription",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_database_owner",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_execute_server_program",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_maintain",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_monitor",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_settings",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_stats",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_autovacuum_worker",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_backend",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_stat_scan_tables",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_use_reserved_connections",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "postgres",
+              "login": true,
+              "super": true,
+              "inherit": true,
+              "bypassrls": true
+            },
+            {
+              "name": "service_role",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": true
+            }
+          ],
+          "columns": [
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "user_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "member_role"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "joined_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_type"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "learning_day"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_data"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_by"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "device_uid"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "label"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_by"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "revoked_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "last_seen"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "source_record_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "outcome"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_before"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_after"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "daily_index"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_points"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_total"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_normal_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "event_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "coin_delta"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "payload"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "applied_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "result_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "schema_version"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "revision"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_coins"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_source"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coins_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "owned"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "current_vehicle"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter1_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter2_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "story"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "study"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "achievements"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "reward_ledger"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "claims"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coin_rewards"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "items"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "fragments"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_by_device"
+            }
+          ],
+          "schemas": [
+            {
+              "acl": "{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres}",
+              "name": "auth",
+              "owner": "postgres"
+            },
+            {
+              "acl": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}",
+              "name": "public",
+              "owner": "pg_database_owner"
+            }
+          ],
+          "defaults": null
+        },
+        "data": {
+          "growth_family_members": {
+            "count": 7,
+            "sha256": "02ccff73b8cdec8651d031c7b673f73f3449ac74556677ed18fa299911891be4"
+          },
+          "growth_learning_records": {
+            "count": 8,
+            "sha256": "2d13c959093b1c24f7d5535d6ef11e53c62109de6098968389a99bc08aadf979"
+          },
+          "r5_device": {
+            "count": 5,
+            "sha256": "458fe9cc10213565852641e3e2577cf0bda6e353d4525de8598b8f2d78b2866f"
+          },
+          "r5_fragment_drops": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_fragment_state": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_events": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_saves": {
+            "count": 2,
+            "sha256": "7af4b54e0f4ff9fc9e9d991d1186ff8d76f764430bf74866fa4086f44757ca4b"
+          }
+        }
+      }
+    },
+    {
+      "stage": 3,
+      "status": "PASS",
+      "injected_sqlstate": "22012",
+      "aborted_sqlstate": "25P02",
+      "before_sha256": "faaaae427ee295269fa54d7b988301fbce91a2f118dc2549c3a38849633a80b5",
+      "after_sha256": "faaaae427ee295269fa54d7b988301fbce91a2f118dc2549c3a38849633a80b5",
+      "proof": {
+        "catalog": {
+          "counts": {
+            "drops": 0,
+            "saves": 2,
+            "events": 0,
+            "members": 7,
+            "records": 8
+          },
+          "tables": [
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_family_members",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_learning_records",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": null,
+              "rls": true,
+              "name": "r5_device",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": false,
+              "name": "r5_fragment_drops",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,anon=r/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": false,
+              "name": "r5_fragment_state",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_events",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_saves",
+              "owner": "postgres",
+              "force_rls": false
+            }
+          ],
+          "policies": [
+            {
+              "cmd": "SELECT",
+              "qual": "(user_id = (auth.jwt() ->> 'sub'::text))",
+              "roles": "{authenticated}",
+              "tablename": "growth_family_members",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_members_self_select",
+              "with_check": null
+            },
+            {
+              "cmd": "SELECT",
+              "qual": "(family_id IN ( SELECT m.family_id\n   FROM growth_family_members m\n  WHERE (m.user_id = (auth.jwt() ->> 'sub'::text))))",
+              "roles": "{authenticated}",
+              "tablename": "growth_learning_records",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_records_family_select",
+              "with_check": null
+            }
+          ],
+          "functions": [
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_assemble(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_assemble(p_family text, p_device text, p_vehicle_id text, p_cost jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_owned jsonb; v_rev bigint; v_bal jsonb; v_deficit jsonb := '{}'::jsonb;\n  v_k text; v_q int; v_have bigint; v_n int := 0; v_cost_ok boolean;\nBEGIN\n  -- 车辆 ID：小写字母开头，允许数字 / 短横线 / 下划线（占位车带下划线）\n  IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN\n    RETURN jsonb_build_object('status','BAD_VEHICLE_ID','zero_write',true);\n  END IF;\n\n  -- 生日 / 限定车：永久隔离\n  IF p_vehicle_id IN ('birthday-star-6','six-star-supercar-2026')\n     OR p_vehicle_id LIKE 'pink-newyear%' OR p_vehicle_id LIKE 'pink-new-year%' THEN\n    RETURN jsonb_build_object('status','BIRTHDAY_VEHICLE_FORBIDDEN','zero_write',true);\n  END IF;\n\n  -- 既有取得方式的车辆：金币购买 / 剧情解锁。碎片系统不得提供第二条路径\n  IF p_vehicle_id IN ('moto','turtle') THEN\n    RETURN jsonb_build_object('status','COIN_VEHICLE_FORBIDDEN','zero_write',true);\n  END IF;\n\n  -- v1 遗留槽位已冻结\n  IF p_vehicle_id = 'scholar' THEN\n    RETURN jsonb_build_object('status','LEGACY_SLOT_RETIRED','zero_write',true);\n  END IF;\n\n  -- 成本：非空对象，键必须是 frag_*，值必须是 1..200 的整数，条目数 1..4。\n  IF p_cost IS NULL OR jsonb_typeof(p_cost) <> 'object' OR p_cost = '{}'::jsonb THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n  SELECT bool_and(c.k ~ '^frag_[a-z0-9_]{1,40}$' AND c.v ~ '^[0-9]{1,3}$'), count(*)\n    INTO v_cost_ok, v_n\n    FROM jsonb_each_text(p_cost) AS c(k, v);\n  IF NOT COALESCE(v_cost_ok, false) OR v_n < 1 OR v_n > 4 THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n  IF EXISTS (SELECT 1 FROM jsonb_each_text(p_cost) AS c(k, v) WHERE c.v::int < 1 OR c.v::int > 200) THEN\n    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);\n  END IF;\n\n  SELECT s.owned, s.revision INTO v_owned, v_rev FROM public.r5_racing_saves s\n   WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;\n\n  IF v_owned ? p_vehicle_id THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_OWNED','vehicle_id',p_vehicle_id,'zero_write',true);\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.r5_racing_events e WHERE e.family_id = p_family AND e.event_id = 'asm:' || p_vehicle_id) THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_ASSEMBLED','vehicle_id',p_vehicle_id,'zero_write',true);\n  END IF;\n\n  SELECT COALESCE(jsonb_object_agg(t.k, t.q), '{}'::jsonb) INTO v_bal FROM (\n    SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n    FROM public.r5_racing_events x\n    WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n      AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n    GROUP BY 1\n  ) t;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP\n    v_have := COALESCE((v_bal->>v_k)::bigint, 0);\n    IF v_have < v_q THEN\n      v_deficit := v_deficit || jsonb_build_object(v_k, v_q - v_have);\n    END IF;\n  END LOOP;\n\n  IF v_deficit <> '{}'::jsonb THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','INSUFFICIENT_FRAGMENTS','vehicle_id',p_vehicle_id,'required',p_cost,'deficit',v_deficit,'zero_write',true);\n  END IF;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'asm:' || p_vehicle_id || ':' || v_k, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_k, 'quantity_delta', -v_q, 'source', 'assemble', 'vehicle_id', p_vehicle_id),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END LOOP;\n\n  INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n  VALUES (p_family, 'asm:' || p_vehicle_id, 'grant', 0,\n    jsonb_build_object('vehicle_id', p_vehicle_id, 'source', 'fragment-assembly', 'cost', p_cost),\n    COALESCE(p_device, ''), now(), NULL)\n  ON CONFLICT (family_id, event_id) DO NOTHING;\n\n  UPDATE public.r5_racing_saves s\n     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id, jsonb_build_object('at', (extract(epoch from now())*1000)::bigint, 'source', 'fragment-assembly', 'note', '碎片组装')),\n         revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ASSEMBLED','vehicle_id',p_vehicle_id,'cost',p_cost,'zero_write',false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_claim(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_claim(p_family text, p_device text, p_record_id text, p_cfg jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_day date := COALESCE((p_cfg->>'record_day')::date, (now() AT TIME ZONE 'Asia/Shanghai')::date);\n  v_cap int := GREATEST(1, COALESCE((p_cfg->>'daily_cap')::int, 2));\n  v_pity_target int := GREATEST(2, COALESCE((p_cfg->>'pity_target')::int, 5));\n  v_frag text := NULLIF(p_cfg->>'fragment_id', '');\n  v_rare_frag text := NULLIF(p_cfg->>'rare_fragment_id', '');\n  v_want_rare boolean := COALESCE((p_cfg->>'rare')::boolean, false);\n  v_pity_exempt boolean := COALESCE((p_cfg->>'pity_exempt')::boolean, false);\n  v_want text := CASE WHEN p_cfg->>'want' = 'drop' THEN 'drop' ELSE 'none' END;\n  v_kind text := COALESCE(p_cfg->>'record_kind', '');\n  v_subject text := COALESCE(p_cfg->>'subject', '');\n  v_prev public.r5_fragment_drops;\n  v_state public.r5_fragment_state;\n  v_pity int; v_daily int; v_daily_rare int; v_capped boolean;\n  v_outcome text; v_count int := 0; v_rare_count int := 0; v_pity_after int;\n  v_daily_index int := 0; v_rev bigint;\nBEGIN\n  IF p_family IS NULL OR p_family = '' THEN RETURN jsonb_build_object('status','BAD_FAMILY'); END IF;\n  IF p_record_id IS NULL OR p_record_id = '' OR length(p_record_id) > 160 THEN RETURN jsonb_build_object('status','BAD_RECORD_ID'); END IF;\n\n  SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n  IF FOUND THEN\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'fragment_id',v_prev.fragment_id,'rare_fragment_id',v_prev.rare_fragment_id,'pity_points',COALESCE((SELECT pity_points FROM public.r5_fragment_state WHERE family_id = p_family),0),'claimed_at',v_prev.created_at,'zero_write',true);\n  END IF;\n\n  SELECT s.revision INTO v_rev FROM public.r5_racing_saves s WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;\n\n  INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family) ON CONFLICT (family_id) DO NOTHING;\n  SELECT * INTO v_state FROM public.r5_fragment_state st WHERE st.family_id = p_family FOR UPDATE;\n\n  IF v_state.daily_day = v_day THEN\n    v_pity := v_state.pity_points; v_daily := v_state.daily_normal_count; v_daily_rare := v_state.daily_rare_count;\n  ELSE\n    v_pity := v_state.pity_points; v_daily := 0; v_daily_rare := 0;\n  END IF;\n\n  v_capped := v_daily >= v_cap;\n  IF v_capped THEN v_outcome := 'capped';\n  ELSIF v_want = 'none' THEN v_outcome := 'none';\n  ELSE v_outcome := 'drop'; END IF;\n\n  IF v_outcome = 'drop' THEN\n    v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;\n  ELSIF v_outcome = 'none' THEN\n    IF v_pity_exempt THEN\n      v_pity_after := v_pity;\n    ELSE\n      v_pity_after := v_pity + 1;\n      IF v_pity_after >= v_pity_target THEN\n        v_outcome := 'pity'; v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;\n      END IF;\n    END IF;\n  ELSE\n    v_pity_after := v_pity;\n  END IF;\n\n  IF v_want_rare AND v_rare_frag IS NOT NULL AND v_daily_rare < 1 THEN\n    v_rare_count := 1;\n  END IF;\n\n  INSERT INTO public.r5_fragment_drops (family_id, source_record_id, record_day, record_kind, subject, outcome, fragment_id, fragment_count, rare_fragment_id, rare_count, pity_before, pity_after, daily_index, device)\n  VALUES (p_family, p_record_id, v_day, v_kind, v_subject, v_outcome,\n    CASE WHEN v_count > 0 THEN v_frag ELSE NULL END, v_count,\n    CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END, v_rare_count,\n    v_pity, v_pity_after, v_daily_index, COALESCE(p_device, ''))\n  ON CONFLICT (family_id, source_record_id) DO NOTHING;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n    RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'zero_write',true);\n  END IF;\n\n  IF v_count > 0 AND v_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_frag, 'quantity_delta', v_count, 'source', 'study', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text, 'outcome', v_outcome, 'pity_after', v_pity_after),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  IF v_rare_count > 0 AND v_rare_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id || ':rare', 'fragment_change', 0,\n      jsonb_build_object('item_id', v_rare_frag, 'quantity_delta', v_rare_count, 'source', 'study-rare', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  UPDATE public.r5_fragment_state st\n     SET pity_points = v_pity_after,\n         pity_total = st.pity_total + CASE WHEN v_outcome = 'pity' THEN 1 ELSE 0 END,\n         daily_day = v_day,\n         daily_normal_count = v_daily + v_count,\n         daily_rare_count = v_daily_rare + v_rare_count,\n         updated_at = now()\n   WHERE st.family_id = p_family;\n\n  UPDATE public.r5_racing_saves s\n     SET revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot(p_family) || jsonb_build_object('status','CLAIMED','outcome',v_outcome,'granted_normal',v_count,'granted_rare',v_rare_count,'fragment_id',CASE WHEN v_count > 0 THEN v_frag ELSE NULL END,'rare_fragment_id',CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END,'pity_points',v_pity_after,'pity_before',v_pity,'daily_normal_count',v_daily + v_count,'daily_rare_count',v_daily_rare + v_rare_count,'daily_index',v_daily_index,'record_day',v_day::text,'zero_write',false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_snapshot(text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot(p_family text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  SELECT jsonb_build_object(\n    'fragments', COALESCE((\n      SELECT jsonb_object_agg(t.k, t.q) FROM (\n        SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n        FROM public.r5_racing_events x\n        WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n          AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n        GROUP BY 1\n      ) t), '{}'::jsonb),\n    'owned', COALESCE((SELECT s.owned FROM public.r5_racing_saves s WHERE s.family_id = p_family), '{}'::jsonb),\n    'revision', COALESCE((SELECT s.revision FROM public.r5_racing_saves s WHERE s.family_id = p_family), 0),\n    'pity_points', COALESCE((SELECT st.pity_points FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'pity_total', COALESCE((SELECT st.pity_total FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_day', COALESCE((SELECT st.daily_day::text FROM public.r5_fragment_state st WHERE st.family_id = p_family), ''),\n    'daily_normal_count', COALESCE((SELECT st.daily_normal_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_rare_count', COALESCE((SELECT st.daily_rare_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'drops_total', COALESCE((SELECT count(*) FROM public.r5_fragment_drops d WHERE d.family_id = p_family), 0)\n  );\n$function$\n"
+            }
+          ]
+        },
+        "privileges": {
+          "roles": [
+            {
+              "name": "anon",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "authenticated",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_checkpoint",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_create_subscription",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_database_owner",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_execute_server_program",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_maintain",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_monitor",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_settings",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_stats",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_autovacuum_worker",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_backend",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_stat_scan_tables",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_use_reserved_connections",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "postgres",
+              "login": true,
+              "super": true,
+              "inherit": true,
+              "bypassrls": true
+            },
+            {
+              "name": "service_role",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": true
+            }
+          ],
+          "columns": [
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "user_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "member_role"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "joined_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_type"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "learning_day"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_data"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_by"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "device_uid"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "label"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_by"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "revoked_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "last_seen"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "source_record_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "outcome"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_before"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_after"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "daily_index"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_points"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_total"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_normal_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "event_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "coin_delta"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "payload"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "applied_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "result_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "schema_version"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "revision"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_coins"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_source"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coins_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "owned"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "current_vehicle"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter1_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter2_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "story"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "study"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "achievements"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "reward_ledger"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "claims"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coin_rewards"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "items"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "fragments"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_by_device"
+            }
+          ],
+          "schemas": [
+            {
+              "acl": "{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres}",
+              "name": "auth",
+              "owner": "postgres"
+            },
+            {
+              "acl": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}",
+              "name": "public",
+              "owner": "pg_database_owner"
+            }
+          ],
+          "defaults": null
+        },
+        "data": {
+          "growth_family_members": {
+            "count": 7,
+            "sha256": "e31f97a9eba9e718bbde797d84aac43b72534f20464168bffc69cb1129f9dfcc"
+          },
+          "growth_learning_records": {
+            "count": 8,
+            "sha256": "f56422e0f20297acadcf8eb32b69674c31f422ec48a9acbafa361b29f21131dd"
+          },
+          "r5_device": {
+            "count": 5,
+            "sha256": "94869267b2ec715957da21e84d621ec75a22788f003eb970b66829d64462ca9b"
+          },
+          "r5_fragment_drops": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_fragment_state": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_events": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_saves": {
+            "count": 2,
+            "sha256": "3cc664d9660dd9d9faf19570bea1a3555b5b807cff060a321f379658f157433b"
+          }
+        }
+      }
+    },
+    {
+      "stage": "commit",
+      "status": "PASS",
+      "pre_commit_sha256": "f72b278de2cddc78c2aa70fb9082d5448554b16204797137c41597ba3d754fff",
+      "post_commit_sha256": "f72b278de2cddc78c2aa70fb9082d5448554b16204797137c41597ba3d754fff",
+      "proof": {
+        "catalog": {
+          "counts": {
+            "drops": 0,
+            "saves": 2,
+            "events": 0,
+            "members": 7,
+            "records": 8
+          },
+          "tables": [
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_family_members",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,authenticated=r/postgres}",
+              "rls": true,
+              "name": "growth_learning_records",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=r/postgres}",
+              "rls": true,
+              "name": "r5_backend_role",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwd/postgres}",
+              "rls": true,
+              "name": "r5_device",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_fragment_drops",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_fragment_state",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_events",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+              "rls": true,
+              "name": "r5_racing_saves",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=r/postgres}",
+              "rls": true,
+              "name": "r5_reward_config",
+              "owner": "postgres",
+              "force_rls": false
+            },
+            {
+              "acl": "{postgres=arwdDxtm/postgres,service_role=r/postgres}",
+              "rls": true,
+              "name": "r5_vehicle_recipe",
+              "owner": "postgres",
+              "force_rls": false
+            }
+          ],
+          "policies": [
+            {
+              "cmd": "SELECT",
+              "qual": "(user_id = (auth.jwt() ->> 'sub'::text))",
+              "roles": "{authenticated}",
+              "tablename": "growth_family_members",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_members_self_select",
+              "with_check": null
+            },
+            {
+              "cmd": "SELECT",
+              "qual": "(family_id IN ( SELECT m.family_id\n   FROM growth_family_members m\n  WHERE (m.user_id = (auth.jwt() ->> 'sub'::text))))",
+              "roles": "{authenticated}",
+              "tablename": "growth_learning_records",
+              "permissive": "PERMISSIVE",
+              "policyname": "growth_records_family_select",
+              "with_check": null
+            }
+          ],
+          "functions": [
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_assemble(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_assemble(p_family text, p_device text, p_vehicle_id text, p_cost jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_recipe public.r5_vehicle_recipe;\n  v_cost   jsonb;\n  v_owned  jsonb;\n  v_rev    bigint;\n  v_bal    jsonb;\n  v_deficit jsonb := '{}'::jsonb;\n  v_k      text;\n  v_q      int;\n  v_have   bigint;\nBEGIN\n  -- ▼ 入口守卫（读写之前）\n  IF NOT public.r5_fragment_scope_ok(p_family, p_device) THEN\n    RETURN jsonb_build_object('status', 'FORBIDDEN_SCOPE', 'zero_write', true);\n  END IF;\n  -- ▲\n\n  IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN\n    RETURN jsonb_build_object('status', 'BAD_VEHICLE_ID', 'zero_write', true);\n  END IF;\n\n  -- 前缀类限定车无法枚举，只能按前缀拒绝\n  IF p_vehicle_id LIKE 'pink-newyear%' OR p_vehicle_id LIKE 'pink-new-year%' THEN\n    RETURN jsonb_build_object('status', 'BIRTHDAY_VEHICLE_FORBIDDEN', 'zero_write', true);\n  END IF;\n\n  -- ▼ 车辆白名单 / 获取方式（服务端表）\n  SELECT * INTO v_recipe FROM public.r5_vehicle_recipe r WHERE r.vehicle_id = p_vehicle_id;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'UNKNOWN_VEHICLE', 'zero_write', true);\n  END IF;\n  -- 先判获取方式（更具体的拒绝原因），再看开关\n  CASE v_recipe.obtainable_via\n    WHEN 'fragment' THEN\n      NULL;\n    WHEN 'birthday' THEN\n      RETURN jsonb_build_object('status', 'BIRTHDAY_VEHICLE_FORBIDDEN', 'zero_write', true);\n    WHEN 'coin' THEN\n      RETURN jsonb_build_object('status', 'COIN_VEHICLE_FORBIDDEN', 'zero_write', true);\n    WHEN 'retired' THEN\n      RETURN jsonb_build_object('status', 'LEGACY_SLOT_RETIRED', 'zero_write', true);\n    ELSE\n      RETURN jsonb_build_object('status', 'VEHICLE_NOT_ASSEMBLABLE', 'zero_write', true);\n  END CASE;\n  IF NOT v_recipe.enabled THEN\n    RETURN jsonb_build_object('status', 'VEHICLE_DISABLED', 'zero_write', true);\n  END IF;\n\n  -- 成本只认表里的，客户端传什么都不看\n  v_cost := v_recipe.cost;\n  IF v_cost IS NULL OR jsonb_typeof(v_cost) <> 'object' OR v_cost = '{}'::jsonb THEN\n    RETURN jsonb_build_object('status', 'RECIPE_INVALID', 'zero_write', true);\n  END IF;\n  -- ▲\n\n  SELECT s.owned, s.revision INTO v_owned, v_rev FROM public.r5_racing_saves s\n   WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'SAVE_NOT_INITIALIZED', 'zero_write', true);\n  END IF;\n\n  IF v_owned ? p_vehicle_id THEN\n    RETURN public.r5_fragment_snapshot_internal(p_family)\n      || jsonb_build_object('status', 'ALREADY_OWNED', 'vehicle_id', p_vehicle_id, 'zero_write', true);\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM public.r5_racing_events e\n              WHERE e.family_id = p_family AND e.event_id = 'asm:' || p_vehicle_id) THEN\n    RETURN public.r5_fragment_snapshot_internal(p_family)\n      || jsonb_build_object('status', 'ALREADY_ASSEMBLED', 'vehicle_id', p_vehicle_id, 'zero_write', true);\n  END IF;\n\n  SELECT COALESCE(jsonb_object_agg(t.k, t.q), '{}'::jsonb) INTO v_bal FROM (\n    SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n    FROM public.r5_racing_events x\n    WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n      AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n    GROUP BY 1\n  ) t;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(v_cost) LOOP\n    v_have := COALESCE((v_bal->>v_k)::bigint, 0);\n    IF v_have < v_q THEN\n      v_deficit := v_deficit || jsonb_build_object(v_k, v_q - v_have);\n    END IF;\n  END LOOP;\n\n  IF v_deficit <> '{}'::jsonb THEN\n    RETURN public.r5_fragment_snapshot_internal(p_family)\n      || jsonb_build_object('status', 'INSUFFICIENT_FRAGMENTS', 'vehicle_id', p_vehicle_id,\n                            'required', v_cost, 'deficit', v_deficit, 'zero_write', true);\n  END IF;\n\n  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(v_cost) LOOP\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'asm:' || p_vehicle_id || ':' || v_k, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_k, 'quantity_delta', -v_q, 'source', 'assemble', 'vehicle_id', p_vehicle_id),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END LOOP;\n\n  INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n  VALUES (p_family, 'asm:' || p_vehicle_id, 'grant', 0,\n    jsonb_build_object('vehicle_id', p_vehicle_id, 'source', 'fragment-assembly', 'cost', v_cost),\n    COALESCE(p_device, ''), now(), NULL)\n  ON CONFLICT (family_id, event_id) DO NOTHING;\n\n  UPDATE public.r5_racing_saves s\n     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id,\n           jsonb_build_object('at', (extract(epoch from now())*1000)::bigint,\n                              'source', 'fragment-assembly', 'note', '碎片组装')),\n         revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(\n    'status', 'ASSEMBLED', 'vehicle_id', p_vehicle_id, 'cost', v_cost, 'zero_write', false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_caller_role()",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_caller_role()\n RETURNS text\n LANGUAGE sql\n STABLE\nAS $function$\n  SELECT CASE\n           WHEN COALESCE(current_setting('role', true), 'none') IN ('', 'none')\n             THEN session_user\n           ELSE current_setting('role', true)\n         END;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_claim(text,text,text,jsonb)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_claim(p_family text, p_device text, p_record_id text, p_cfg jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nDECLARE\n  v_cfg         public.r5_reward_config;\n  v_kind        text;\n  v_subject     text;\n  v_day         date;\n  v_today       date := (now() AT TIME ZONE 'Asia/Shanghai')::date;\n  v_prev        public.r5_fragment_drops;\n  v_state       public.r5_fragment_state;\n  v_cap         int;\n  v_pity_target int;\n  v_frag        text;\n  v_rare_frag   text;\n  v_pity        int;\n  v_daily       int;\n  v_daily_rare  int;\n  v_pity_exempt boolean := false;\n  v_outcome     text;\n  v_count       int := 0;\n  v_rare_count  int := 0;\n  v_pity_after  int := 0;\n  v_daily_index int := 0;\n  v_rev         bigint;\nBEGIN\n  -- ▼ 入口守卫（读写之前）：非特权连接必须持家庭成员 JWT\n  IF NOT public.r5_fragment_scope_ok(p_family, p_device) THEN\n    RETURN jsonb_build_object('status', 'FORBIDDEN_SCOPE', 'zero_write', true);\n  END IF;\n  -- ▲\n\n  IF p_family IS NULL OR p_family = '' THEN\n    RETURN jsonb_build_object('status', 'BAD_FAMILY', 'zero_write', true);\n  END IF;\n  IF p_record_id IS NULL OR p_record_id = '' OR length(p_record_id) > 160 THEN\n    RETURN jsonb_build_object('status', 'BAD_RECORD_ID', 'zero_write', true);\n  END IF;\n\n  -- 幂等：同一条记录只结算一次\n  SELECT * INTO v_prev FROM public.r5_fragment_drops d\n   WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n  IF FOUND THEN\n    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(\n      'status', 'ALREADY_CLAIMED', 'outcome', v_prev.outcome,\n      'granted_normal', v_prev.fragment_count, 'granted_rare', v_prev.rare_count,\n      'fragment_id', v_prev.fragment_id, 'rare_fragment_id', v_prev.rare_fragment_id,\n      'pity_points', COALESCE((SELECT pity_points FROM public.r5_fragment_state WHERE family_id = p_family), 0),\n      'claimed_at', v_prev.created_at, 'zero_write', true);\n  END IF;\n\n  -- ▼ 服务端验证真实学习记录（阻断项 3 的核心）\n  SELECT r.record_type,\n         COALESCE(r.subject, ''),\n         (r.created_at AT TIME ZONE 'Asia/Shanghai')::date\n    INTO v_kind, v_subject, v_day\n    FROM public.growth_learning_records r\n   WHERE r.record_id = p_record_id\n     AND r.family_id = p_family;\n  IF NOT FOUND THEN\n    RETURN public.r5_fragment_snapshot_internal(p_family)\n      || jsonb_build_object('status', 'RECORD_NOT_FOUND', 'zero_write', true);\n  END IF;\n  IF v_day <> v_today THEN\n    RETURN public.r5_fragment_snapshot_internal(p_family)\n      || jsonb_build_object('status', 'NOT_TODAY', 'record_day', v_day::text, 'zero_write', true);\n  END IF;\n  -- ▲\n\n  -- ▼ 服务端配置（掉落概率 / 上限 / 保底 / 碎片 id）\n  SELECT * INTO v_cfg FROM public.r5_reward_config c WHERE c.family_id = p_family;\n  IF NOT FOUND THEN\n    SELECT * INTO v_cfg FROM public.r5_reward_config c WHERE c.family_id = '*';\n  END IF;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'CONFIG_MISSING', 'zero_write', true);\n  END IF;\n  v_cap := GREATEST(0, v_cfg.daily_cap);\n  v_pity_target := GREATEST(2, v_cfg.pity_target);\n  v_frag := NULLIF(v_cfg.common_fragment_id, '');\n  v_rare_frag := NULLIF(v_cfg.rare_fragment_id, '');\n  -- ▲\n\n  SELECT s.revision INTO v_rev FROM public.r5_racing_saves s\n   WHERE s.family_id = p_family FOR UPDATE;\n  IF NOT FOUND THEN\n    RETURN jsonb_build_object('status', 'SAVE_NOT_INITIALIZED', 'zero_write', true);\n  END IF;\n\n  INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family)\n  ON CONFLICT (family_id) DO NOTHING;\n  SELECT * INTO v_state FROM public.r5_fragment_state st\n   WHERE st.family_id = p_family FOR UPDATE;\n\n  IF v_state.daily_day = v_today THEN\n    v_pity := v_state.pity_points;\n    v_daily := v_state.daily_normal_count;\n    v_daily_rare := v_state.daily_rare_count;\n  ELSE\n    v_pity := v_state.pity_points;\n    v_daily := 0;\n    v_daily_rare := 0;\n  END IF;\n\n  -- 记录类型不在白名单 → 不产出、也不消耗保底\n  IF NOT (v_kind = ANY (v_cfg.eligible_record_types)) THEN\n    v_outcome := 'none';\n    v_pity_exempt := true;\n  ELSIF v_daily >= v_cap THEN\n    v_outcome := 'capped';\n    v_pity_exempt := true;\n  ELSIF (random() * 100) < v_cfg.drop_percent THEN\n    v_outcome := 'drop';\n  ELSE\n    v_outcome := 'none';\n  END IF;\n\n  IF v_outcome = 'drop' THEN\n    v_count := 1;\n    v_daily_index := v_daily + 1;\n    v_pity_after := 0;\n  ELSIF v_outcome = 'none' THEN\n    IF v_pity_exempt THEN\n      v_pity_after := v_pity;\n    ELSE\n      v_pity_after := v_pity + 1;\n      IF v_pity_after >= v_pity_target THEN\n        v_outcome := 'pity';\n        v_count := 1;\n        v_daily_index := v_daily + 1;\n        v_pity_after := 0;\n      END IF;\n    END IF;\n  ELSE\n    v_pity_after := v_pity;\n  END IF;\n\n  IF v_kind = ANY (v_cfg.rare_record_types)\n     AND v_rare_frag IS NOT NULL\n     AND v_daily_rare < v_cfg.rare_daily_cap THEN\n    v_rare_count := 1;\n  END IF;\n\n  INSERT INTO public.r5_fragment_drops (\n    family_id, source_record_id, record_day, record_kind, subject, outcome,\n    fragment_id, fragment_count, rare_fragment_id, rare_count,\n    pity_before, pity_after, daily_index, device)\n  VALUES (\n    p_family, p_record_id, v_day, v_kind, v_subject, v_outcome,\n    CASE WHEN v_count > 0 THEN v_frag ELSE NULL END, v_count,\n    CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END, v_rare_count,\n    v_pity, v_pity_after, v_daily_index, COALESCE(p_device, ''))\n  ON CONFLICT (family_id, source_record_id) DO NOTHING;\n\n  IF NOT FOUND THEN\n    SELECT * INTO v_prev FROM public.r5_fragment_drops d\n     WHERE d.family_id = p_family AND d.source_record_id = p_record_id;\n    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(\n      'status', 'ALREADY_CLAIMED', 'outcome', v_prev.outcome,\n      'granted_normal', v_prev.fragment_count, 'granted_rare', v_prev.rare_count,\n      'zero_write', true);\n  END IF;\n\n  IF v_count > 0 AND v_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id, 'fragment_change', 0,\n      jsonb_build_object('item_id', v_frag, 'quantity_delta', v_count, 'source', 'study',\n                         'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject,\n                         'record_day', v_day::text, 'outcome', v_outcome, 'pity_after', v_pity_after),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  IF v_rare_count > 0 AND v_rare_frag IS NOT NULL THEN\n    INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)\n    VALUES (p_family, 'frag:' || p_record_id || ':rare', 'fragment_change', 0,\n      jsonb_build_object('item_id', v_rare_frag, 'quantity_delta', v_rare_count, 'source', 'study-rare',\n                         'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject,\n                         'record_day', v_day::text),\n      COALESCE(p_device, ''), now(), NULL)\n    ON CONFLICT (family_id, event_id) DO NOTHING;\n  END IF;\n\n  UPDATE public.r5_fragment_state st\n     SET pity_points = v_pity_after,\n         pity_total = st.pity_total + CASE WHEN v_outcome = 'pity' THEN 1 ELSE 0 END,\n         daily_day = v_today,\n         daily_normal_count = v_daily + v_count,\n         daily_rare_count = v_daily_rare + v_rare_count,\n         updated_at = now()\n   WHERE st.family_id = p_family;\n\n  UPDATE public.r5_racing_saves s\n     SET revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')\n   WHERE s.family_id = p_family;\n\n  RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(\n    'status', 'CLAIMED', 'outcome', v_outcome,\n    'granted_normal', v_count, 'granted_rare', v_rare_count,\n    'fragment_id', CASE WHEN v_count > 0 THEN v_frag ELSE NULL END,\n    'rare_fragment_id', CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END,\n    'pity_points', v_pity_after, 'pity_before', v_pity,\n    'daily_normal_count', v_daily + v_count, 'daily_rare_count', v_daily_rare + v_rare_count,\n    'daily_index', v_daily_index, 'record_day', v_day::text, 'record_kind', v_kind,\n    'zero_write', false);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_is_privileged()",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_is_privileged()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  WITH r AS (SELECT public.r5_fragment_caller_role() AS role_name)\n  SELECT EXISTS (\n           SELECT 1 FROM public.r5_backend_role b, r WHERE b.role_name = r.role_name\n         )\n      OR EXISTS (\n           SELECT 1 FROM pg_roles g, r\n            WHERE g.rolname = r.role_name AND (g.rolsuper OR g.rolbypassrls)\n         );\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_member_assemble(text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_member_assemble(p_vehicle_id text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_uid    text;\n  v_fams   text[];\n  v_family text;\n  v_device text;\nBEGIN\n  v_uid := NULLIF(auth.jwt() ->> 'sub', '');\n  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('status', 'UNAUTHENTICATED', 'zero_write', true);\n  END IF;\n\n  SELECT array_agg(DISTINCT m.family_id) INTO v_fams\n    FROM public.growth_family_members m\n   WHERE m.user_id = v_uid\n     AND m.member_role IN ('owner', 'parent', 'grandparent');\n\n  IF v_fams IS NULL THEN\n    RETURN jsonb_build_object('status', 'NOT_MEMBER', 'zero_write', true);\n  END IF;\n  IF array_length(v_fams, 1) <> 1 THEN\n    RETURN jsonb_build_object('status', 'AMBIGUOUS_MEMBER', 'zero_write', true);\n  END IF;\n  v_family := v_fams[1];\n  IF v_family IS NULL OR v_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN\n    RETURN jsonb_build_object('status', 'BAD_FAMILY', 'zero_write', true);\n  END IF;\n\n  -- 车辆 ID 形态先过一遍（与旧函数同一套正则），避免把奇怪字符串带进事件 ID。\n  -- 不在白名单 / 不是碎片车 / 成本多少，全部由 r5_fragment_assemble 查\n  -- public.r5_vehicle_recipe 决定；本函数不揣任何成本，也不允许调用方自带价格。\n  IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN\n    RETURN jsonb_build_object('status', 'BAD_VEHICLE_ID', 'zero_write', true);\n  END IF;\n\n  -- 设备列只做审计，不参与授权（身份已经是家长本人）\n  v_device := 'v6:' || v_uid;\n\n  RETURN public.r5_fragment_assemble(v_family, v_device, p_vehicle_id, '{}'::jsonb);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_member_snapshot()",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_member_snapshot()\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_uid    text;\n  v_fams   text[];\n  v_family text;\n  v_role   text;\nBEGIN\n  v_uid := NULLIF(auth.jwt() ->> 'sub', '');\n  IF v_uid IS NULL THEN\n    RETURN jsonb_build_object('status', 'UNAUTHENTICATED');\n  END IF;\n\n  -- 同一账号在同一家庭只能有一行（主键约束），这里仍用 DISTINCT：\n  -- 防的是「一个账号挂多个家庭」，不是「一个家庭有多名成员」。\n  SELECT array_agg(DISTINCT m.family_id)\n    INTO v_fams\n    FROM public.growth_family_members m\n   WHERE m.user_id = v_uid\n     AND m.member_role IN ('owner', 'parent', 'grandparent');\n\n  IF v_fams IS NULL THEN\n    RETURN jsonb_build_object('status', 'NOT_MEMBER');\n  END IF;\n  IF array_length(v_fams, 1) <> 1 THEN\n    -- 一个账号挂多个家庭时不替用户选，交给家长入口处理\n    RETURN jsonb_build_object('status', 'AMBIGUOUS_MEMBER', 'families', to_jsonb(v_fams));\n  END IF;\n\n  v_family := v_fams[1];\n  IF v_family IS NULL OR v_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN\n    RETURN jsonb_build_object('status', 'BAD_FAMILY');\n  END IF;\n\n  -- role 只用于页面标注「以什么身份查看」，不参与授权判断（授权只看成员行是否存在）\n  SELECT m.member_role INTO v_role\n    FROM public.growth_family_members m\n   WHERE m.user_id = v_uid AND m.family_id = v_family;\n\n  -- 只读：直接复用既有快照函数，不在这里重新算余额\n  RETURN public.r5_fragment_snapshot(v_family)\n    || jsonb_build_object(\n         'status', 'OK',\n         'family_id', v_family,\n         'family_source', 'growth_family_members',\n         'member_role', v_role,\n         'member_uid', v_uid,\n         'zero_write', true,\n         -- 服务端目录：车辆白名单 / 成本 / 掉落参数都来自 r5_vehicle_recipe 与 r5_reward_config\n         'program', public.r5_fragment_program_json()\n       );\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_program_json()",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_program_json()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT jsonb_build_object(\n    'version', 'v2',\n    'catalog_source', 'public.r5_vehicle_recipe',\n    'common_fragment_id', c.common_fragment_id,\n    'common_fragment_name', '星星碎片',\n    'rare_fragment_id', c.rare_fragment_id,\n    'rare_fragment_name', '学习徽章碎片',\n    'daily_cap', c.daily_cap,\n    'rare_daily_cap', c.rare_daily_cap,\n    'pity_target', c.pity_target,\n    'drop_percent', c.drop_percent,\n    'drop_percent_status', c.status,\n    'legacy_slots', jsonb_build_array('scholar'),\n    'excluded_vehicles', COALESCE((\n      SELECT jsonb_agg(v.vehicle_id ORDER BY v.vehicle_id)\n        FROM public.r5_vehicle_recipe v\n       WHERE v.obtainable_via = 'birthday'), '[]'::jsonb),\n    'excluded_prefixes', jsonb_build_array('pink-newyear', 'pink-new-year'),\n    'non_fragment_vehicles', COALESCE((\n      SELECT jsonb_agg(v.vehicle_id ORDER BY v.vehicle_id)\n        FROM public.r5_vehicle_recipe v\n       WHERE v.obtainable_via IN ('coin', 'retired')), '[]'::jsonb),\n    'vehicles', COALESCE((\n      SELECT jsonb_agg(jsonb_build_object(\n               'vehicle_id', v.vehicle_id,\n               'name', v.name,\n               'tier', v.tier,\n               'cost', v.cost,\n               'drivable', true,\n               'placeholder', false,\n               'display_name_pending', false,\n               'note', v.note) ORDER BY v.vehicle_id)\n        FROM public.r5_vehicle_recipe v\n       WHERE v.obtainable_via = 'fragment' AND v.enabled), '[]'::jsonb)\n  )\n  FROM (SELECT * FROM public.r5_reward_config WHERE family_id = '*') c;\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_scope_ok(text,text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_scope_ok(p_family text, p_device text DEFAULT NULL::text)\n RETURNS boolean\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_privileged boolean;\n  v_claims     jsonb;\n  v_uid        text;\n  v_dev        text;\nBEGIN\n  IF p_family IS NULL OR p_family = '' THEN\n    RETURN false;\n  END IF;\n  IF p_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN\n    RETURN false;\n  END IF;\n\n  v_privileged := public.r5_fragment_is_privileged();\n  v_claims := NULLIF(current_setting('request.jwt.claims', true), '')::jsonb;\n\n  -- ===== ① 非特权连接：只认 JWT 里的成员身份 =====\n  IF NOT v_privileged THEN\n    -- 没有 claims 就是没有身份。**绝不因为「没带 claims」而放行**（阻断项 1 的核心）。\n    IF v_claims IS NULL OR v_claims = '{}'::jsonb THEN\n      RETURN false;\n    END IF;\n    -- 说明：claims->>'role' 在这里完全没有用。伪造 role=service_role 也进不来，\n    -- 因为数据库角色仍然是 anon/authenticated。\n    v_uid := NULLIF(v_claims ->> 'sub', '');\n    IF v_uid IS NULL THEN\n      RETURN false;\n    END IF;\n    RETURN EXISTS (\n      SELECT 1 FROM public.growth_family_members m\n       WHERE m.user_id = v_uid\n         AND m.family_id = p_family\n         AND m.member_role IN ('owner', 'parent', 'grandparent')\n    );\n  END IF;\n\n  -- ===== ② 特权连接（云函数 / 迁移 / service_role）=====\n  v_dev := NULLIF(p_device, '');\n  IF v_dev IS NULL THEN\n    RETURN true;                       -- 服务端直连且不声称任何设备\n  END IF;\n\n  -- 家长身份路径的审计标记 v6:<uid>：uid 必须是该家庭的家长成员\n  IF left(v_dev, 3) = 'v6:' THEN\n    v_uid := NULLIF(substr(v_dev, 4), '');\n    IF v_uid IS NULL THEN\n      RETURN false;\n    END IF;\n    RETURN EXISTS (\n      SELECT 1 FROM public.growth_family_members m\n       WHERE m.user_id = v_uid\n         AND m.family_id = p_family\n         AND m.member_role IN ('owner', 'parent', 'grandparent')\n    );\n  END IF;\n\n  -- 声称了设备：设备必须真的绑定在这个家庭且未撤销（纵深防御，不是认证）\n  IF v_dev !~ '^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$' THEN\n    RETURN false;\n  END IF;\n  RETURN EXISTS (\n    SELECT 1 FROM public.r5_device d\n     WHERE d.device_uid = v_dev\n       AND d.family_id = p_family\n       AND d.revoked_at IS NULL\n  );\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_snapshot(text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot(p_family text)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\nBEGIN\n  IF NOT public.r5_fragment_scope_ok(p_family, NULL) THEN\n    RETURN jsonb_build_object('status', 'FORBIDDEN_SCOPE', 'zero_write', true);\n  END IF;\n  RETURN public.r5_fragment_snapshot_internal(p_family);\nEND;\n$function$\n"
+            },
+            {
+              "acl": "{postgres=X/postgres}",
+              "owner": "postgres",
+              "signature": "r5_fragment_snapshot_internal(text)",
+              "definition": "CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot_internal(p_family text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\n  SELECT jsonb_build_object(\n    'fragments', COALESCE((\n      SELECT jsonb_object_agg(t.k, t.q) FROM (\n        SELECT x.payload->>'item_id' AS k, GREATEST(0, sum((x.payload->>'quantity_delta')::bigint)) AS q\n        FROM public.r5_racing_events x\n        WHERE x.family_id = p_family AND x.kind = 'fragment_change'\n          AND x.payload ? 'item_id' AND x.payload ? 'quantity_delta'\n        GROUP BY 1\n      ) t), '{}'::jsonb),\n    'owned', COALESCE((SELECT s.owned FROM public.r5_racing_saves s WHERE s.family_id = p_family), '{}'::jsonb),\n    'revision', COALESCE((SELECT s.revision FROM public.r5_racing_saves s WHERE s.family_id = p_family), 0),\n    'pity_points', COALESCE((SELECT st.pity_points FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'pity_total', COALESCE((SELECT st.pity_total FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_day', COALESCE((SELECT st.daily_day::text FROM public.r5_fragment_state st WHERE st.family_id = p_family), ''),\n    'daily_normal_count', COALESCE((SELECT st.daily_normal_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'daily_rare_count', COALESCE((SELECT st.daily_rare_count FROM public.r5_fragment_state st WHERE st.family_id = p_family), 0),\n    'drops_total', COALESCE((SELECT count(*) FROM public.r5_fragment_drops d WHERE d.family_id = p_family), 0)\n  );\n$function$\n"
+            }
+          ]
+        },
+        "privileges": {
+          "roles": [
+            {
+              "name": "anon",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "authenticated",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_checkpoint",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_create_subscription",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_database_owner",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_execute_server_program",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_maintain",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_monitor",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_settings",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_all_stats",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_read_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_autovacuum_worker",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_signal_backend",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_stat_scan_tables",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_use_reserved_connections",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_all_data",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "pg_write_server_files",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": false
+            },
+            {
+              "name": "postgres",
+              "login": true,
+              "super": true,
+              "inherit": true,
+              "bypassrls": true
+            },
+            {
+              "name": "service_role",
+              "login": false,
+              "super": false,
+              "inherit": true,
+              "bypassrls": true
+            }
+          ],
+          "columns": [
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "user_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "member_role"
+            },
+            {
+              "acl": null,
+              "table": "growth_family_members",
+              "column": "joined_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_type"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "learning_day"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "record_data"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_by"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "growth_learning_records",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_backend_role",
+              "column": "role_name"
+            },
+            {
+              "acl": null,
+              "table": "r5_backend_role",
+              "column": "note"
+            },
+            {
+              "acl": null,
+              "table": "r5_backend_role",
+              "column": "added_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "device_uid"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "label"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_by"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "bound_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "revoked_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_device",
+              "column": "last_seen"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "source_record_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "record_kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "subject"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "outcome"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "fragment_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_before"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "pity_after"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "daily_index"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_drops",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_points"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "pity_total"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_day"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_normal_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "daily_rare_count"
+            },
+            {
+              "acl": null,
+              "table": "r5_fragment_state",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "event_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "kind"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "coin_delta"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "payload"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "applied_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_events",
+              "column": "result_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "schema_version"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "revision"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_coins"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_source"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_device"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "baseline_confirmed_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coins_balance"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "owned"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "current_vehicle"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter1_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "chapter2_state"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "story"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "study"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "achievements"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "reward_ledger"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "claims"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "coin_rewards"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "items"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "fragments"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "created_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_racing_saves",
+              "column": "updated_by_device"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "family_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "common_fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "rare_fragment_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "drop_percent"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "daily_cap"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "rare_daily_cap"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "pity_target"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "eligible_record_types"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "rare_record_types"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "status"
+            },
+            {
+              "acl": null,
+              "table": "r5_reward_config",
+              "column": "updated_at"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "vehicle_id"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "name"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "tier"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "cost"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "obtainable_via"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "enabled"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "note"
+            },
+            {
+              "acl": null,
+              "table": "r5_vehicle_recipe",
+              "column": "updated_at"
+            }
+          ],
+          "schemas": [
+            {
+              "acl": "{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres}",
+              "name": "auth",
+              "owner": "postgres"
+            },
+            {
+              "acl": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}",
+              "name": "public",
+              "owner": "pg_database_owner"
+            }
+          ],
+          "defaults": null
+        },
+        "data": {
+          "growth_family_members": {
+            "count": 7,
+            "sha256": "59887215f7d2949396d72cf3e9ca72aedfa43935a82538bb590dea6b2256307d"
+          },
+          "growth_learning_records": {
+            "count": 8,
+            "sha256": "610627d763614655fb743a67cc11830fcb220d83821e58874057a38b253f802b"
+          },
+          "r5_backend_role": {
+            "count": 3,
+            "sha256": "62631e30dfe1665d5c5bd776a433f993fbc9e5babf802da9b36074d19b093edd"
+          },
+          "r5_device": {
+            "count": 5,
+            "sha256": "7e4199dec4f55357d82c07faef985a95c4bc9f0ea90f21585f94a38db3adb048"
+          },
+          "r5_fragment_drops": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_fragment_state": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_events": {
+            "count": 0,
+            "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "r5_racing_saves": {
+            "count": 2,
+            "sha256": "cdb52bb7d674fc05255e58b5711a86d8eddabe3462e6efd115c398ef3e8564c5"
+          },
+          "r5_reward_config": {
+            "count": 1,
+            "sha256": "5874bd99e97380bd37bf2d60b39c606e0b2d1a4a388cb1272dbe4bb738445737"
+          },
+          "r5_vehicle_recipe": {
+            "count": 7,
+            "sha256": "84dabe3e54053923c529cd19003d4477a2bc47d7ff6516f0dac14e4fa5a569b6"
+          }
+        }
+      }
+    }
+  ]
+}

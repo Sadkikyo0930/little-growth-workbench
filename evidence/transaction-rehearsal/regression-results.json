@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-11-14T09:58:34.873Z",
+  "suites": [
+    {
+      "suite": "listening",
+      "file": "tests/listening.test.mjs",
+      "exit": 0,
+      "passed": 45,
+      "total": 45,
+      "failed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "suite": "garage",
+      "file": "tests/garage.test.mjs",
+      "exit": 0,
+      "passed": 69,
+      "total": 69,
+      "failed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "suite": "data-contract",
+      "file": "tests/data-contract.test.mjs",
+      "exit": 0,
+      "passed": 20,
+      "total": 20,
+      "failed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "suite": "sync-simulation",
+      "file": "tests/sync-simulation.test.mjs",
+      "exit": 0,
+      "passed": 37,
+      "total": 37,
+      "failed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "suite": "member-identity",
+      "file": "tests/member-identity.test.mjs",
+      "exit": 0,
+      "passed": 82,
+      "total": 82,
+      "failed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "suite": "db-authz",
+      "file": "db/isolated/run.mjs",
+      "exit": 0,
+      "passed": 54,
+      "total": 54,
+      "failed": 0,
+      "verdict": "PASS"
+    },
+    {
+      "suite": "db-authority",
+      "file": "db/isolated/run-authority.mjs",
+      "exit": 0,
+      "passed": 54,
+      "total": 54,
+      "failed": 0,
+      "verdict": "PASS"
+    }
+  ],
+  "total_passed": 361,
+  "total_failed": 0,
+  "skipped": []
+}

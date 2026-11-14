@@ -1,0 +1,68 @@
+
+=== F 阻断项 1：空 JWT claims 不再等于特权，伪造 role 无效 ===
+[PASS] F1 anon + 空 claims 读自家 → FORBIDDEN_SCOPE（旧实现这里会放行）
+[PASS] F2 authenticated + 空 claims → FORBIDDEN_SCOPE
+[PASS] F3 anon 伪造 claims.role=service_role → FORBIDDEN_SCOPE
+[PASS] F4 authenticated 伪造 service_role + 非成员 sub → FORBIDDEN_SCOPE
+[PASS] F5 伪造 service_role 不产生额外权力：仍只按成员身份判（自家通、别家拒）
+[PASS] F6 真实服务端连接（云函数 / 迁移，无 claims）→ 放行
+[PASS] F7 service_role → 放行
+[PASS] F8 SECURITY DEFINER 内仍能识别原调用者（anon→false/postgres→true），不是靠 current_user
+[PASS] F9 authenticated 连接不被误判成特权
+[PASS] F10 伪造 service_role 去领取 → 零写入
+
+=== G 阻断项 2：设备 UID 不再单独作为身份凭证 ===
+[PASS] G1 anon 拿着真实设备 UID 直接打 RPC → FORBIDDEN_SCOPE 且零写入（旧实现这里 CLAIMED）
+[PASS] G2 登录家长 + 别家真实设备 UID → 仍 FORBIDDEN_SCOPE（设备不能提权）
+[PASS] G3 服务端连接 + 属于别家的设备 → FORBIDDEN_SCOPE（纵深防御）
+[PASS] G4 服务端连接 + 本家庭设备 → CLAIMED（赛车网关形态）
+[PASS] G5 服务端连接 + 已撤销设备 → FORBIDDEN_SCOPE
+[PASS] G6 特权连接声称 v6:<非家长> → false
+[PASS] G7 特权连接声称 v6:<爸爸 uid> → true
+[PASS] G8 特权连接声称长度不足的设备 UID → false（低熵值不受理）
+[PASS] G9 特权连接里 claims 是垃圾也不影响：仍按设备绑定判定
+
+=== H 阻断项 3：配置 / 学习记录 / 白名单 / 成本由服务端决定 ===
+[PASS] H1 伪造 p_cfg（want=drop/daily_cap=9/pity_target=2）全部无效：服务端 0% 就是不掉
+[PASS] H2 服务端 100% 必掉；但每日上限只认服务端 2 —— 第三条 capped，p_cfg 抬不动
+[PASS] H3 凭空捏造的 record_id → RECORD_NOT_FOUND 且零写入
+[PASS] H4 拿别家的真实 record_id → RECORD_NOT_FOUND（记录必须属于本家庭）
+[PASS] H5 昨天的学习记录 → NOT_TODAY（不能补领昨天来重置今天的额度）
+[PASS] H6 record_day / record_kind / subject 全部取自真实记录，p_cfg 改不动
+[PASS] H7 p_cost 传 {"frag_common":1} 无效 → INSUFFICIENT_FRAGMENTS（按服务端 12 片判）
+[PASS] H8 p_cost 为空也能走到正确判定（配方来自表，客户端不参与）
+[PASS] H9 凑够 12 片后按配方扣 12 片（不是客户端说的 1 片）
+[PASS] H10 目录外的车 → UNKNOWN_VEHICLE
+[PASS] H11 金币车 → COIN_VEHICLE_FORBIDDEN
+[PASS] H12 生日 / 限定期前缀车 → BIRTHDAY_VEHICLE_FORBIDDEN
+[PASS] H13 v1 遗留槽位 → LEGACY_SLOT_RETIRED
+[PASS] H14 改 r5_reward_config 立刻生效，且 p_cfg want=none 也拦不住服务端 100%
+
+=== I 阻断项 4：底层表不能再绕过 RPC 直接读写 ===
+[PASS] I1 anon 直接 SELECT r5_fragment_drops → 拒绝
+[PASS] I2 anon 直接 SELECT r5_fragment_state → 拒绝
+[PASS] I3 authenticated 直接 INSERT drops → 拒绝
+[PASS] I4 authenticated 直接 UPDATE state（改保底）→ 拒绝
+[PASS] I5 authenticated 直接 DELETE drops（删了重领）→ 拒绝
+[PASS] I6 authenticated 直接 SELECT racing_events → 拒绝
+[PASS] I7 authenticated 直接 SELECT racing_saves → 拒绝
+[PASS] I8 authenticated 自己给自己绑设备 → 拒绝
+[PASS] I9 service_role 仍可写（服务端任务没被误伤）
+[PASS] I10 五张奖励相关表全部开启 RLS
+[PASS] I11 登录家长仍能读自家学习记录（没有误伤学习进度）
+[PASS] I12 anon 读学习记录 → 拒绝
+[PASS] I13 绕过尝试失败后幂等仍成立：同一条记录再领 → ALREADY_CLAIMED 且 zero_write
+
+=== J 赛车兼容：真实网关形态 + 老设备令牌 ===
+[PASS] J1 赛车领取照常：服务端连接 + 老设备 r5-demo-device-0001 → CLAIMED
+[PASS] J2 同一设备连续领取第二条 → CLAIMED（没有误伤）
+[PASS] J3 赛车侧组装照常：12 片 → ASSEMBLED，余额扣 12 片且不为负
+[PASS] J4 事件里的设备列就是原设备 UID（审计链没断）
+[PASS] J5 save.get 需要的那几个字段都在：fragments/owned/revision/pity/daily/drops_total
+[PASS] J6 云函数不带设备（p_device 为空）也能领取
+[PASS] J7 三个旧函数签名一字未改（网关与云函数无需改代码）
+[PASS] J8 设备被撤销后立刻停用（撤销是真实的解除授权）
+
+============================================================
+TOTAL  54/54 passed, 0 failed
+VERDICT PASS

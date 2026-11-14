@@ -1,0 +1,6 @@
+Node v24.22.1; PGlite 0.5.16; synthetic fixtures only
+PASS rollback after 1 script(s): original catalog + row counts restored
+PASS rollback after 2 script(s): original catalog + row counts restored
+PASS rollback after 3 script(s): original catalog + row counts restored
+PASS single-session 3-script COMMIT persists member RPC
+ALL 4 ISOLATED TRANSACTION REHEARSALS PASSED. Production transport still unverified.

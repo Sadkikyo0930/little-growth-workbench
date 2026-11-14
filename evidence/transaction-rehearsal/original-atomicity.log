@@ -1,0 +1,5 @@
+PASS rollback after script 1 (ACL/RLS/functions/policies/counts)
+PASS rollback after script 2 (ACL/RLS/functions/policies/counts)
+PASS rollback after script 3 (ACL/RLS/functions/policies/counts)
+PASS three-script single-session COMMIT
+4/4 isolated rehearsals passed; this does NOT validate CloudBase API session behavior.

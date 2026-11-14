@@ -1,0 +1,11 @@
+{
+  "name": "v6-fragment-atomic-rehearsal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run-migration-atomicity.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.16"
+  }
+}

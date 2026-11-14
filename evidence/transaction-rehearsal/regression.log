@@ -1,0 +1,10 @@
+PASS  listening      45/45 passed, 0 failed
+PASS  garage         69/69 passed, 0 failed
+PASS  data-contract  20/20 passed, 0 failed
+PASS  sync-simulation 37/37 passed, 0 failed
+PASS  member-identity 82/82 passed, 0 failed
+PASS  db-authz       54/54 passed, 0 failed
+PASS  db-authority   54/54 passed, 0 failed
+==============================================
+TOTAL  361/361 passed, 0 failed
+VERDICT PASS

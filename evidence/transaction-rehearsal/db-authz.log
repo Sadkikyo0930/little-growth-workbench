@@ -1,0 +1,66 @@
+
+=== A 成员模型（正式家庭三人均保留） ===
+[PASS] A1 正式家庭恰好 3 名成员
+[PASS] A2 角色齐全：owner / parent / grandparent
+[PASS] A3 三名家长分别对应 爸爸/妈妈/外婆 的 user_id
+[PASS] A4 约束是「每个账号只挂 1 个家庭」——只有测试账号 u-two-families 违反
+[PASS] A5 同一家庭同一账号不能重复（PK (family_id,user_id) 生效）
+[PASS] A6 迁移脚本对成员表只有 SELECT，没有任何写成员行的语句
+[PASS] A7 迁移脚本用 array_agg(DISTINCT …) —— 一个家庭多名成员不会被误判成「多家庭」
+
+=== B 旧接口的漏洞（改之前，证明它确实存在） ===
+[PASS] B1 anon 直接传别家 family_id 就能读到那家的快照
+[PASS] B2 返回里连一个「你没权限」都没有（旧函数不做任何授权判断）
+[PASS] B3 anon 还能对别家**写入**领取记录（drops 行数 +1）
+[PASS] B4 登录家长（妈妈）能读别人家
+[PASS] B5 anon 还能直接 SELECT r5_fragment_drops / r5_fragment_state（表级也在漏）
+
+=== C 新接口 r5_fragment_member_*（只能读到自己家） ===
+[PASS] C1 anon 对 member_snapshot 没有执行权
+[PASS] C2 anon 对 member_assemble 没有执行权
+[PASS] C3 登录了但不是任何家庭成员 → NOT_MEMBER
+[PASS] C4 角色是 child → NOT_MEMBER（孩子账号不能读家长视图）
+[PASS] C5 owner 能读到 synthetic-family-main-001，且 family 由服务端给出（member_role=owner）
+[PASS] C6 parent 能读到 synthetic-family-main-001，且 family 由服务端给出（member_role=parent）
+[PASS] C7 grandparent 能读到 synthetic-family-main-001，且 family 由服务端给出（member_role=grandparent）
+[PASS] C8 零碎片时返回空对象而不是报错（前端据此显示 0/12、0/8）
+[PASS] C9 一个账号挂两个家庭 → AMBIGUOUS_MEMBER，且不带任何碎片数据
+[PASS] C10 函数签名里没有任何 family 参数（pronargs=0）
+[PASS] C11 组装函数只接受 p_vehicle_id，没有 family / cost 参数
+[PASS] C12 非成员组装 → NOT_MEMBER + zero_write
+[PASS] C13a birthday-star-6 由服务端配方表拒绝 → BIRTHDAY_VEHICLE_FORBIDDEN
+[PASS] C13b moto 由服务端配方表拒绝 → COIN_VEHICLE_FORBIDDEN
+[PASS] C13c not-a-real-car 由服务端配方表拒绝 → UNKNOWN_VEHICLE
+[PASS] C13d 非法车辆 ID 形态 → BAD_VEHICLE_ID
+[PASS] C14 12 片时组装成功（ASSEMBLED）且扣到 0
+[PASS] C15 车辆进入 owned，revision 前进 1
+[PASS] C16 事件里的设备标识是 v6:<uid>（不伪装成 r5dev_ 设备令牌）
+[PASS] C17 再装一次 → ALREADY_OWNED + zero_write，余额不再扣
+
+=== D 旧接口加守卫之后（匿名跨家庭被拒，赛车路仍通） ===
+[PASS] D1 anon 传别家 family → FORBIDDEN_SCOPE，返回里没有碎片字段
+[PASS] D2 旧快照函数签名未变（仍只有 1 个参数），多传参数会被数据库拒绝
+[PASS] D3 anon 拿自家设备令牌去领别家 → FORBIDDEN_SCOPE
+[PASS] D5 anon + 已撤销的设备令牌 → FORBIDDEN_SCOPE
+[PASS] D7 anon 伪造设备令牌组装 → FORBIDDEN_SCOPE + zero_write
+[PASS] D8 scope_ok 对空 family 一律 false；空设备在特权连接下视为「不声称设备」
+[PASS] D4 服务端连接 + 该家庭自己的老设备令牌 → 照常 CLAIMED（赛车那条路没坏）
+[PASS] D6 服务端连接且不声称设备 → 放行（云函数直连形态）
+[PASS] D9 设备路径可以连续领取（第三条记录仍 CLAIMED，未误伤）
+[PASS] D10 登录家长读自家 → 正常返回
+[PASS] D11 登录家长读别家 → FORBIDDEN_SCOPE
+[PASS] D12 child 账号读自家也不行（不是家长角色）→ FORBIDDEN_SCOPE
+[PASS] D13 service_role → 放行（服务端任务不受影响）
+[PASS] D14 无 claims 的服务端连接（云函数/迁移）→ 放行
+[PASS] D15 内部快照函数 anon 没有执行权（42501）
+[PASS] E1 所有越权尝试之后，正式家庭 revision 未变
+[PASS] E2 所有越权尝试之后，正式家庭 drops 未增（被拒=零写入）
+[PASS] E3 被拒的跨家庭领取没有留下任何行
+[PASS] E4 正式家庭仍然是 0 片（本轮没给正式家庭补发任何碎片）
+[PASS] E5 三个旧函数的签名一字未改（调用方无需改代码）
+[PASS] E6 六个函数都钉死了 search_path（防 search_path 注入）
+[PASS] E7 三个新函数都是 SECURITY DEFINER
+
+============================================================
+TOTAL  54/54 passed, 0 failed
+VERDICT PASS
