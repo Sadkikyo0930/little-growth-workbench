@@ -394,11 +394,16 @@ function render() {
 
   // 说明条：把「概率待确认」「稀有来源」讲清楚，不假装已经定稿
   const pct = prog.drop_percent;
-  const pctTxt = prog.drop_percent_status === 'pending-parent-confirmation'
-    ? `掉落比例仍是<b>待家长确认</b>的临时参数（当前配置 ${pct}%），正式发布前可调整。`
-    : `掉落比例 ${pct}%。`;
-  $('noticeText').innerHTML =
-    `学习徽章碎片只在「每周学习目标 / 掌握成就」完成后才会产出（学习平台侧尚未接入）。<br>${pctTxt}`;
+  // Probability is approved; activation and deployment are NOT authorized.
+  // The old database status string is retained as an inactive gate.
+  const pctTxt = prog.drop_percent_status === 'active'
+    ? `普通碎片基础掉落概率 ${pct}%。`
+    : `普通碎片基础掉落概率已确定为 ${pct}%；<b>奖励尚未启用</b>，当前不会发放任何新碎片。`;
+  const rareSources = Array.isArray(prog.rare_record_types) ? prog.rare_record_types : [];
+  const rareTxt = rareSources.length
+    ? '专属碎片仅由云端验证的合格成就产生，仍受每日上限控制。'
+    : '秋名疾影所需的专属碎片发放来源尚未接入，暂时无法靠新学习记录获得。';
+  $('noticeText').innerHTML = `${rareTxt}<br>${pctTxt}`;
 
   // 待组装
   const pending = progress.filter(p => !p.owned);

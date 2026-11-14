@@ -13,7 +13,9 @@ const checks=[
  ['member snapshot does not accept client family',member.includes("rpc('r5_fragment_member_snapshot', {}, who.token)")],
  ['member assembly accepts only car ID',member.includes("{ p_vehicle_id: v.vehicle_id }")],
  ['device token still checked by gateway',client.includes("'x-r5-device': device")],
+ ['rate confirmation does not claim rewards are active',html.includes('奖励尚未启用') && !html.includes('待家长确认</b>')],
+ ['rare award source accurately shown as unimplemented',html.includes('专属碎片发放来源尚未接入')],
  ['birthday and non-fragment vehicle separation preserved',html.includes('BIRTHDAY_VEHICLE_FORBIDDEN') && html.includes('COIN_VEHICLE_FORBIDDEN')],
 ];
 checks.forEach(([name,yes])=>{assert.ok(yes,name);console.log('PASS',name)});
-console.log('ALL 10 GARAGE CROSS-DEVICE THUMBNAIL CHECKS PASSED');
+console.log('ALL 12 GARAGE CROSS-DEVICE THUMBNAIL CHECKS PASSED');
