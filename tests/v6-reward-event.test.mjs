@@ -13,6 +13,8 @@ const checks=[
  ['reward overlay does not call claim twice',hook.includes('claimImpl:async()=>response')],
  ['rejected old records are discarded',hook.includes("'NOT_TODAY'")&&hook.includes("'RECORD_NOT_FOUND'")],
  ['reward accepts local state override',reward.includes('opts.loadStateImpl')],
+ ['family uploader queues only after successful insert',sync.indexOf('enqueueVerifiedCourse(item.record_id)')>sync.indexOf('ids.add(item.record_id)')],
+ ['R5 bridge queues only after cloud record verification',bridge.indexOf('enqueueVerifiedCourse(x.record_id)')>bridge.indexOf('var allThere = vf.known')],
  ['member claim uses no client family or cost',member.includes("{p_record_id:id}")],
 ];
 checks.forEach(([name,ok])=>{a.ok(ok,name);console.log('PASS',name)});

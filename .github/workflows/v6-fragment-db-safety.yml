@@ -45,6 +45,11 @@ jobs:
           set -o pipefail
           node tests/garage-thumbnail-priority.test.mjs | tee garage-thumbnail-priority.log
           grep -q "ALL 5 GARAGE THUMBNAIL PRIORITY CHECKS PASSED" garage-thumbnail-priority.log
+      - name: Verify reward delivery after cloud-confirmed course completion
+        run: |
+          set -o pipefail
+          node tests/v6-reward-event.test.mjs | tee reward-event.log
+          grep -q "ALL 12 REWARD EVENT CONTRACT CHECKS PASSED" reward-event.log
       - name: Verify native SQL and gateway fragment response contracts
         run: |
           set -o pipefail
@@ -118,6 +123,7 @@ jobs:
             family-auto-restore.log
             garage-device.log
             fragment-rpc.log
+            reward-event.log
             garage-thumbnail-priority.log
             v2-contract.log
             v6-smoke.log

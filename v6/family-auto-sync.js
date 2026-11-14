@@ -88,6 +88,11 @@ async function run(){
    var out=await db.from("growth_learning_records").insert(row);
    if(out&&out.error)throw out.error;
    ids.add(item.record_id);count++;
+   if(item.record_type==="course-complete"){
+    import("./r5/reward-hook.mjs").then(function(m){
+      m.enqueueVerifiedCourse(item.record_id);return m.resumeRewardQueue();
+    }).catch(function(){});
+   }
   }
   lastFingerprint=fp;
   saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",{state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()});
@@ -147,6 +152,9 @@ async function restoreMissing(){
 }
 function schedule(){
  try{
+  try{if(localStorage.getItem("v6-fragment-pending-v1"))
+   import("./r5/reward-hook.mjs").then(function(m){return m.resumeRewardQueue()}).catch(function(){});
+  }catch(e){}
   if(localStorage.getItem(ENABLED)==="yes")Promise.resolve(run()).catch(function(e){saveStatus("自动上传执行异常："+error(e),{state:"error"})});
   if(localStorage.getItem(RESTORE_OPT_IN)==="yes")Promise.resolve(restoreMissing()).catch(function(e){restoreStatus("自动补全异常："+error(e),"error")});
  }catch(e){saveStatus("同步初始化异常："+error(e),{state:"error"})}

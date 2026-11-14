@@ -1027,6 +1027,14 @@
       var pending = vf.known ? vf.missing.length : null;
       var noRows = rows.length === 0;
       var allThere = vf.known && vf.missing.length === 0 && !noRows;
+      if (allThere && up.uploaded > 0) {
+        rows.filter(function(x){return x.record_type === 'course-complete';})
+          .forEach(function(x){
+            import('./r5/reward-hook.mjs').then(function(m){
+              m.enqueueVerifiedCourse(x.record_id);return m.resumeRewardQueue();
+            }).catch(function(){});
+          });
+      }
       var stateName = !vf.known ? 'unverified' : (vf.missing.length ? 'partial' : 'ok');
       var pendingSync = pendingScoreSyncOf(st);
       var pendingVerify = pendingVerifyOf(st);
