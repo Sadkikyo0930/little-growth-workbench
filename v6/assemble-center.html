@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f63b7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="赛车组装中心">
+<title>赛车组装中心 · 小小赛车成长工坊</title>
+<style>
+  :root{
+    --blue:#0f63b7; --blue-d:#0a3f7c; --sky:#58b9ff; --sky-l:#ebf8ff;
+    --yellow:#ffcb2e; --yellow-d:#c9860b; --violet:#7b5cff; --violet-l:#efe7ff;
+    --ink:#153963; --ink-soft:#4d7099; --ok:#18a06a;
+    --card-shadow:0 8px 0 rgba(21,79,145,.22), 0 14px 26px rgba(24,76,138,.22);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%}
+  body{
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:linear-gradient(160deg,#58b9ff,#c7efff 45%,#ebf8ff);
+    background-attachment:fixed;
+    padding:calc(10px + env(safe-area-inset-top)) 0 calc(28px + env(safe-area-inset-bottom));
+  }
+  .wrap{max-width:720px;margin:0 auto;padding:0 14px}
+
+  /* ---------- 顶部 ---------- */
+  .head{display:flex;align-items:center;gap:10px;margin:2px 0 14px}
+  .back{
+    display:inline-flex;align-items:center;gap:5px;text-decoration:none;
+    background:rgba(255,255,255,.85);color:#12548f;border:3px solid #fff;
+    border-radius:999px;padding:9px 14px;font-size:14px;font-weight:900;
+    box-shadow:0 4px 0 rgba(21,79,145,.2);white-space:nowrap;
+  }
+  .head .ttl{flex:1;min-width:0}
+  .head h1{
+    margin:0;font-size:clamp(19px,5.4vw,26px);font-weight:1000;color:#fff;
+    text-shadow:0 3px #2767b8, 0 5px 12px #1b6cb0;letter-spacing:.5px;
+  }
+  .head .sub{margin:3px 0 0;font-size:12px;font-weight:800;color:#0e4f92;opacity:.85}
+
+  /* ---------- 碎片钱包 ---------- */
+  .wallets{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .wallet{
+    position:relative;background:#fff;border:4px solid #fff;border-radius:22px;
+    padding:12px 13px 11px;box-shadow:var(--card-shadow);overflow:hidden;
+  }
+  .wallet:before{
+    content:'';position:absolute;inset:0;border-radius:18px;
+    background:linear-gradient(165deg,#fffdf2,#fff6d9);z-index:0;
+  }
+  .wallet.rare:before{background:linear-gradient(165deg,#faf7ff,#efe7ff)}
+  .wallet>*{position:relative;z-index:1}
+  .wallet .ico{font-size:20px;line-height:1}
+  .wallet .lab{font-size:12px;font-weight:900;color:#8a6a12;margin:4px 0 2px}
+  .wallet.rare .lab{color:#6b46d6}
+  .wallet .val{font-size:27px;font-weight:1000;letter-spacing:-.6px;line-height:1.05;color:#3a2a00}
+  .wallet.rare .val{color:#42219c}
+  .wallet .val span{font-size:13px;font-weight:800;color:#9a8757}
+  .wallet.rare .val span{color:#8b7cc0}
+  .wallet .cap{font-size:11px;font-weight:800;color:#a08f60;margin-top:2px}
+  .wallet.rare .cap{color:#8b7cc0}
+
+  /* ---------- 保底 / 每日额度 ---------- */
+  .pity{
+    background:#fff;border:4px solid #fff;border-radius:20px;padding:11px 13px;
+    box-shadow:var(--card-shadow);display:flex;align-items:center;gap:9px;
+    font-size:12px;font-weight:900;color:#2c5b8c;margin-bottom:10px;flex-wrap:wrap;
+  }
+  .dots{display:flex;gap:5px}
+  .dot{width:15px;height:15px;border-radius:50%;background:#e2ecf8;box-shadow:inset 0 -2px #cfdcee}
+  .dot.on{background:linear-gradient(180deg,#ffd85c,#f5a800);box-shadow:0 0 8px rgba(255,190,40,.75), inset 0 -2px #c9860b}
+  .pity .cap{margin-left:auto;color:#0f63b7;font-weight:1000}
+
+  /* ---------- 说明条 ---------- */
+  .notice{
+    display:flex;gap:8px;align-items:flex-start;background:rgba(255,255,255,.72);
+    border:2px dashed #9ad4f5;border-radius:16px;padding:10px 12px;margin-bottom:14px;
+    font-size:12px;line-height:1.6;color:#26608f;font-weight:700;
+  }
+  .notice b{color:#0d4c86}
+  .notice .ic{font-size:14px;line-height:1.3}
+
+  /* ---------- 分区标题 ---------- */
+  .sect{display:flex;align-items:baseline;gap:8px;margin:16px 3px 9px}
+  .sect h2{
+    font-size:16px;margin:0;font-weight:1000;color:#fff;
+    text-shadow:0 2px #2767b8, 0 3px 7px #1b6cb0;
+  }
+  .sect em{font-style:normal;font-size:12px;font-weight:800;color:#12518f;opacity:.8}
+
+  /* ---------- 车辆卡 ---------- */
+  .car{
+    background:#fff;border:4px solid #fff;border-radius:24px;padding:13px;
+    box-shadow:var(--card-shadow);display:grid;grid-template-columns:86px 1fr;gap:12px;
+    align-items:center;margin-bottom:11px;
+  }
+  .thumb{
+    position:relative;width:86px;height:74px;border-radius:18px;display:grid;place-items:center;
+    background:repeating-linear-gradient(45deg,#eaf4ff,#eaf4ff 8px,#dcecfb 8px,#dcecfb 16px);
+    border:3px dashed #a9cee9;
+  }
+  .car.rare .thumb{background:repeating-linear-gradient(45deg,#f4efff,#f4efff 8px,#e7ddff 8px,#e7ddff 16px);border-color:#bda9ee}
+  /* 资源到位：占位虚线格换成真车图 */
+  .thumb.ready{
+    background:#fff;border:3px solid #e2eefb;overflow:hidden;padding:0;
+  }
+  .thumb.ready img{width:100%;height:100%;object-fit:contain;display:block}
+  .thumb .big{font-size:26px;line-height:1}
+  .thumb .hint{
+    position:absolute;left:0;right:0;bottom:-2px;text-align:center;font-size:9px;
+    font-weight:900;color:#3f7ba8;letter-spacing:.2px;
+  }
+  .car.rare .thumb .hint{color:#6b46d6}
+  .car h3{margin:0 0 3px;font-size:16px;font-weight:1000;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .tag{font-size:10px;font-weight:900;padding:3px 7px;border-radius:999px;background:#e6f2ff;color:#2f6ea5;letter-spacing:.3px}
+  .tag.rare{background:var(--violet-l);color:#6b46d6}
+  .car p{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink-soft);font-weight:700}
+  .car p.ph::before{content:'🎨 ';}
+  .bar{height:11px;border-radius:999px;background:#e4eef9;overflow:hidden;margin:9px 0 7px;box-shadow:inset 0 -2px #d3e2f2}
+  .bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#ffb703,#ffd447);transition:width .7s cubic-bezier(.2,.9,.2,1)}
+  .car.rare .bar i{background:linear-gradient(90deg,#7b5cff,#b9a6ff)}
+  .meta{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:#2f5c88}
+  .meta .num{white-space:nowrap}
+
+  .btn{
+    border:0;border-radius:14px;padding:10px 15px;font:inherit;font-size:13.5px;font-weight:1000;
+    background:linear-gradient(180deg,#ffd447,#f2ae06);color:#4a3000;
+    box-shadow:0 4px 0 #c9860b, 0 8px 16px rgba(201,134,11,.28);cursor:pointer;white-space:nowrap;
+  }
+  .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #c9860b}
+  .btn[disabled]{background:#d8e4f0;color:#8ba3bb;box-shadow:0 4px 0 #c3d3e3;cursor:not-allowed}
+  .btn.ghost{background:#eaf3fd;color:#2c5b8c;box-shadow:0 4px 0 #c6dcf0}
+  .owned{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:1000;color:var(--ok)}
+
+  .empty{
+    background:rgba(255,255,255,.66);border:2px dashed #a9d6f2;border-radius:18px;
+    padding:16px;text-align:center;font-size:13px;font-weight:800;color:#2f6ea5;
+  }
+
+  /* ---------- 已组装 ---------- */
+  .done{display:grid;grid-template-columns:1fr;gap:9px}
+  .done .row{
+    background:#fff;border:4px solid #fff;border-radius:18px;padding:11px 13px;
+    box-shadow:0 6px 0 rgba(21,79,145,.18);display:flex;align-items:center;gap:10px;
+    font-size:13.5px;font-weight:900;
+  }
+  .done .row .em{font-size:20px}
+  .done .row small{display:block;font-size:11px;font-weight:800;color:#8ba3bb;margin-top:2px}
+  .done .row .st{margin-left:auto;color:var(--ok);font-size:12px;white-space:nowrap}
+
+  .footnote{
+    margin:18px 3px 0;font-size:11.5px;line-height:1.7;font-weight:800;color:#12518f;opacity:.78;
+  }
+  .debug{
+    margin-top:12px;background:#0b2440;color:#bfe0ff;border-radius:14px;padding:11px 13px;
+    font:11px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;
+  }
+
+  /* ---------- 加载态 ---------- */
+  .loading .wallets,.loading .pity,.loading .notice,.loading .sect,.loading .car,.loading #pending,.loading #done{opacity:.55}
+  .spin{
+    display:inline-block;width:13px;height:13px;border:2.5px solid rgba(255,255,255,.45);
+    border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ---------- 吐司 ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translate(-50%,18px);
+    background:rgba(9,32,58,.95);color:#fff;padding:12px 18px;border-radius:16px;
+    font-size:13.5px;font-weight:800;opacity:0;pointer-events:none;transition:.26s;
+    max-width:88vw;text-align:center;z-index:60;box-shadow:0 10px 26px rgba(0,0,0,.3)
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  /* ---------- 确认抽屉 ---------- */
+  .sheet{position:fixed;inset:0;background:rgba(6,26,50,.62);display:none;place-items:end center;z-index:70;backdrop-filter:blur(3px)}
+  .sheet.show{display:grid}
+  .sheet .panel{
+    width:min(560px,100%);background:linear-gradient(180deg,#fff,#eff7ff);
+    border-radius:26px 26px 0 0;padding:18px 17px calc(16px + env(safe-area-inset-bottom));
+    box-shadow:0 -10px 30px rgba(0,0,0,.3);animation:up .3s cubic-bezier(.2,.9,.2,1)
+  }
+  @keyframes up{from{transform:translateY(44px);opacity:.5}to{transform:translateY(0);opacity:1}}
+  .sheet h4{margin:0 0 7px;font-size:18px;font-weight:1000;color:#0d3f74}
+  .sheet p{margin:0 0 14px;font-size:13.5px;line-height:1.65;color:#4d7099;font-weight:700}
+  .sheet .cost{background:#eaf3fd;border-radius:13px;padding:10px 12px;margin:0 0 14px;font-size:13px;font-weight:900;color:#0d4c86}
+  .sheet .row{display:flex;gap:9px}
+  .sheet .row .btn{flex:1;text-align:center}
+
+  /* ---------- 成功动画 ---------- */
+  .win{position:fixed;inset:0;display:none;place-items:center;z-index:80;padding:18px;
+    background:radial-gradient(circle at 50% 38%,rgba(255,203,46,.20),rgba(4,18,38,.94) 58%)}
+  .win.show{display:grid}
+  /* 文字必须有自己的底板：否则白字直接压在下方卡片上，真机上看不清 */
+  .win .box{text-align:center;max-width:420px;padding:10px 20px 18px;border-radius:26px;
+    background:linear-gradient(180deg,rgba(10,40,76,.95),rgba(5,22,44,.96));
+    border:2px solid rgba(255,255,255,.30);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .win .medal{
+    width:132px;height:132px;margin:0 auto 12px;border-radius:50%;
+    display:grid;place-items:center;font-size:64px;background:radial-gradient(circle at 50% 32%,#fff6d0,#ffc93c);
+    border:6px solid #fff;box-shadow:0 0 0 8px rgba(255,255,255,.22), 0 16px 40px rgba(0,0,0,.4);
+    animation:pop .62s cubic-bezier(.2,1.5,.4,1)
+  }
+  @keyframes pop{0%{transform:scale(.35) rotate(-16deg);opacity:0}70%{transform:scale(1.1) rotate(4deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+  .win h3{margin:0 0 5px;font-size:22px;font-weight:1000;color:#fff;text-shadow:0 3px 8px rgba(0,0,0,.45)}
+  /* 车名单列一行：长车名（如「碎片赛车·普通（占位）」）塞进标题会折出孤字 */
+  .win .win-sub{margin:0 0 8px;font-size:16px;font-weight:1000;color:#ffd34d;
+    text-shadow:0 2px 6px rgba(0,0,0,.5);word-break:break-word}
+  .win p{margin:0 0 16px;color:#d8ecff;font-size:13px;font-weight:800;line-height:1.6}
+  .win .row{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+  .confetti{position:fixed;inset:0;pointer-events:none;z-index:79;overflow:hidden}
+  .confetti i{position:absolute;width:9px;height:14px;border-radius:2px;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(112vh) rotate(720deg);opacity:.15}}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+
+  <header class="head">
+    <a class="back" id="backLink" href="./index.html">‹ 返回学习</a>
+    <div class="ttl">
+      <h1>🏎️ 赛车组装中心</h1>
+      <p class="sub">用学习碎片，把新赛车拼出来</p>
+    </div>
+  </header>
+
+  <section class="wallets">
+    <div class="wallet">
+      <div class="ico">⭐</div>
+      <div class="lab" id="labCommon">星星碎片</div>
+      <div class="val" id="wCommon">—</div>
+      <div class="cap" id="capCommon">攒够 12 片可组装</div>
+    </div>
+    <div class="wallet rare">
+      <div class="ico">🎖️</div>
+      <div class="lab" id="labRare">学习徽章碎片</div>
+      <div class="val" id="wRare">—</div>
+      <div class="cap" id="capRare">攒够 8 片可组装</div>
+    </div>
+  </section>
+
+  <div class="pity">
+    <span>保底进度</span>
+    <div class="dots" id="pityDots"></div>
+    <span id="pityHint" style="font-weight:800;color:#8ba3bb">—</span>
+    <span class="cap" id="capHint">今日 —</span>
+  </div>
+
+  <div class="notice" id="notice">
+    <span class="ic">ⓘ</span>
+    <span id="noticeText">正在读取云端数据…</span>
+  </div>
+
+  <div class="sect"><h2>待组装赛车</h2><em id="pendingCount"></em></div>
+  <div id="pending"></div>
+
+  <div class="sect"><h2>已经组装好的</h2><em id="doneCount"></em></div>
+  <div id="done"></div>
+
+  <p class="footnote">
+    金币购买的车（例如闪电小摩托 1500 金币）不在这里，请到赛车游戏的车库里用金币购买并驾驶。<br>
+    赛车组装中心只负责碎片收集与组装，不改变任何已有车辆的取得方式。
+  </p>
+  <div class="debug" id="debugBox" style="display:none"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="sheet" id="sheet">
+  <div class="panel">
+    <h4 id="sheetTitle">确认组装</h4>
+    <p id="sheetBody"></p>
+    <div class="cost" id="sheetCost"></div>
+    <div class="row">
+      <button class="btn ghost" id="sheetCancel">再想想</button>
+      <button class="btn" id="sheetOk">确定组装</button>
+    </div>
+  </div>
+</div>
+
+<div class="win" id="win">
+  <div class="box">
+    <div class="medal" id="winEmoji">🏎️</div>
+    <h3 id="winTitle">组装成功！</h3>
+    <div class="win-sub" id="winName">新赛车</div>
+    <p id="winBody">已经永久加进你的车库</p>
+    <div class="row">
+      <button class="btn" id="winClose">继续看看</button>
+    </div>
+  </div>
+</div>
+<div class="confetti" id="confetti"></div>
+
+<script type="module">
+import { loadState, assembleVehicle, buildProgress, assembledList, messageOf, FragmentError } from './r5/fragment-client.mjs';
+import { isDebug } from './r5/config.mjs';
+
+const $ = id => document.getElementById(id);
+const DEBUG = isDebug();
+
+let state = null;
+let progress = [];
+let pendingVehicle = null;
+
+function toast(msg, ms = 2600) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/** 占位缩略图：绝不画最终外观，只表示「这一格留给设计稿」 */
+function thumbHTML(p) {
+  const art = p.art || {};
+  /* 资源到位（服务端目录里 placeholder=false 且给了 thumb）→ 直接显示真车图；
+   * 任何一个条件不满足都退回占位格，不会出现破图。 */
+  if (!p.placeholder && art.thumb) {
+    return `<div class="thumb ready">
+    <img src="${art.thumb}" alt="${p.name}" loading="lazy" decoding="async">
+  </div>`;
+  }
+  return `<div class="thumb">
+    <span class="big">${p.tier === 'rare' ? '💎' : '🎨'}</span>
+    <span class="hint">外观设计中</span>
+  </div>`;
+}
+
+function render() {
+  const prog = state.program || {};
+  const commonId = prog.common_fragment_id || 'frag_common';
+  const rareId = prog.rare_fragment_id || 'frag_scholar';
+  const frags = state.fragments || {};
+
+  const needOf = fid => {
+    const hit = progress.find(p => p.rows.some(r => r.fragment_id === fid));
+    const row = hit && hit.rows.find(r => r.fragment_id === fid);
+    return row ? row.need : null;
+  };
+  const needCommon = needOf(commonId);
+  const needRare = needOf(rareId);
+
+  $('labCommon').textContent = prog.common_fragment_name || '星星碎片';
+  $('labRare').textContent = prog.rare_fragment_name || '学习徽章碎片';
+  $('wCommon').innerHTML = `${Number(frags[commonId] || 0)}${needCommon ? ` <span>/ ${needCommon}</span>` : ''}`;
+  $('wRare').innerHTML = `${Number(frags[rareId] || 0)}${needRare ? ` <span>/ ${needRare}</span>` : ''}`;
+  $('capCommon').textContent = needCommon ? `攒够 ${needCommon} 片可组装` : '普通碎片';
+  $('capRare').textContent = needRare ? `攒够 ${needRare} 片可组装` : '稀有专属碎片';
+
+  // 保底
+  const pityTarget = Number(prog.pity_target || 5);
+  const pity = Number(state.pity_points || 0);
+  $('pityDots').innerHTML = Array.from({ length: pityTarget })
+    .map((_, i) => `<i class="dot${i < pity ? ' on' : ''}"></i>`).join('');
+  $('pityHint').textContent = pity >= pityTarget - 1
+    ? '下一次必出 1 片！'
+    : `再 ${Math.max(0, pityTarget - pity)} 次不出必得 1 片`;
+
+  const d = state.daily || { normal: 0, cap: prog.daily_cap || 2 };
+  $('capHint').textContent = `今日 ${Number(d.normal || 0)} / ${Number(d.cap || prog.daily_cap || 2)}`;
+
+  // 说明条：把「概率待确认」「稀有来源」讲清楚，不假装已经定稿
+  const pct = prog.drop_percent;
+  const pctTxt = prog.drop_percent_status === 'pending-parent-confirmation'
+    ? `掉落比例仍是<b>待家长确认</b>的临时参数（当前配置 ${pct}%），正式发布前可调整。`
+    : `掉落比例 ${pct}%。`;
+  $('noticeText').innerHTML =
+    `学习徽章碎片只在「每周学习目标 / 掌握成就」完成后才会产出（学习平台侧尚未接入）。<br>${pctTxt}`;
+
+  // 待组装
+  const pending = progress.filter(p => !p.owned);
+  const ready = pending.filter(p => p.ready);
+  $('pendingCount').textContent = pending.length
+    ? (ready.length ? `${ready.length} 辆可以组装` : '继续学习攒碎片')
+    : '全部组装完成';
+
+  $('pending').innerHTML = pending.length ? pending.map(p => {
+    const rows = p.rows.map(r => `${r.name} ${r.have}/${r.need}`).join(' · ');
+    const pctW = Math.round(p.ratio * 100);
+    const action = p.ready
+      ? `<button class="btn" data-assemble="${p.vehicle_id}">组装</button>`
+      : `<button class="btn" disabled>还差 ${p.missing} 片</button>`;
+    const note = p.placeholder
+      ? `<p class="ph">开发占位：<span style="font-family:ui-monospace,Menlo,monospace">${p.vehicle_id}</span> · 外观与正式名称待设计稿通过家长验收后接入</p>`
+      : `<p>${p.note || ''}</p>`;
+    return `<div class="car ${p.tier === 'rare' ? 'rare' : ''}">
+      ${thumbHTML(p)}
+      <div>
+        <h3>${p.name}<span class="tag ${p.tier === 'rare' ? 'rare' : ''}">${p.tier === 'rare' ? '稀有' : '普通'}</span></h3>
+        ${note}
+        <div class="bar"><i style="width:${pctW}%"></i></div>
+        <div class="meta"><span class="num">${rows}</span><span style="margin-left:auto">${action}</span></div>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty">🎉 两辆碎片赛车都已经组装好啦</div>`;
+
+  // 已组装
+  const done = assembledList(state);
+  $('doneCount').textContent = done.length ? `${done.length} 辆` : '';
+  $('done').innerHTML = done.length ? `<div class="done">${done.map(x => {
+    const at = x.info && x.info.at ? new Date(Number(x.info.at)) : null;
+    const when = at && !isNaN(at) ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}` : '';
+    return `<div class="row">
+      <span class="em">${x.tier === 'rare' ? '💎' : '🏎️'}</span>
+      <span>${x.name}<small>${x.via}${when ? ' · ' + when : ''}</small></span>
+      <span class="st">✓ 已入库</span>
+    </div>`;
+  }).join('')}</div>` : `<div class="empty">还没有组装好的碎片赛车，先去学习攒碎片吧</div>`;
+
+  document.querySelectorAll('[data-assemble]').forEach(btn => {
+    btn.addEventListener('click', () => openConfirm(btn.dataset.assemble));
+  });
+
+  if (DEBUG) {
+    $('debugBox').style.display = 'block';
+    $('debugBox').textContent = JSON.stringify({
+      family: state.raw && state.raw.family_id,
+      revision: state.revision,
+      program_version: prog.version,
+      drop_percent: prog.drop_percent,
+      drop_percent_status: prog.drop_percent_status,
+      frag_common: frags[commonId] || 0,
+      frag_rare: frags[rareId] || 0,
+      pity_points: state.pity_points,
+      daily: state.daily,
+      vehicles: (prog.vehicles || []).map(v => ({ id: v.vehicle_id, cost: v.cost, art: v.art })),
+      non_fragment_vehicles: prog.non_fragment_vehicles,
+      legacy_slots: prog.legacy_slots,
+    }, null, 2);
+  }
+}
+
+async function refresh() {
+  try {
+    state = await loadState();
+    progress = buildProgress(state);
+    render();
+    $('wrap').classList.remove('loading');
+  } catch (e) {
+    const code = e instanceof FragmentError ? e.code : 'SERVER';
+    $('wrap').classList.remove('loading');
+    if (code === 'DEVICE') {
+      $('noticeText').innerHTML =
+        '<b>还没有连接家庭</b><br>请从赛车游戏车库点「去组装」进来，或使用家长发给你的那条带设备凭证的链接。';
+      $('pending').innerHTML = `<div class="empty">连接家庭后会显示待组装的赛车</div>`;
+      $('done').innerHTML = `<div class="empty">—</div>`;
+    } else {
+      toast(messageOf(code), 3200);
+      $('noticeText').innerHTML = `<b>云端没连上</b><br>${messageOf(code)}`;
+      $('pending').innerHTML = `<div class="empty">数据没读出来，下拉刷新或稍后再试</div>`;
+      $('done').innerHTML = `<div class="empty">—</div>`;
+    }
+  }
+}
+
+function openConfirm(vid) {
+  const p = progress.find(x => x.vehicle_id === vid);
+  if (!p) return;
+  if (!p.ready) { toast(`还差 ${p.missing} 片碎片`); return; }
+  pendingVehicle = vid;
+  $('sheetTitle').textContent = `组装「${p.name}」`;
+  $('sheetBody').textContent = '组装成功后这辆车会永久加入车库，碎片不会退回。';
+  $('sheetCost').textContent = '消耗：' + p.rows.map(r => `${r.name} ${r.need} 片`).join(' + ')
+    + `（现有 ${p.rows.map(r => `${r.name} ${r.have} 片`).join(' · ')}）`;
+  $('sheet').classList.add('show');
+}
+
+function closeSheet() {
+  $('sheet').classList.remove('show');
+  pendingVehicle = null;
+}
+
+async function doAssemble() {
+  const vid = pendingVehicle;
+  if (!vid) return;
+  const p = progress.find(x => x.vehicle_id === vid);
+  $('sheetOk').disabled = true;
+  $('sheetOk').textContent = '组装中…';
+  try {
+    const r = await assembleVehicle(vid);
+    const st = String((r && r.status) || '');
+    if (st === 'ASSEMBLED') {
+      closeSheet();
+      showWin(p);
+      await refresh();
+    } else if (st === 'INSUFFICIENT_FRAGMENTS') {
+      const lack = Object.values((r && r.deficit) || {}).reduce((a, b) => a + Number(b), 0);
+      toast(`碎片不够啦，还差 ${lack} 片`, 3000);
+      await refresh();
+    } else if (st === 'ALREADY_OWNED' || st === 'ALREADY_ASSEMBLED') {
+      toast('这辆车已经在车库里啦');
+      await refresh();
+    } else if (st === 'COIN_VEHICLE_FORBIDDEN') {
+      toast(messageOf('COIN'), 3200);
+    } else if (st === 'BIRTHDAY_VEHICLE_FORBIDDEN') {
+      toast(messageOf('FORBIDDEN'), 3200);
+    } else if (st === 'LEGACY_SLOT_RETIRED' || st === 'VEHICLE_NOT_ASSEMBLABLE') {
+      toast('这辆车不在组装目录里啦', 3000);
+    } else {
+      toast(messageOf('SERVER'), 3000);
+    }
+  } catch (e) {
+    // 网络失败绝不显示成功
+    toast(messageOf(e instanceof FragmentError ? e.code : 'SERVER'), 3400);
+  } finally {
+    $('sheetOk').disabled = false;
+    $('sheetOk').textContent = '确定组装';
+  }
+}
+
+function showWin(p) {
+  const name = (p && p.name) || '新赛车';
+  $('winEmoji').textContent = (p && p.tier === 'rare') ? '💎' : '🏎️';
+  $('winTitle').textContent = '组装完成！';
+  $('winName').textContent = name;
+  $('winBody').textContent = '已经永久加进你的车库。外观做好之后就能在赛车游戏里开上赛道。';
+  $('win').classList.add('show');
+  burst();
+}
+
+function burst() {
+  const box = $('confetti');
+  const colors = ['#ffcb2e', '#ff6b5a', '#2ec4b6', '#7b5cff', '#ffffff'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('i');
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.top = '-20px';
+    el.style.background = colors[i % colors.length];
+    el.style.animationDuration = (1.1 + Math.random() * 1.2) + 's';
+    el.style.animationDelay = (Math.random() * .5) + 's';
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 2800);
+  }
+}
+
+$('sheetCancel').addEventListener('click', closeSheet);
+$('sheetOk').addEventListener('click', doAssemble);
+$('winClose').addEventListener('click', () => $('win').classList.remove('show'));
+$('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+
+// 把 ?d= 继续传给首页，保证返回后仍然是同一台设备
+try {
+  const d = new URLSearchParams(location.search).get('d');
+  const fam = new URLSearchParams(location.search).get('family');
+  const qs = new URLSearchParams();
+  if (d) qs.set('d', d);
+  if (fam) qs.set('family', fam);
+  const s = qs.toString();
+  if (s) $('backLink').href = './index.html?' + s;
+} catch { /* 忽略 */ }
+
+$('wrap').classList.add('loading');
+refresh();
+</script>
+</body>
+</html>
