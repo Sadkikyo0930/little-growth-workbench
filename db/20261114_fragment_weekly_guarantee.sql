@@ -42,6 +42,9 @@ BEGIN
      OR v_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN
     RETURN jsonb_build_object('status','FORBIDDEN_SCOPE','zero_write',true);
   END IF;
+  IF COALESCE(v_snapshot->'program'->>'drop_percent_status','') <> 'active' THEN
+    RETURN jsonb_build_object('status','REWARD_NOT_ACTIVE','zero_write',true);
+  END IF;
   v_record := 'r5-weekly-' || v_family || '-' || to_char(v_week, 'YYYYMMDD');
 
   -- 已结算的本周奖励不重复写入；返回现有账本的结果。
