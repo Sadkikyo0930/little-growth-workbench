@@ -607,9 +607,11 @@
   function collectCompletions(state, day, todayStr) {
     var device = deviceId();
     var subs = (state.v6Course && state.v6Course.subjects) || {};
+    var alreadyCloud = (state.v6Course && state.v6Course.remoteRestored) || {};
     var pack = subs[day] || {};
     var out = [];
     Object.keys(pack).forEach(function (name) {
+      if (alreadyCloud[day] && alreadyCloud[day][name]) return;
       var iso = pack[name];
       if (!iso || !Number.isFinite(Date.parse(iso))) return;
       var localDate = ymd(new Date(iso));
