@@ -223,7 +223,10 @@ console.log('\n=== H 阻断项 3：配置 / 学习记录 / 白名单 / 成本由
   let db = await newStack();
 
   // H1 调用方传 want=drop 但服务端概率是 0 → 不掉
-  await setConfig(db, { drop_percent: 0 });
+  // 生产默认的可结算类型是 ['course-complete']（与线上云函数 LEARNING_KINDS_OK 一致）。
+  // 这里的种子记录多为 'answer'，显式声明本组把 answer 也算作可结算，才能单独验证
+  // 「概率与上限只认服务端」这一件事，不被记录类型过滤干扰。
+  await setConfig(db, { drop_percent: 0, eligible_record_types: ['answer', 'course-complete'] });
   await asServer(db);
   const h1 = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1',
       '{"want":"drop","fragment_id":"frag_scholar","daily_cap":9,"pity_target":2}'::jsonb) AS r`);
@@ -295,7 +298,9 @@ console.log('\n=== H 阻断项 3：配置 / 学习记录 / 白名单 / 成本由
   ok('H13', 'v1 遗留槽位 → LEGACY_SLOT_RETIRED', h13.status === 'LEGACY_SLOT_RETIRED', h13.status);
 
   // H14 配置是唯一事实来源：改表立即生效
-  await setConfig(db, { drop_percent: 100 });
+  // 本组在第 7 项之后重建过库，配置回到生产默认（只认 course-complete）；
+  // 这里的种子记录是 'answer'，所以重新声明一次可结算类型。
+  await setConfig(db, { drop_percent: 100, eligible_record_types: ['answer', 'course-complete'] });
   await asServer(db);
   await db.exec(`INSERT INTO public.growth_learning_records(record_id,family_id,record_type,subject,learning_day,created_at)
                  VALUES ('lr-other-fresh','${OTHER}','answer','语文',3, now())`);
@@ -459,7 +464,8 @@ console.log('\n=== K 家长未批准时所有奖励发放路径必须零写入 =
     (SELECT count(*)::int FROM public.r5_fragment_state WHERE family_id='${OTHER}') AS states`);
   ok('K5', '暂停后仍完全零写入', JSON.stringify(before) === JSON.stringify(pausedAfter), {before,pausedAfter});
 
-  await setConfig(db, { status: 'active', drop_percent: 100, rare_record_types: [] });
+  await setConfig(db, { status: 'active', drop_percent: 100, rare_record_types: [],
+                        eligible_record_types: ['answer', 'course-complete'] });
   const active = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
   ok('K6', '只有明确 active 才能首次领取原记录', active.status === 'CLAIMED' && Number(active.granted_normal) === 1, active);
   const duplicate = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
@@ -475,8 +481,12 @@ console.log('\n=== L 稀有碎片端到端契约（仅合成库测试，正式�
 {
   const db=await newStack();
   await asServer(db);
-  const defaultRare=await one(db,"SELECT cardinality(rare_record_types) AS n FROM public.r5_reward_config WHERE family_id='*'");
-  ok('L1','默认稀有奖励来源关闭，不能自动给真实家庭发专属碎片',Number(defaultRare.n)===0,defaultRare);
+  // 线上云函数 RARE_SOURCE_KINDS 就是这四类。默认值必须与它一致，否则家长 RPC
+  // 路径会静默少发稀有碎片，与赛车云函数路径行为不一致。
+  const defaultRare=await one(db,"SELECT array_to_string(rare_record_types, ',') AS t FROM public.r5_reward_config WHERE family_id='*'");
+  const RARE_EXPECT='weekly-goal,weekly_goal,mastery,mastery-achievement';
+  ok('L1','默认稀有来源与线上云函数一致（weekly-goal / mastery 四类），不多不少',
+    defaultRare.t===RARE_EXPECT,defaultRare);
   await setConfig(db,{drop_percent:0,rare_record_types:['answer'],rare_daily_cap:1});
   const first=await rpc(db,`SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
   ok('L2','合成启用白名单后，第一条真实学习记录获得 1 片稀有碎片',
@@ -561,7 +571,7 @@ console.log('\n=== N 家长登录模式领取碎片 · 设备令牌非必需 ===
   await asParent(db,'r5-selftest-parent');
   const paused=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
   ok('N5','即使已登录家长，奖励未启用仍零写',paused.status==='REWARD_NOT_ACTIVE'&&paused.zero_write===true,paused);
-  await setConfig(db,{status:'active',drop_percent:100});
+  await setConfig(db,{status:'active',drop_percent:100,eligible_record_types:['answer','course-complete']});
   await asParent(db,'r5-selftest-parent');
   const earned=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
   ok('N6','隔离启用后家长模式复用 60% 所属的服务端领取规则',

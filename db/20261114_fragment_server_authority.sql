@@ -75,8 +75,9 @@ CREATE TABLE IF NOT EXISTS public.r5_reward_config (
                           CHECK (rare_daily_cap BETWEEN 0 AND 10),
   pity_target           integer NOT NULL DEFAULT 5
                           CHECK (pity_target BETWEEN 2 AND 50),
-  eligible_record_types text[] NOT NULL DEFAULT ARRAY['answer', 'course-complete']::text[],
-  rare_record_types     text[] NOT NULL DEFAULT ARRAY[]::text[],
+  eligible_record_types text[] NOT NULL DEFAULT ARRAY['course-complete']::text[],
+  rare_record_types     text[] NOT NULL DEFAULT
+                          ARRAY['weekly-goal', 'weekly_goal', 'mastery', 'mastery-achievement']::text[],
   status                text   NOT NULL DEFAULT 'pending-parent-confirmation',
   updated_at            timestamptz NOT NULL DEFAULT now()
 );

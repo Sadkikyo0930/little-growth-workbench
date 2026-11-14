@@ -32,8 +32,8 @@ export async function resumeRewardQueue() {
   busy=true;lastTry=Date.now();
   try {
     const state=await memberState();
-    // 60% probability is approved, but this flag remains inactive until
-    // separately authorized CloudBase migration and activation.
+    // The 60% rule is approved and live. The flag is read from the server snapshot
+    // only — an offline or stale page can never decide rewards are on by itself.
     if(state.program?.drop_percent_status !== 'active')return {status:'INACTIVE'};
     const recordId=items[0];
     const response=await memberClaim(recordId);

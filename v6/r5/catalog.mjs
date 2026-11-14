@@ -20,7 +20,7 @@ export const CATALOG_SOURCE = 'r5-racing-save/FRAGMENT_PROGRAM (v2, 2026-11-12 �
 
 export const FRAGMENT_PROGRAM = Object.freeze({
   version: 'v2',
-  /* 这份目录是离线展示兜底。概率 60% 已确认，但生产奖励仍未启用。 */
+  /* 这份目录是离线展示兜底。概率 60% 已确认并已正式启用。 */
   catalog_only: true,
   common_fragment_id: 'frag_common',
   common_fragment_name: '星星碎片',
@@ -29,10 +29,10 @@ export const FRAGMENT_PROGRAM = Object.freeze({
   daily_cap: 2,
   rare_daily_cap: 1,
   pity_target: 5,
-  /* 家长已确认 60% 基础概率。该旧状态名仅代表“生产奖励未激活”，
-   * 不是允许客户端自主发奖；真实规则与启停仍由服务端校验。 */
+  /* 家长已确认并正式启用 60% 基础概率。真实规则仍由服务端 r5_reward_config 决定，
+   * 这里只是离线兜底展示。 */
   drop_percent: 60,
-  drop_percent_status: 'pending-parent-confirmation',
+  drop_percent_status: 'active',
   vehicles: Object.freeze([
     Object.freeze({
       vehicle_id: 'frag_car_common_01',

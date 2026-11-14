@@ -397,10 +397,11 @@ function render() {
   const d = state.daily || { normal: 0, cap: prog.daily_cap || 2 };
   $('capHint').textContent = `今日 ${Number(d.normal || 0)} / ${Number(d.cap || prog.daily_cap || 2)}`;
 
-  // 说明条：把「概率待确认」「稀有来源」讲清楚，不假装已经定稿
+  // 说明条：把「概率」「稀有来源」讲清楚，不假装已经定稿
   const pct = prog.drop_percent;
-  // Probability is approved; activation and deployment are NOT authorized.
-  // The old database status string is retained as an inactive gate.
+  // Probability is approved AND the reward system is live. The gate string still
+  // comes from the server (r5_reward_config.status); it is never set locally,
+  // so an offline page can never flip itself into "rewards are on".
   const pctTxt = prog.drop_percent_status === 'active'
     ? `普通碎片基础掉落概率 ${pct}%。`
     : `普通碎片基础掉落概率已确定为 ${pct}%；<b>奖励尚未启用</b>，当前不会发放任何新碎片。`;
