@@ -13,6 +13,36 @@
 
 import { claimFragment, loadState, buildProgress, FragmentError, messageOf } from './fragment-client.mjs';
 
+/**
+ * Fail-closed reward status policy.
+ * Only the two explicitly acknowledged server outcomes are accepted.
+ * Never treat a new/unknown failure code as a successful reward.
+ */
+export function rewardClaimDecision(code) {
+  const status = String(code || '');
+  if (status === 'CLAIMED' || status === 'ALREADY_CLAIMED') {
+    return { accepted: true, status, message: '' };
+  }
+  const reasons = {
+    REWARD_NOT_ACTIVE: '碎片奖励还没有启用，今天不会扣次数或发放碎片',
+    FORBIDDEN_SCOPE: '当前设备或家庭没有领取权限',
+    RECORD_NOT_FOUND: '云端没有找到这条学习记录',
+    BAD_RECORD_ID: '学习记录编号不正确',
+    NOT_TODAY: '这不是今天完成的学习记录',
+    CONFIG_MISSING: '奖励配置尚未准备好',
+    SAVE_NOT_INITIALIZED: '赛车云端存档还没有准备好',
+    LEARNING_RECORD_NOT_FOUND: '云端没有找到今天的这条学习记录',
+    LEARNING_RECORD_NOT_REWARDABLE: '这条记录不是「学习完成」记录',
+    LEARNING_RECORD_SUBJECT_INVALID: '这条记录的科目不在四科之内',
+    LEARNING_RECORD_NOT_EFFECTIVE: '这条记录不算有效完成',
+    LEARNING_RECORD_NO_DAY: '这条记录里没有完成时间',
+    LEARNING_RECORD_NOT_TODAY: '这是以前的学习记录，今天不结算',
+    SYNC_DISABLED_PROD: '这个家庭还没有开通赛车奖励',
+    R5_BAD_LEARNING_RECORD: '学习记录编号看起来不对',
+  };
+  return { accepted: false, status, message: reasons[status] || '云端没有确认成功结算，这次不会显示已领取' };
+}
+
 const CSS = `
 .vfr{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:16px;
   background:radial-gradient(circle at 50% 28%,rgba(88,185,255,.55),rgba(9,32,58,.9) 64%);
@@ -121,21 +151,12 @@ export async function showFragmentReward(opts = {}) {
   const status = String((result && result.status) || '');
   const outcome = String((result && result.outcome) || '');
 
-  /* 明确的业务拒绝：绝不显示成「没掉落」或「已获得」 */
-  const REJECT = {
-    LEARNING_RECORD_NOT_FOUND: '云端没有找到今天的这条学习记录',
-    LEARNING_RECORD_NOT_REWARDABLE: '这条记录不是「学习完成」记录',
-    LEARNING_RECORD_SUBJECT_INVALID: '这条记录的科目不在四科之内',
-    LEARNING_RECORD_NOT_EFFECTIVE: '这条记录不算有效完成',
-    LEARNING_RECORD_NO_DAY: '这条记录里没有完成时间',
-    LEARNING_RECORD_NOT_TODAY: '这是以前的学习记录，今天不结算',
-    SYNC_DISABLED_PROD: '这个家庭还没有开通赛车奖励',
-    R5_BAD_LEARNING_RECORD: '学习记录编号看起来不对',
-  };
-  if (REJECT[status]) {
+  /* 服务端确认前严禁显示获得碎片；未知状态也必须拒绝。 */
+  const decision = rewardClaimDecision(status);
+  if (!decision.accepted) {
     overlay.querySelector('.card').innerHTML = `${STAR}
       <h3>这次没能结算</h3>
-      <p class="sub">${REJECT[status]}</p>
+      <p class="sub">${decision.message}</p>
       <button class="btn" data-close>知道了</button>`;
     overlay.querySelector('[data-close]').addEventListener('click', close);
     return { ok: false, status };

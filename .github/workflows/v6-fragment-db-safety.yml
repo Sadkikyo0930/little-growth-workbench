@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Check denied/unknown reward status cannot show success
+        run: |
+          set -o pipefail
+          node tests/fragment-reward-status.test.mjs | tee reward-ui.log
+          grep -q "ALL 13 REWARD UI STATUS TESTS PASSED" reward-ui.log
       - name: Assert reward gate and negative cases
         run: |
           set -o pipefail
@@ -54,6 +59,7 @@ jobs:
           retention-days: 7
           path: |
             authority.log
+            reward-ui.log
             authz.log
             atomicity.log
             reversal.log
