@@ -69,6 +69,7 @@ console.log('PASS forward migration COMMIT changes catalog');
 
 const reverse=`
   -- Drop new wrapper RPCs before their dependencies.
+  DROP FUNCTION public.r5_fragment_member_claim(text);
   DROP FUNCTION public.r5_fragment_member_assemble(text);
   DROP FUNCTION public.r5_fragment_member_snapshot();
 `;

@@ -299,6 +299,24 @@ BEGIN
     RETURN jsonb_build_object('status', 'SAVE_NOT_INITIALIZED', 'zero_write', true);
   END IF;
 
+  -- The same course/day/subject may be uploaded on several authorized devices
+  -- with different record IDs. Locking the family save above serializes this check.
+  -- Only one of these cloud records may earn a fragment reward.
+  IF v_kind = 'course-complete' THEN
+    SELECT * INTO v_prev FROM public.r5_fragment_drops d
+     WHERE d.family_id = p_family
+       AND d.record_day = v_day
+       AND d.record_kind = v_kind
+       AND d.subject = v_subject
+     ORDER BY d.created_at, d.source_record_id LIMIT 1;
+    IF FOUND THEN
+      RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(
+        'status','ALREADY_CLAIMED', 'duplicate_course',true,
+        'granted_normal',v_prev.fragment_count,
+        'granted_rare',v_prev.rare_count, 'zero_write',true);
+    END IF;
+  END IF;
+
   INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family)
   ON CONFLICT (family_id) DO NOTHING;
   SELECT * INTO v_state FROM public.r5_fragment_state st

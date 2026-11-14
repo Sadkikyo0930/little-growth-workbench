@@ -362,6 +362,45 @@ console.log('\n=== D 旧接口加守卫之后（匿名跨家庭被拒，赛车�
   await db.close();
 }
 
+
+/* ================================================================ F: V6 member reward */
+console.log('\n=== F 家庭成员凭真实学习记录领碎片与跨设备去重 ===');
+{
+ const db=await newStack();
+ await asParent(db,MOM);
+ const first=await rpc(db,`SELECT public.r5_fragment_member_claim('lr-official-today-3') AS r`);
+ ok('F1','妈妈按家庭成员 JWT 领取真实课程记录',
+   first.status==='CLAIMED'&&first.zero_write===false,first);
+ await asServer(db);
+ await db.exec(`INSERT INTO public.growth_learning_records
+   (record_id,family_id,record_type,subject,learning_day,created_at)
+   VALUES ('v6-other-device-course','${OFFICIAL}','course-complete','科学',1,now())`);
+ await asParent(db,DAD);
+ const duplicate=await rpc(db,`SELECT public.r5_fragment_member_claim('v6-other-device-course') AS r`);
+ ok('F2','爸爸另一设备上传同一天同科的记录不会重复发碎片',
+   duplicate.status==='ALREADY_CLAIMED'&&duplicate.duplicate_course===true&&duplicate.zero_write===true,duplicate);
+ const foreign=await rpc(db,`SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r`);
+ ok('F3','家长不能领其他家庭的学习记录',
+   foreign.status==='RECORD_NOT_FOUND'&&foreign.zero_write===true,foreign);
+ await asAnon(db);
+ const blocked=await denied(()=>db.exec("SELECT public.r5_fragment_member_claim('lr-official-today-3')"));
+ ok('F4','未登录的匿名调用方没有领取 RPC 执行权',blocked.denied&&blocked.code==='42501',blocked);
+ await asServer(db);
+ const rev=await one(db,`SELECT count(*)::int n FROM public.r5_fragment_drops WHERE family_id='${OFFICIAL}'`);
+ ok('F5','跨设备重复提交仍只产生一条领取记录',Number(rev.n)===1,rev);
+ await db.close();
+}
+{
+ const db=await newStack();
+ await asServer(db);
+ await db.exec("UPDATE public.r5_reward_config SET status='paused' WHERE family_id='*'");
+ await asParent(db,MOM);
+ const paused=await rpc(db,`SELECT public.r5_fragment_member_claim('lr-official-today-3') AS r`);
+ ok('F6','即使已登录妈妈，奖励暂停也必须零写入',
+   paused.status==='REWARD_NOT_ACTIVE'&&paused.zero_write===true,paused);
+ await db.close();
+}
+
 /* ================================================================ 汇总 */
 console.log('\n' + '='.repeat(60));
 console.log(`TOTAL  ${passed}/${passed + failed} passed, ${failed} failed`);

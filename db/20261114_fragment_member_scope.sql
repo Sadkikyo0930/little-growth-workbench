@@ -133,13 +133,48 @@ BEGIN
 END;
 $function$;
 
+
+-- ---------------------------------------------------------------------------
+-- 2b. Authenticated V6: claim only an already-persisted learning record.
+-- Family is derived from JWT member lookup; no browser-provided family,
+-- drop percentage, vehicle price, or device authority is accepted.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.r5_fragment_member_claim(p_record_id text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_snapshot jsonb;
+  v_family text;
+  v_uid text;
+BEGIN
+  v_snapshot := public.r5_fragment_member_snapshot();
+  IF v_snapshot IS NULL OR v_snapshot->>'status' IS DISTINCT FROM 'OK' THEN
+    RETURN jsonb_build_object(
+      'status', COALESCE(v_snapshot->>'status','UNAUTHENTICATED'),
+      'zero_write', true
+    );
+  END IF;
+  v_family := NULLIF(v_snapshot->>'family_id', '');
+  v_uid := NULLIF(auth.jwt()->>'sub','');
+  IF v_family IS NULL OR v_uid IS NULL THEN
+    RETURN jsonb_build_object('status','FORBIDDEN_SCOPE','zero_write',true);
+  END IF;
+  RETURN public.r5_fragment_claim(v_family,'v6:' || v_uid,p_record_id,'{}'::jsonb);
+END;
+$function$;
+
 -- ---------------------------------------------------------------------------
 -- 3. 授权：只给已登录用户。anon 一律没有执行权。
 -- ---------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.r5_fragment_member_snapshot() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.r5_fragment_member_assemble(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.r5_fragment_member_claim(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.r5_fragment_member_snapshot() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.r5_fragment_member_assemble(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.r5_fragment_member_claim(text) TO authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 4. 预检（只读，跑完看清楚再决定是否继续）
