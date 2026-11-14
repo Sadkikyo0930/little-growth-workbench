@@ -1,0 +1,186 @@
+{
+  "captured_at": "2026-11-14T10:05:00+08:00",
+  "mode": "read-only",
+  "candidate": "e4afc8c + this round's increments",
+  "authorised_writes_performed": [],
+
+  "backup_capability": {
+    "verdict": "no native backup/restore, but a restorable logical backup exists and was exercised",
+    "probes": {
+      "current_user": "cloudbase_postgres_postgres_130fh140",
+      "rolsuper": false,
+      "rolreplication": false,
+      "server_version": "17.11",
+      "archive_mode": "on",
+      "archive_command": "sh ./pg_xlog_archive.sh %p %f ./pg_xlog_archive.conf",
+      "pg_stat_archiver": "all columns NULL (archived_count, last_archived_wal, last_archived_time)",
+      "pg_stat_replication_rows": 0,
+      "inet_server_addr": "28.248.135.70",
+      "inet_server_port": 50967,
+      "note_tcp": "VPC-internal address; no public pg_dump path and no credentials",
+      "mcp_surface": "SQL + migration only; no backup/restore action exposed"
+    },
+    "restore_is_possible_because": "the current role holds SELECT/INSERT/UPDATE/DELETE on all 20 public tables",
+    "drill": {
+      "script": "tests/isolated/restore-drill.mjs",
+      "result": "19/19 PASS",
+      "tables": {
+        "r5_parent_settings": { "rows": 2, "hash": "442c542f65a8848bddce2c132303da77", "restored_identical": true },
+        "r5_daily_plan": { "rows": 10, "hash": "1fb63691eaf659684ccc4b6bda9eefa9", "restored_identical": true },
+        "r5_subject_template": { "rows": 30, "hash": "ad1b433d34b9c6d7597ce15ab49976f9", "restored_identical": true },
+        "r5_racing_saves": { "rows": 1, "hash": "6b3a32fbccfe8d075d12afcf64b71d1c", "restored_identical": true },
+        "r5_daily_usage": { "rows": 2, "hash": "57901678ac240858d38b3aa577f51c8c", "restored_identical": true },
+        "growth_family_members": { "rows": 10, "hash": "1dd83a66a2f8964ad7fb64afaed895a7", "restored_identical": true }
+      },
+      "method": "export with jsonb_agg(to_jsonb(x) ORDER BY key); insert into a fresh instance; recompute the same md5 with timezone=Asia/Shanghai; then wipe the tables and recover from the dump alone",
+      "not_covered": ["growth_learning_records (126 rows, 73 of them the formal family)"]
+    },
+    "open_item": "the full 20-table backup and its restore drill must be run inside the maintenance window; a dump taken now would be stale by deploy time"
+  },
+
+  "rehearsal": {
+    "script": "tests/isolated/rehearsal.mjs",
+    "result": "31/31 PASS",
+    "shape_source": "read-only read of normal-goose-d5g4qyzr8bb389a4a",
+    "shape": {
+      "plan_rows": 6,
+      "plan_days": [1, 1, 1, 2, 2, 1],
+      "records": 73,
+      "record_groups": [
+        "day1 科学: 5 answers (5 correct) on 2026-11-11 + 1 course-complete on 2026-11-11",
+        "day1 英语: 14 answers (14 correct) on 2026-11-12 + 1 course-complete on 2026-11-12",
+        "day6 数学: 2 answers (2 correct) on 2026-11-06",
+        "day9 语文: 47 answers (37 correct) on 2026-11-09",
+        "3 × sync-test, learning_day NULL"
+      ],
+      "members": ["owner", "parent", "grandparent"],
+      "settings": { "daily_seconds": 1800, "bonus_seconds": 0, "enabled": true }
+    },
+    "outcome": {
+      "snapshot": {
+        "plan_max_day": 2,
+        "plan_high_water_date": "2026-11-11",
+        "latest_plan_day": 1,
+        "rollback_plan_rows": [{ "date": "2026-11-13", "day": 1 }],
+        "corrections_required": ["PLAN_HISTORY_ROLLBACK"],
+        "blocking": [],
+        "allowed_window": [3, 3]
+      },
+      "initialised_day": 3,
+      "initialized_from": "parent_confirmed",
+      "records_written_by_initialisation": 0,
+      "plans_written_by_initialisation": 0,
+      "publish_with_stale_client": { "study_day": 3, "stale_client": true, "subjects": ["数学", "英语"] },
+      "gate_without_evidence_allowed": false,
+      "gate_one_subject_allowed": false,
+      "gate_60pct_allowed": false,
+      "gate_both_subjects_80pct_allowed": true,
+      "auto_advanced_to_day4": false,
+      "historical_records_unchanged": "73 rows, md5 identical",
+      "quota_unchanged": [1800, 0, true]
+    }
+  },
+
+  "subject_cross_check": {
+    "parent_statement_day3": ["数学", "英语"],
+    "r5_subject_template_day3": ["数学", "英语"],
+    "hosted_november_subject_schedule_day3": ["数学", "英语"],
+    "hosted_schedule_version": "2026-11-04",
+    "parent_statement_day2": ["语文", "数学"],
+    "r5_subject_template_day2": ["语文", "数学"],
+    "conclusion": "the parent's day numbering and the system's day numbering are the same numbering"
+  },
+
+  "gateway": {
+    "route": { "path": "/r5", "upstream": "r5-gateway", "type": "SCF", "enable_auth": false },
+    "function_code_sha256": "c95c3d4b961f9441bf6dcb9b0947f4ba29095ca63f15538734a4abc26e22636c",
+    "code_sha256_recomputed_locally": true,
+    "db_calls": {
+      "mechanism": "sqlAs(claims) sets request.jwt.claims only; ExecutePGSql is called without a Role parameter",
+      "implication": "the function path relies on request.jwt.claims, not on the SQL role, so the SQL grants matter for the direct REST path"
+    },
+    "client_data_api": {
+      "base": "https://normal-goose-d5g4qyzr8bb389a4a.api.tcloudbasegateway.com/v1/rdb/rest",
+      "unauthenticated_probe": {
+        "GET /growth_learning_records": 401,
+        "POST /rpc/r5_status": 401,
+        "code": "MISSING_CREDENTIALS"
+      },
+      "implication": "clients reach /rpc/ directly, so revoking authenticated EXECUTE on r5_gate_status_core genuinely closes the p_ignore_override bypass"
+    },
+    "live_bridge_rpc_surface": ["r5_status", "r5_publish_today"],
+    "candidate_adds_or_reuses": ["r5_advance_day (new)", "r5_claim_answers (existing in DB)"]
+  },
+
+  "hosted_web_layer": {
+    "checked_at": "2026-11-14T10:01:00+08:00",
+    "files": {
+      "/v6/index.html": { "status": 200, "bytes": 1139535 },
+      "/v6/r5-bridge.test.js": { "status": 200, "bytes": 34265, "is_the_loaded_bridge": true },
+      "/v6/r5-bridge.js": { "status": 404 },
+      "/v6/sw.js": { "status": 404 },
+      "/v6/pwa.js": { "status": 200, "bytes": 5461, "registers": "./sw.js" },
+      "/v6/november-subject-schedule.js": { "status": 200, "bytes": 2429 },
+      "/v6/family-auto-sync.test.js": { "status": 200, "bytes": 3090 }
+    },
+    "index_html_external_scripts": [
+      "./r5-test-guard.js", "./weekly-exam.js", "./clean-art.js",
+      "./chinese-classroom.js", "./pwa.js", "./family-auto-sync.test.js", "./r5-bridge.test.js"
+    ],
+    "live_bridge_markers": {
+      "BRIDGE_BUILD": "absent",
+      "authoritative_day": "absent",
+      "stale_device_day": "absent",
+      "verdict": "the deployed bridge has no authoritative-day logic"
+    },
+    "service_worker": {
+      "registered_by": "pwa.js line 68 -> ./sw.js",
+      "sw_present": false,
+      "effective_state": "no service worker is active in production today",
+      "candidate_sw_has_kill_switch": false,
+      "candidate_sw_uses": ["skipWaiting()", "clients.claim()"],
+      "implication": "uploading sw.js is a first-time activation and is one-way; rollback needs a self-unregistering sw.js"
+    }
+  },
+
+  "baseline_recheck": {
+    "unchanged": true,
+    "formal_records": { "count": 73, "fingerprint": "eb29dabf6924badc84457397613eeb26" },
+    "plan_rows": 6,
+    "plan_days": [1, 1, 1, 2, 2, 1],
+    "frozen_function_md5": {
+      "r5_gate_status_core": "f78aceeba9c934fa8f4b5c754daba101",
+      "r5_publish_today": "b0d8d2deb58ab5240c9207e6b5081ea3",
+      "r5_claim_answers": "45ef62312ed179f299700946c9c7863d",
+      "r5_status": "23aba2d6e510cf3b687557784cd3a8f2",
+      "r5_gate_status": "8044d55ecc72f87291627818ca19d52b",
+      "r5_child_entry": "1bb9367ef5118b236ced97775c42885b",
+      "r5_parent_waive": "1230725f9add8135336d699d0d541d01",
+      "r5_assert_member": "f69530d39fe248eee97950fefb46f27a",
+      "r5_override_active": "470536538077c747e1535711b9854cf4"
+    },
+    "acl": {
+      "service_role_and_owner_only": ["r5_gate_status_core", "r5_gate_status", "r5_override_active"],
+      "authenticated_plus_service_role_and_owner": ["r5_publish_today", "r5_status", "r5_claim_answers", "r5_parent_waive", "r5_child_entry", "r5_assert_member"],
+      "public_grants_found": 0
+    },
+    "candidate_tables_absent": ["r5_family_progress", "r5_plan_audit", "r5_credential_snapshot", "r5_day_confirmation", "r5_acl_baseline"],
+    "migrations": { "count": 11, "latest": "20261113111500 session_binding_guard", "c01_registered": false },
+    "quota": { "daily_seconds": 1800, "bonus_seconds": 0, "enabled": true }
+  },
+
+  "test_totals": {
+    "local_suites": "327/327",
+    "isolated_rehearsal": "31/31",
+    "backup_restore_drill": "19/19"
+  },
+
+  "blockers_open": [
+    { "id": "R1", "kind": "decision required", "summary": "the live page loads r5-bridge.test.js, not r5-bridge.js; sw.js is 404 and has never been active" },
+    { "id": "R2", "kind": "must run on execution day", "summary": "the snapshot has to be recomputed the day of execution; the record-day predicate is brittle" },
+    { "id": "R3", "kind": "scheduling", "summary": "B and F must share one window; publish is fail-closed in between" },
+    { "id": "R4", "kind": "written acceptance", "summary": "the only environment is SHARED; the migration is not isolated" },
+    { "id": "R5", "kind": "written acceptance", "summary": "no platform-level restore point; logical backup plus 900 is the only path" },
+    { "id": "R6", "kind": "written acceptance", "summary": "production runs PostgreSQL 17.11, the verification engine is 18.6; no 18-only syntax is used" }
+  ]
+}

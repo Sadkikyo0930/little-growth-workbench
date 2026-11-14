@@ -1,0 +1,125 @@
+{
+  "generated_at": "2026-11-14T02:05:10.306Z",
+  "engine": "fresh PostgreSQL instance (PGlite), never held this data before",
+  "dump": "evidence/backup-drill/tables-2026-11-14.json",
+  "totals": {
+    "pass": 19,
+    "fail": 0
+  },
+  "results": [
+    {
+      "id": "B1:r5_parent_settings",
+      "name": "r5_parent_settings: 2 rows restored into a fresh instance, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 2/442c542f65a8848bddce2c132303da77 got 2/442c542f65a8848bddce2c132303da77"
+    },
+    {
+      "id": "B1:r5_daily_plan",
+      "name": "r5_daily_plan: 10 rows restored into a fresh instance, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 10/1fb63691eaf659684ccc4b6bda9eefa9 got 10/1fb63691eaf659684ccc4b6bda9eefa9"
+    },
+    {
+      "id": "B1:r5_subject_template",
+      "name": "r5_subject_template: 30 rows restored into a fresh instance, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 30/ad1b433d34b9c6d7597ce15ab49976f9 got 30/ad1b433d34b9c6d7597ce15ab49976f9"
+    },
+    {
+      "id": "B1:r5_racing_saves",
+      "name": "r5_racing_saves: 1 rows restored into a fresh instance, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 1/6b3a32fbccfe8d075d12afcf64b71d1c got 1/6b3a32fbccfe8d075d12afcf64b71d1c"
+    },
+    {
+      "id": "B1:r5_daily_usage",
+      "name": "r5_daily_usage: 2 rows restored into a fresh instance, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 2/57901678ac240858d38b3aa577f51c8c got 2/57901678ac240858d38b3aa577f51c8c"
+    },
+    {
+      "id": "B1:growth_family_members",
+      "name": "growth_family_members: 10 rows restored into a fresh instance, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 10/1dd83a66a2f8964ad7fb64afaed895a7 got 10/1dd83a66a2f8964ad7fb64afaed895a7"
+    },
+    {
+      "id": "B2:r5_parent_settings",
+      "name": "r5_parent_settings: emptied before the recovery",
+      "status": "PASS",
+      "detail": "got 0"
+    },
+    {
+      "id": "B3:r5_parent_settings",
+      "name": "r5_parent_settings: recovered from the dump alone, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 2/442c542f65a8848bddce2c132303da77 got 2/442c542f65a8848bddce2c132303da77"
+    },
+    {
+      "id": "B2:r5_daily_plan",
+      "name": "r5_daily_plan: emptied before the recovery",
+      "status": "PASS",
+      "detail": "got 0"
+    },
+    {
+      "id": "B3:r5_daily_plan",
+      "name": "r5_daily_plan: recovered from the dump alone, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 10/1fb63691eaf659684ccc4b6bda9eefa9 got 10/1fb63691eaf659684ccc4b6bda9eefa9"
+    },
+    {
+      "id": "B2:r5_subject_template",
+      "name": "r5_subject_template: emptied before the recovery",
+      "status": "PASS",
+      "detail": "got 0"
+    },
+    {
+      "id": "B3:r5_subject_template",
+      "name": "r5_subject_template: recovered from the dump alone, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 30/ad1b433d34b9c6d7597ce15ab49976f9 got 30/ad1b433d34b9c6d7597ce15ab49976f9"
+    },
+    {
+      "id": "B2:r5_racing_saves",
+      "name": "r5_racing_saves: emptied before the recovery",
+      "status": "PASS",
+      "detail": "got 0"
+    },
+    {
+      "id": "B3:r5_racing_saves",
+      "name": "r5_racing_saves: recovered from the dump alone, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 1/6b3a32fbccfe8d075d12afcf64b71d1c got 1/6b3a32fbccfe8d075d12afcf64b71d1c"
+    },
+    {
+      "id": "B2:r5_daily_usage",
+      "name": "r5_daily_usage: emptied before the recovery",
+      "status": "PASS",
+      "detail": "got 0"
+    },
+    {
+      "id": "B3:r5_daily_usage",
+      "name": "r5_daily_usage: recovered from the dump alone, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 2/57901678ac240858d38b3aa577f51c8c got 2/57901678ac240858d38b3aa577f51c8c"
+    },
+    {
+      "id": "B2:growth_family_members",
+      "name": "growth_family_members: emptied before the recovery",
+      "status": "PASS",
+      "detail": "got 0"
+    },
+    {
+      "id": "B3:growth_family_members",
+      "name": "growth_family_members: recovered from the dump alone, table hash identical to production",
+      "status": "PASS",
+      "detail": "want 10/1dd83a66a2f8964ad7fb64afaed895a7 got 10/1dd83a66a2f8964ad7fb64afaed895a7"
+    },
+    {
+      "id": "B0",
+      "name": "every table in the dump carries its own row count and hash",
+      "status": "PASS",
+      "detail": "r5_parent_settings:2/2 r5_daily_plan:10/10 r5_subject_template:30/30 r5_racing_saves:1/1 r5_daily_usage:2/2 growth_family_members:10/10"
+    }
+  ]
+}

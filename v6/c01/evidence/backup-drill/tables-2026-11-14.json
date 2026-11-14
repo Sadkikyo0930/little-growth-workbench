@@ -1,0 +1,146 @@
+{
+  "captured_at": "2026-11-14T09:55:00+08:00",
+  "source": {
+    "env": "normal-goose-d5g4qyzr8bb389a4a",
+    "database": "postgres-130fh140",
+    "role": "cloudbase_postgres_postgres_130fh140",
+    "server_version": "17.11",
+    "method": "read-only SELECT ... jsonb_agg(to_jsonb(x) ORDER BY key) through the CloudBase query tool. No DDL, no DML, no function replacement."
+  },
+  "hash_rule": "md5(coalesce(jsonb_agg(to_jsonb(x) ORDER BY <key>)::text,'[]')) evaluated with timezone='Asia/Shanghai'",
+  "tables": {
+    "r5_parent_settings": {
+      "order_by": ["family_id"],
+      "columns": ["family_id", "enabled", "daily_seconds", "bonus_seconds", "updated_at", "updated_by"],
+      "production_count": 2,
+      "production_hash": "442c542f65a8848bddce2c132303da77",
+      "rows": [
+        {"family_id": "little-growth-family-001", "enabled": true, "daily_seconds": 1800, "bonus_seconds": 0, "updated_at": "2026-11-08T14:02:50.495303+08:00", "updated_by": null},
+        {"family_id": "r5-selftest-family", "enabled": true, "daily_seconds": 1800, "bonus_seconds": 0, "updated_at": "2026-11-09T13:32:06.873598+08:00", "updated_by": null}
+      ]
+    },
+    "r5_daily_plan": {
+      "order_by": ["family_id", "study_date"],
+      "columns": ["family_id", "study_date", "day_index", "subjects", "published"],
+      "production_count": 10,
+      "production_hash": "1fb63691eaf659684ccc4b6bda9eefa9",
+      "rows": [
+        {"family_id": "little-growth-family-001", "study_date": "2026-11-08", "day_index": 1, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "little-growth-family-001", "study_date": "2026-11-09", "day_index": 1, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "little-growth-family-001", "study_date": "2026-11-10", "day_index": 1, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "little-growth-family-001", "study_date": "2026-11-11", "day_index": 2, "subjects": ["语文", "数学"], "published": true},
+        {"family_id": "little-growth-family-001", "study_date": "2026-11-12", "day_index": 2, "subjects": ["语文", "数学"], "published": true},
+        {"family_id": "little-growth-family-001", "study_date": "2026-11-13", "day_index": 1, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "r5-selftest-family", "study_date": "2026-11-08", "day_index": 1, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "r5-selftest-family", "study_date": "2026-11-09", "day_index": 1, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "r5-selftest-family", "study_date": "2026-11-11", "day_index": 2, "subjects": ["英语", "科学"], "published": true},
+        {"family_id": "r5-selftest-family", "study_date": "2026-11-13", "day_index": 3, "subjects": ["数学", "英语"], "published": true}
+      ]
+    },
+    "r5_subject_template": {
+      "order_by": ["day_index"],
+      "columns": ["day_index", "subjects"],
+      "production_count": 30,
+      "production_hash": "ad1b433d34b9c6d7597ce15ab49976f9",
+      "rows": [
+        {"day_index": 1, "subjects": ["英语", "科学"]},
+        {"day_index": 2, "subjects": ["语文", "数学"]},
+        {"day_index": 3, "subjects": ["数学", "英语"]},
+        {"day_index": 4, "subjects": ["语文", "英语"]},
+        {"day_index": 5, "subjects": ["数学", "科学"]},
+        {"day_index": 6, "subjects": ["语文", "数学"]},
+        {"day_index": 7, "subjects": ["语文", "英语"]},
+        {"day_index": 8, "subjects": ["英语", "科学"]},
+        {"day_index": 9, "subjects": ["语文", "数学"]},
+        {"day_index": 10, "subjects": ["数学", "英语"]},
+        {"day_index": 11, "subjects": ["语文", "英语"]},
+        {"day_index": 12, "subjects": ["数学", "科学"]},
+        {"day_index": 13, "subjects": ["语文", "数学"]},
+        {"day_index": 14, "subjects": ["语文", "英语"]},
+        {"day_index": 15, "subjects": ["英语", "科学"]},
+        {"day_index": 16, "subjects": ["语文", "数学"]},
+        {"day_index": 17, "subjects": ["数学", "英语"]},
+        {"day_index": 18, "subjects": ["语文", "英语"]},
+        {"day_index": 19, "subjects": ["数学", "科学"]},
+        {"day_index": 20, "subjects": ["语文", "数学"]},
+        {"day_index": 21, "subjects": ["语文", "英语"]},
+        {"day_index": 22, "subjects": ["英语", "科学"]},
+        {"day_index": 23, "subjects": ["语文", "数学"]},
+        {"day_index": 24, "subjects": ["数学", "英语"]},
+        {"day_index": 25, "subjects": ["语文", "英语"]},
+        {"day_index": 26, "subjects": ["数学", "科学"]},
+        {"day_index": 27, "subjects": ["语文", "数学"]},
+        {"day_index": 28, "subjects": ["语文", "英语"]},
+        {"day_index": 29, "subjects": ["英语", "科学"]},
+        {"day_index": 30, "subjects": ["语文", "数学"]}
+      ]
+    },
+    "r5_racing_saves": {
+      "order_by": ["family_id"],
+      "columns": ["family_id", "schema_version", "revision", "baseline_confirmed", "baseline_coins", "baseline_source", "baseline_device", "baseline_confirmed_at", "coins_balance", "owned", "current_vehicle", "chapter1_state", "chapter2_state", "story", "study", "achievements", "reward_ledger", "claims", "coin_rewards", "items", "fragments", "created_at", "updated_at", "updated_by_device"],
+      "production_count": 1,
+      "production_hash": "6b3a32fbccfe8d075d12afcf64b71d1c",
+      "rows": [
+        {
+          "family_id": "r5-selftest-family",
+          "schema_version": 1,
+          "revision": 168,
+          "baseline_confirmed": false,
+          "baseline_coins": 0,
+          "baseline_source": "",
+          "baseline_device": "",
+          "baseline_confirmed_at": null,
+          "coins_balance": 270,
+          "owned": {
+            "moto": {"at": 1794449264385, "price": 1500, "source": "coins"},
+            "turtle": {"at": 1794393196530, "source": "story-chapter1", "chapter": "chapter1"},
+            "frag_car_rare_01": {"at": 1794449260025, "note": "碎片组装", "source": "fragment-assembly"},
+            "frag_car_common_01": {"at": 1794449259493, "note": "碎片组装", "source": "fragment-assembly"}
+          },
+          "current_vehicle": "turtle",
+          "chapter1_state": "done",
+          "chapter2_state": "idle",
+          "story": {"chapter1": {"at": 1794393196530, "granted": true, "vehicleId": "turtle"}},
+          "study": {},
+          "achievements": {},
+          "reward_ledger": {},
+          "claims": ["rmwbz8r4d2rvfm1"],
+          "coin_rewards": [],
+          "items": {},
+          "fragments": {},
+          "created_at": "2026-11-11T08:05:51.657491+08:00",
+          "updated_at": "2026-11-12T13:56:31.690933+08:00",
+          "updated_by_device": "r5dev_05d9bee84834d51d29a79a08311dd120"
+        }
+      ]
+    },
+    "r5_daily_usage": {
+      "order_by": ["family_id", "play_date"],
+      "columns": ["family_id", "play_date", "used_ms", "active", "last_beat"],
+      "production_count": 2,
+      "production_hash": "57901678ac240858d38b3aa577f51c8c",
+      "rows": [
+        {"family_id": "little-growth-family-001", "play_date": "2026-11-13", "used_ms": 103719, "active": true, "last_beat": "2026-11-13T21:46:32.814461+08:00"},
+        {"family_id": "r5-selftest-family", "play_date": "2026-11-13", "used_ms": 153545, "active": false, "last_beat": "2026-11-13T11:54:56.252128+08:00"}
+      ]
+    },
+    "growth_family_members": {
+      "order_by": ["family_id", "user_id"],
+      "columns": ["family_id", "user_id", "member_role", "joined_at"],
+      "production_count": 10,
+      "production_hash": "1dd83a66a2f8964ad7fb64afaed895a7",
+      "rows": [
+        {"family_id": "little-growth-family-001", "user_id": "2118316498342715393", "member_role": "owner", "joined_at": "2026-11-05T20:36:29.261993+08:00"},
+        {"family_id": "little-growth-family-001", "user_id": "2118318220867104770", "member_role": "parent", "joined_at": "2026-11-05T20:36:29.261993+08:00"},
+        {"family_id": "little-growth-family-001", "user_id": "2118318551127629825", "member_role": "grandparent", "joined_at": "2026-11-05T20:36:29.261993+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "2118316498342715393", "member_role": "owner", "joined_at": "2026-11-13T09:17:03.378163+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "2118318220867104770", "member_role": "parent", "joined_at": "2026-11-13T10:06:42.352664+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "2118318551127629825", "member_role": "grandparent", "joined_at": "2026-11-13T10:06:42.352664+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "2119398471278612482", "member_role": "grandparent", "joined_at": "2026-11-08T19:56:10.433438+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "2121059497908838401", "member_role": "parent", "joined_at": "2026-11-13T09:56:29.906001+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "2121059513385820162", "member_role": "owner", "joined_at": "2026-11-13T09:56:29.906001+08:00"},
+        {"family_id": "r5-selftest-family", "user_id": "r5-selftest-parent", "member_role": "owner", "joined_at": "2026-11-08T14:59:02.224878+08:00"}
+      ]
+    }
+  }
+}

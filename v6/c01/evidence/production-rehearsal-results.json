@@ -1,0 +1,212 @@
+{
+  "generated_at": "2026-11-14T02:04:46.409Z",
+  "family_shape": {
+    "plan_rows": 6,
+    "plan_days": [
+      1,
+      1,
+      1,
+      2,
+      2,
+      1
+    ],
+    "records": 73,
+    "source": "read-only export of normal-goose-d5g4qyzr8bb389a4a on 2026-11-14"
+  },
+  "summary": {
+    "suite": "production-rehearsal",
+    "total": 31,
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0,
+    "failures": []
+  },
+  "results": [
+    {
+      "id": "P0",
+      "title": "the rehearsal starts from exactly 73 records and 6 plan rows",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B0",
+      "title": "between deploy and initialisation the family cannot publish a plan (R5_DAY_NOT_INITIALIZED)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B1",
+      "title": "the gate still answers in the deploy→init window (degraded, not a 500)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B2",
+      "title": "plan history is read as the live rows [1,1,1,2,2,1]",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B3",
+      "title": "plan_max_day is 2, latest_plan_day is 1, high-water date is 11-11",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B4",
+      "title": "exactly one rollback row (11-13 day1) is detected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B5",
+      "title": "the rollback is classified as correctable, not blocking",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B6",
+      "title": "the confirmation window collapses to [3,3]",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B7",
+      "title": "the record day set is [1,6,9] and nothing is dated on the latest plan date",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B8",
+      "title": "day6/day9 records do not raise DEVICE_DAY_DISAGREEMENT or RECORD_DAY_AHEAD_OF_PLAN",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B9",
+      "title": "confirming day 2 is refused (it would reopen a day already lived through)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B10",
+      "title": "confirming day 4 is refused (no skipping an unplayed day)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B11",
+      "title": "confirming day 3 without acknowledging the rollback is refused",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B12",
+      "title": "confirming day 3 with the acknowledged correction succeeds",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B13",
+      "title": "the progress row holds day 3 and records how it was reached",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B14",
+      "title": "day advancement is NOT pre-stamped (last_advanced_on is null)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B15",
+      "title": "the confirmation audit row stores day 3, the correction code and the written reason",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B16",
+      "title": "initialisation writes no learning record and no plan row (fingerprints unchanged)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B17",
+      "title": "no record was re-dated to day 3 and no day-2 score was fabricated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B18",
+      "title": "a stale device cannot write today's plan as day 1 (trigger refuses it)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B19",
+      "title": "a client that still believes it is day 1 publishes day 3 and is told it is stale",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B20",
+      "title": "the stored plan for today is day 3 with 数学 + 英语",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B21",
+      "title": "with no day-3 evidence the gate is closed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B22",
+      "title": "day-1 English is NOT borrowed as day-3 English",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B23",
+      "title": "one of two subjects is not enough — the gate stays closed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B24",
+      "title": "60% accuracy does not unlock the gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B25",
+      "title": "both subjects complete and at/above threshold unlocks the gate (racing entry)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B26",
+      "title": "finishing day 3 does NOT auto-advance to day 4",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B27",
+      "title": "a second publish on the same day stays on day 3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B28",
+      "title": "the 73 historical records are byte-identical at the end of the run",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "B29",
+      "title": "the 1800s quota and parent switch are unchanged",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}
