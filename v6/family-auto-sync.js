@@ -104,7 +104,9 @@ async function run(){
  }finally{running=false}
 }
 async function restoreMissing(){
- if(restoreRunning||localStorage.getItem(RESTORE_OPT_IN)!=="yes"||!navigator.onLine)return;
+ // Family members who are already authenticated can safely pull *verified*
+// course completion marks; no local records are replaced or erased.
+if(restoreRunning||!navigator.onLine)return;
  if(Date.now()-lastRestoreAttempt<60000)return;
  restoreRunning=true;lastRestoreAttempt=Date.now();
  try{
@@ -136,7 +138,7 @@ async function restoreMissing(){
   var plan=mod.planMerge(local,rows,FAMILY);
   if(!plan.additions.length){restoreStatus("已与当前读取到的云端课程完成标记对齐","synced");return}
   // Never write on session changes, revocation of opt-in, or concurrent learning.
-  if(localStorage.getItem(RESTORE_OPT_IN)!=="yes")return;
+  if(!navigator.onLine)return;
   var verifiedAgain=await auth.getSession();
   var activeUser=verifiedAgain&&verifiedAgain.data&&verifiedAgain.data.session&&verifiedAgain.data.session.user;
   if(!activeUser||String(activeUser.id)!==String(user.id)){
@@ -162,7 +164,7 @@ function schedule(){
    import("./r5/reward-hook.mjs").then(function(m){return m.resumeRewardQueue()}).catch(function(){});
   }catch(e){}
   if(localStorage.getItem(ENABLED)==="yes")Promise.resolve(run()).catch(function(e){saveStatus("自动上传执行异常："+error(e),{state:"error"})});
-  if(localStorage.getItem(RESTORE_OPT_IN)==="yes")Promise.resolve(restoreMissing()).catch(function(e){restoreStatus("自动补全异常："+error(e),"error")});
+  Promise.resolve(restoreMissing()).catch(function(e){restoreStatus("自动补全异常："+error(e),"error")});
  }catch(e){saveStatus("同步初始化异常："+error(e),{state:"error"})}
 }
 window.addEventListener("online",schedule);document.addEventListener("visibilitychange",function(){if(!document.hidden)schedule()});
