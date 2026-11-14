@@ -22,7 +22,7 @@ globalThis.fetch=async(url,init={})=>{
   if(u.includes('/rpc/r5_fragment_member_claim'))return {
     ok:true,status:200,async text(){return JSON.stringify(mode==='CLAIMED'
       ? {status:'CLAIMED',granted_normal:1,granted_rare:0,zero_write:false}
-      : {status:mode,zero_write:true})}
+      : {status:mode,granted_normal:1,granted_rare:0,zero_write:true})}
   };
   if(u.includes('/v1/racing/fragment/claim'))return {
     ok:false,status:403,async text(){return '{"error":"bad device"}'}
