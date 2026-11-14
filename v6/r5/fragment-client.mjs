@@ -10,6 +10,7 @@
  * 也不保留任何本地碎片余额副本（不新造第二套存档）。
  */
 import { R5_CONFIG } from './config.mjs';
+import {normalizeClaimResponse,validateFragmentSnapshot} from './fragment-contract.mjs';
 
 const BASE = String(R5_CONFIG.base || '').replace(/\/$/, '');
 const FAMILY = R5_CONFIG.familyId;
@@ -80,8 +81,8 @@ async function post(path, body) {
 
 /** 读取碎片与车辆状态（真实云端，不含任何本地缓存兜底） */
 export async function loadState() {
-  const j = await post('/v1/racing/save/get', {});
-  const f = (j && j.fragment) || {};
+  const j = validateFragmentSnapshot(await post('/v1/racing/save/get', {}));
+  const f = j.fragment;
   return {
     fragments: f.fragments || {},
     owned: f.owned || (j.save && j.save.owned) || {},
@@ -98,7 +99,12 @@ export async function loadState() {
 
 /** 用一条真实学习记录结算碎片；服务端可能返回 CLAIMED / ALREADY_CLAIMED / 封顶 */
 export async function claimFragment(recordId) {
-  return post('/v1/racing/fragment/claim', { learning_record_id: String(recordId || '') });
+  try {
+    return normalizeClaimResponse(await post('/v1/racing/fragment/claim', { learning_record_id: String(recordId || '') }));
+  } catch (e) {
+    if (e && (e.message === 'BAD_CLAIM_RESPONSE' || e.message === 'BAD_CLAIM_COUNTS')) throw new FragmentError('SERVER', e.message);
+    throw e;
+  }
 }
 
 /** 组装：服务端原子扣片并永久授予；返回 ASSEMBLED / INSUFFICIENT_FRAGMENTS / ALREADY_OWNED ... */

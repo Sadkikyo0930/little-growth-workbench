@@ -177,7 +177,7 @@ export async function showFragmentReward(opts = {}) {
   const gotRare = Number(granted.rare || 0);
   const gotAny = gotCommon + gotRare > 0;
 
-  let title = '碎片收好啦！';
+  let title = gotAny ? '碎片收好啦！' : '结算完成';
   let sub = '继续加油，攒够就能组装新赛车';
   if (already) { title = '这片碎片已经收过啦'; sub = '同一次学习只会发一次奖励'; }
   else if (capped) { title = '今天的碎片拿满啦'; sub = '明天学习完再来领新的碎片'; }

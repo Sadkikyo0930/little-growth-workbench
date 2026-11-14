@@ -124,7 +124,10 @@ export async function memberState() {
     const snap = await rpc('r5_fragment_member_snapshot', {}, who.token);
     const st = String((snap && snap.status) || '');
     if (STATUS_ERROR[st]) throw new MemberError(STATUS_ERROR[st], st);
-    if (st && st !== 'OK') throw new MemberError('SERVER', st);
+    if (st !== 'OK' || !snap || String(snap.family_id || '') !== who.family_id ||
+        !snap.fragments || typeof snap.fragments !== 'object' || Array.isArray(snap.fragments) ||
+        !snap.owned || typeof snap.owned !== 'object' || Array.isArray(snap.owned))
+      throw new MemberError('SERVER', st || 'INVALID_MEMBER_SNAPSHOT');
     const program = (snap && snap.program) || JSON.parse(JSON.stringify(FRAGMENT_PROGRAM));
     return normalize(snap, who, program);
   } catch (e) {
@@ -145,6 +148,10 @@ export async function memberAssemble(vehicleId) {
     const out = await rpc('r5_fragment_member_assemble', { p_vehicle_id: v.vehicle_id }, who.token);
     const st = String((out && out.status) || '');
     if (STATUS_ERROR[st]) throw new MemberError(STATUS_ERROR[st], st);
+    if (!['ASSEMBLED','INSUFFICIENT_FRAGMENTS','ALREADY_OWNED','ALREADY_ASSEMBLED',
+          'COIN_VEHICLE_FORBIDDEN','BIRTHDAY_VEHICLE_FORBIDDEN','LEGACY_SLOT_RETIRED',
+          'VEHICLE_NOT_ASSEMBLABLE','UNKNOWN_VEHICLE','BAD_VEHICLE_ID'].includes(st))
+      throw new MemberError('SERVER', st || 'INVALID_ASSEMBLE_RESULT');
     return out;
   } catch (e) {
     throw wrap(e);
