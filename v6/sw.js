@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261109-clean-home-daily1';
+const VERSION='20261114-fragment-garage-v1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -10,7 +10,12 @@ const CORE_FILES=[
 './chinese-classroom.css','./v6-home-clean.jpg','./v6-assessment-clean.jpg',
 './growth_background.png','./english-classroom-fixed.html',
 './science-classroom.html','./math-calendar-preview.html',
-'./english-monthly-assessment.html','./phonics-v4-original.html'
+'./english-monthly-assessment.html','./phonics-v4-original.html',
+/* 碎片车库：新页面与模块。缺文件由 Promise.allSettled 容忍，不会阻断安装。 */
+'./assemble-center.html','./fragment-reward.html',
+'./r5/config.mjs','./r5/catalog.mjs','./r5/identity.mjs','./r5/fragment-client.mjs',
+'./r5/fragment-contract.mjs','./r5/fragment-reward.mjs','./r5/member-fragments.mjs','./r5/reward-hook.mjs',
+'./assets/cars/frag_common_01-thumb.png','./assets/cars/frag_rare_01-thumb.png'
 ];
 self.addEventListener('install',event=>{
  event.waitUntil((async()=>{
