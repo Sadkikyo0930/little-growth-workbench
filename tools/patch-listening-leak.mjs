@@ -17,6 +17,7 @@
  * --check exits 1 if the file still contains the leak, 0 if it is clean.
  */
 import fs from 'node:fs';
+import { EDITS, replaceOnce } from './edits.mjs';
 
 const FILE = process.argv[2];
 const CHECK = process.argv.includes('--check');
@@ -52,41 +53,12 @@ if (CHECK) {
 }
 
 /* ---------------- the replacement ---------------- */
-const OLD_AUDIO = "function audio(s,next){if(!Object.prototype.hasOwnProperty.call(PINYIN_FIXED_AUDIO,s))return;serial++;let t=serial;if(player)player.pause();window.speechSynthesis?.cancel();player=new Audio(PINYIN_FIXED_AUDIO[s]);let status=$('lionAudioState');if(status)status.textContent='正在播放 '+s;player.onended=()=>{if(serial===t&&next)setTimeout(()=>{if(serial===t)next()},280)};player.onerror=()=>{if(serial===t&&status)status.textContent=s+' 音频未能载入，请检查网络。不会使用其他拼音代替。'};player.play().catch(()=>{if(status)status.textContent='请再次点击播放'})}";
-
-const NEW_AUDIO = [
-  'function audio(s,next,mode){',
-  "if(!Object.prototype.hasOwnProperty.call(PINYIN_FIXED_AUDIO,s))return;",
-  'serial++;let t=serial;',
-  'if(player)player.pause();window.speechSynthesis?.cancel();',
-  'player=new Audio(PINYIN_FIXED_AUDIO[s]);',
-  "let status=$('lionAudioState');",
-  '/* 挑战模式下，播放前/中/后都不出现目标拼音：那是答案本身。 */',
-  "const quiz=mode==='quiz';",
-  "if(status)status.textContent=quiz?'正在播放题目…':'正在播放…';",
-  'player.onended=()=>{',
-  'if(serial!==t)return;',
-  "if(status)status.textContent=quiz?'请选出听到的拼音':'播放结束，可以再听一遍';",
-  'if(next)setTimeout(()=>{if(serial===t)next()},280)',
-  '};',
-  'player.onerror=()=>{',
-  'if(serial!==t)return;',
-  "if(status)status.textContent=quiz?'题目音频没能载入，请检查网络后再点一次播放。':'这段录音没能载入，请检查网络后再试一次。'",
-  '};',
-  "player.play().catch(()=>{if(serial===t&&status)status.textContent='还没开始播放，请再点一次播放'})",
-  '}',
-].join('');
-
-const OLD_CALL = "$('lionListen').onclick=()=>audio(s);";
-const NEW_CALL = "$('lionListen').onclick=()=>audio(s,null,'quiz');";
-
-function replaceOnce(haystack, needle, replacement, label) {
-  const parts = haystack.split(needle);
-  if (parts.length !== 2) {
-    throw new Error(`${label}: expected exactly 1 occurrence, found ${parts.length - 1}`);
-  }
-  return parts[0] + replacement + parts[1];
-}
+/* 改动内容统一放在 tools/edits.mjs，测试用同一份数据做反向校验 */
+const [AUDIO_EDIT, CALL_EDIT] = EDITS['chinese-classroom.js'];
+const OLD_AUDIO = AUDIO_EDIT.old;
+const NEW_AUDIO = AUDIO_EDIT.new;
+const OLD_CALL = CALL_EDIT.old;
+const NEW_CALL = CALL_EDIT.new;
 
 let out = src;
 out = replaceOnce(out, OLD_AUDIO, NEW_AUDIO, 'audio() body');

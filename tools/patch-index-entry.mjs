@@ -20,6 +20,7 @@
  * parent's own vocabulary for no benefit.
  */
 import fs from 'node:fs';
+import { EDITS } from './edits.mjs';
 
 const FILE = process.argv[2];
 const CHECK = process.argv.includes('--check');
@@ -29,18 +30,8 @@ if (!FILE) {
 }
 const src = fs.readFileSync(FILE, 'utf8');
 
-const OLD = "$('goGarage').onclick=()=>alert('车库功能即将开放');";
-const NEW = [
-  "$('goGarage').onclick=()=>{",
-  'const q=new URLSearchParams(location.search);',
-  'const p=new URLSearchParams();',
-  "const d=q.get('d'),fam=q.get('family');",
-  "if(d)p.set('d',d);",
-  "if(fam)p.set('family',fam);",
-  "try{const dev=localStorage.getItem('r5_device');if(!p.get('d')&&dev&&/^r5dev_[0-9a-f]{32}$/.test(dev))p.set('d',dev)}catch(e){}",
-  "const s=p.toString();location.href='./assemble-center.html'+(s?'?'+s:'')",
-  '};',
-].join('');
+/* 改动内容统一放在 tools/edits.mjs，测试用同一份数据做反向校验 */
+const [{ old: OLD, new: NEW }] = EDITS['index.html'];
 
 if (CHECK) {
   if (src.includes(OLD)) {

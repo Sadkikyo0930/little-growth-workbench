@@ -12,6 +12,7 @@
  *   node tools/patch-syllable-status.mjs <file> [--check]
  */
 import fs from 'node:fs';
+import { EDITS } from './edits.mjs';
 
 const FILE = process.argv[2];
 const CHECK = process.argv.includes('--check');
@@ -20,8 +21,8 @@ if (!FILE) {
   process.exit(2);
 }
 const src = fs.readFileSync(FILE, 'utf8');
-const OLD = "v.textContent='正在播放 '+s;";
-const NEW = "v.textContent='正在播放…';";
+/* 改动内容统一放在 tools/edits.mjs，测试用同一份数据做反向校验 */
+const [{ old: OLD, new: NEW }] = EDITS['chinese-day2-day3-preview.html'];
 
 if (CHECK) {
   if (src.includes(OLD)) {
