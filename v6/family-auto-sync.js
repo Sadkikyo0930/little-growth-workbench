@@ -150,6 +150,15 @@ if(restoreRunning||!navigator.onLine)return;
   localStorage.setItem(backupKey,original);
   if(localStorage.getItem(backupKey)!==original)throw Error("本机备份失败，拒绝修改原档");
   localStorage.setItem(KEY,JSON.stringify(merged.state));
+  // Keep the running V6 page's in-memory state consistent with the restored
+  // persisted state. Otherwise the next save() could overwrite the merge.
+  try {
+   if(typeof state!=="undefined"&&state&&Array.isArray(state.records)){
+    state=merged.state;
+    if(typeof refreshHomeMode==="function")refreshHomeMode();
+    if(typeof novRender==="function")novRender();
+   }
+  }catch(_){/* Persisted backup remains valid even if UI redraw fails. */}
   restoreStatus("已补全 "+merged.added+" 个缺失的课程完成标记，并保留原始备份","synced",merged.added);
  }catch(e){restoreStatus("补全失败，本机原始记录保留："+error(e),"error")}
  finally{restoreRunning=false}
