@@ -96,6 +96,22 @@ try {
     GRANT ALL ON public.r5_racing_events,public.r5_racing_saves TO service_role;
   `);
   const restoredInside=await proof();
+  if(restoredInside!==original){
+    const pre=JSON.parse(original), post=JSON.parse(restoredInside);
+    for(const section of ['tables','functions','policies']){
+      const a=pre.catalog[section], b=post.catalog[section];
+      const aa=new Map(a.map(x=>[x.name||x.signature||x.tablename+'.'+x.policyname,x]));
+      const bb=new Map(b.map(x=>[x.name||x.signature||x.tablename+'.'+x.policyname,x]));
+      for(const key of new Set([...aa.keys(),...bb.keys()])){
+        if(JSON.stringify(aa.get(key))!==JSON.stringify(bb.get(key))){
+          console.error('DIFF catalog',section,key,JSON.stringify({before:aa.get(key),after:bb.get(key)}).slice(0,1500));
+        }
+      }
+    }
+    for(const table of new Set([...Object.keys(pre.data),...Object.keys(post.data)])){
+      if(JSON.stringify(pre.data[table])!==JSON.stringify(post.data[table])) console.error('DIFF data',table,pre.data[table],post.data[table]);
+    }
+  }
   assert(restoredInside===original,'reverse migration did not restore exact synthetic baseline before COMMIT');
   await exec('COMMIT');
 } catch(e) {
