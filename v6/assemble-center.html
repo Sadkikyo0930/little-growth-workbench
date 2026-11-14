@@ -418,13 +418,24 @@ function render() {
     const action = p.ready
       ? `<button class="btn" data-assemble="${p.vehicle_id}">组装</button>`
       : `<button class="btn" disabled>还差 ${p.missing} 片</button>`;
-    const note = p.placeholder
-      ? `<p class="ph">开发占位：<span style="font-family:ui-monospace,Menlo,monospace">${p.vehicle_id}</span> · 外观与正式名称待设计稿通过家长验收后接入</p>`
-      : `<p>${p.note || ''}</p>`;
+    // 这两辆车已有验收过的缩略图和名称。旧云端目录的 placeholder
+    // 仅是过时的视觉元数据，不应让卡片重新显示“开发占位”。
+    // 余额、价格、归属与是否允许组装仍全部取云端结果。
+    const approvedCars = Object.freeze({
+      frag_car_common_01: { name: '雷霆破晓', note: '紫金火箭赛车，开放式驾驶舱与尾部推进器' },
+      frag_car_rare_01: { name: '秋名疾影', note: '黑白 AE86 赛车，专属碎片组装' },
+    });
+    const approved = approvedCars[p.vehicle_id];
+    const displayName = approved ? approved.name : p.name;
+    const note = approved
+      ? `<p>${approved.note}</p>`
+      : p.placeholder
+        ? `<p class="ph">外观设计中</p>`
+        : `<p>${p.note || ''}</p>`;
     return `<div class="car ${p.tier === 'rare' ? 'rare' : ''}">
       ${thumbHTML(p)}
       <div>
-        <h3>${p.name}<span class="tag ${p.tier === 'rare' ? 'rare' : ''}">${p.tier === 'rare' ? '稀有' : '普通'}</span></h3>
+        <h3>${displayName}<span class="tag ${p.tier === 'rare' ? 'rare' : ''}">${p.tier === 'rare' ? '稀有' : '普通'}</span></h3>
         ${note}
         <div class="bar"><i style="width:${pctW}%"></i></div>
         <div class="meta"><span class="num">${rows}</span><span style="margin-left:auto">${action}</span></div>
