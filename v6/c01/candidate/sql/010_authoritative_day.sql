@@ -811,6 +811,60 @@ COMMENT ON FUNCTION public.r5_initialize_authoritative_day(text, integer, text, 
   'C0.1 ADMIN ONLY: initialise authoritative day from a reviewed snapshot + verified parent confirmation. A historical rollback must be acknowledged with a written reason; hard anomalies can never be acknowledged away. Never called by clients.';
 
 -- -----------------------------------------------------------------------------
+-- 10b. Pre-migration ACL baseline — captured, never assumed
+-- -----------------------------------------------------------------------------
+-- 020 replaces two functions that already exist in production, so a rollback
+-- has to put them back *with the grants they had*, not with a remembered
+-- default. The pre-migration ACL is therefore captured here, while it is still
+-- the live production ACL, and 900_rollback.sql restores from this table.
+--
+-- This is not bookkeeping. Production does not rely on the PostgreSQL default:
+-- it revoked the default and granted `r5_gate_status_core` to service_role only
+-- (read-only pg_proc.proacl, 2026-11-14). That function takes
+-- `p_ignore_override` straight from the caller, so `EXECUTE` on it is the
+-- parent-override bypass. An unconditional `GRANT ... TO PUBLIC` on rollback
+-- would hand that bypass to `anon` and every other role on the instance — the
+-- exact opposite of a rollback.
+--
+-- Capturing beats hardcoding: if production's ACL ever diverges from what this
+-- migration was reviewed against, the rollback still restores what was really
+-- there, and 900 verifies the result and aborts on any mismatch.
+CREATE TABLE IF NOT EXISTS public.r5_acl_baseline (
+  obj_kind     text        NOT NULL,
+  -- canonical, search_path independent: name + identity argument types
+  signature    text        NOT NULL,
+  grantee      text        NOT NULL,   -- '' denotes PUBLIC
+  privilege    text        NOT NULL,
+  is_grantable boolean     NOT NULL,
+  grantor      text        NOT NULL,
+  captured_at  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT r5_acl_baseline_pk
+    PRIMARY KEY (obj_kind, signature, grantee, privilege, is_grantable)
+);
+
+COMMENT ON TABLE public.r5_acl_baseline IS
+  'C0.1: EXECUTE grants the replaced functions had BEFORE 020 touched them. Written by 010, consumed by 900_rollback.sql. No client access.';
+
+-- A function whose proacl is NULL has never been revoked: it runs on the
+-- PostgreSQL default (EXECUTE to PUBLIC + owner), and acldefault() is how that
+-- implicit state is made explicit. Both cases are captured identically.
+-- The signature is name + argument TYPES only (oidvectortypes), so it does not
+-- drift if a parameter is ever renamed, and it is search_path independent.
+INSERT INTO public.r5_acl_baseline (obj_kind, signature, grantee, privilege, is_grantable, grantor)
+SELECT 'function',
+       p.proname || '(' || oidvectortypes(p.proargtypes) || ')',
+       CASE WHEN a.grantee = 0 THEN '' ELSE pg_get_userbyid(a.grantee) END,
+       a.privilege_type,
+       a.is_grantable,
+       pg_get_userbyid(a.grantor)
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+ CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+ WHERE n.nspname = 'public'
+   AND p.proname IN ('r5_gate_status_core', 'r5_publish_today')
+ON CONFLICT DO NOTHING;
+
+-- -----------------------------------------------------------------------------
 -- 11. Privileges — deny by default, grant the client API only
 -- -----------------------------------------------------------------------------
 -- Tables: no direct access for anyone but the owner. No RLS policy exists, so
@@ -820,6 +874,7 @@ REVOKE ALL ON TABLE public.r5_family_progress     FROM PUBLIC;
 REVOKE ALL ON TABLE public.r5_plan_audit          FROM PUBLIC;
 REVOKE ALL ON TABLE public.r5_credential_snapshot FROM PUBLIC;
 REVOKE ALL ON TABLE public.r5_day_confirmation    FROM PUBLIC;
+REVOKE ALL ON TABLE public.r5_acl_baseline        FROM PUBLIC;
 REVOKE ALL ON SEQUENCE public.r5_plan_audit_audit_id_seq FROM PUBLIC;
 REVOKE ALL ON SEQUENCE public.r5_day_confirmation_confirmation_id_seq FROM PUBLIC;
 
@@ -827,6 +882,7 @@ ALTER TABLE public.r5_family_progress     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.r5_plan_audit          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.r5_credential_snapshot ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.r5_day_confirmation    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.r5_acl_baseline        ENABLE ROW LEVEL SECURITY;
 
 DO $priv$
 DECLARE

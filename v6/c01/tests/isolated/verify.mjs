@@ -1,12 +1,18 @@
-/* Isolated-environment deployment verification for the C0.1.2 candidate.
+/* Isolated-environment deployment verification for the C0.1 candidate.
  *
  * What this is: a *deployment*, not a unit test. The SQL files are the exact
- * bytes of GitHub commit 242e2a8c, loaded unmodified into a separate PostgreSQL
- * 18.6 server that listens on its own port and owns its own data directory.
- * Nothing here talks to CloudBase.
+ * bytes of the GitHub candidate branch, loaded unmodified into a separate
+ * PostgreSQL 18.6 server that listens on its own port and owns its own data
+ * directory. Nothing here talks to CloudBase.
  *
  * What it is not: a substitute for a second CloudBase environment. There is no
  * gateway/PostgREST layer here, so "real HTTP API" is still unverified.
+ *
+ * ACLs are part of what is verified, and they are compared against the grants
+ * that CloudBase actually carries (read-only pg_proc query on 2026-11-14), not
+ * against a convenient assumption. The pre-migration state is built to match
+ * production — `fixtures/schema/production-acl.sql` — so a rollback that leaves
+ * a wider grant than production has cannot pass.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,11 +28,41 @@ const read = (p) => fs.readFileSync(path.join(SRC, p), 'utf8');
  * repository checkout (v6/sql/c01/...). Whichever is present is used verbatim. */
 const pick = (a, b) => (fs.existsSync(path.join(SRC, a)) ? a : b);
 const BASE = read(pick('fixtures/schema/base-schema.sql', 'v6/c01/fixtures/schema/base-schema.sql'));
+const PROD_ACL = read(pick('fixtures/schema/production-acl.sql', 'v6/c01/fixtures/schema/production-acl.sql'));
 const M010 = read(pick('candidate/sql/010_authoritative_day.sql', 'v6/sql/c01/010_authoritative_day.sql'));
 const LEG_GATE = read(pick('candidate/sql/legacy/r5_gate_status_core.production.sql', 'v6/sql/c01/legacy/r5_gate_status_core.production.sql'));
 const LEG_PUB = read(pick('candidate/sql/legacy/r5_publish_today.production.sql', 'v6/sql/c01/legacy/r5_publish_today.production.sql'));
 const M020 = read(pick('candidate/sql/020_gate_and_publish.sql', 'v6/sql/c01/020_gate_and_publish.sql'));
 const M900 = read(pick('candidate/sql/900_rollback.sql', 'v6/sql/c01/900_rollback.sql'));
+
+/* The production bodies also have to exist BEFORE the migration — in production
+ * they do, and a rollback can only restore an ACL that had somewhere to live.
+ * The legacy copies are the same bytes under a `_legacy` name, so renaming the
+ * declaration back gives the pre-migration function without duplicating SQL. */
+const renameLegacy = (src, from, to) => {
+  const needle = `FUNCTION public.${from}(`;
+  if (!src.includes(needle)) throw new Error(`cannot de-legacy ${from}: declaration not found`);
+  return src.replace(needle, `FUNCTION public.${to}(`);
+};
+const PROD_GATE = renameLegacy(LEG_GATE, 'r5_gate_status_core_legacy', 'r5_gate_status_core');
+const PROD_PUB = renameLegacy(LEG_PUB, 'r5_publish_today_legacy', 'r5_publish_today');
+
+/* Read-only production ACL, 2026-11-14, environment normal-goose-d5g4qyzr8bb389a4a.
+ * This is the baseline the isolated instance is built to, and the baseline the
+ * rollback is measured against. Kept as data so a divergence is a failed check,
+ * not a silent assumption. */
+const PROD_ACL_2026_11_14 = {
+  'r5_assert_member(text, boolean)': ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+  'r5_child_entry(text)': ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+  'r5_claim_answers(text, jsonb)': ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+  'r5_gate_status(text, boolean)': ['OWNER:EXECUTE', 'service_role:EXECUTE'],
+  'r5_gate_status_core(text, boolean, boolean)': ['OWNER:EXECUTE', 'service_role:EXECUTE'],
+  'r5_override_active(text, text, boolean)': ['OWNER:EXECUTE', 'service_role:EXECUTE'],
+  'r5_parent_waive(text, text, text, boolean)': ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+  'r5_publish_today(text, integer, boolean)': ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+  'r5_status(text)': ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+};
+
 
 const results = [];
 const t0 = Date.now();
@@ -60,7 +96,68 @@ await exec(`
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role NOLOGIN; END IF;
   END $$;
 `);
+/* Pre-migration state = the schema production has today: the two gate functions
+ * already exist (with their production bodies) and carry their production ACL. */
 await exec(BASE);
+await exec(PROD_GATE);
+await exec(PROD_PUB);
+await exec(PROD_ACL);
+
+/* ---------------------------------------------------------------- ACL tooling
+ * One canonical signature form (name + identity args, single-spaced) and one
+ * canonical grant form (`grantee:PRIVILEGE`), so "same ACL" is a set comparison
+ * and never a regex over a text blob. The owner is normalised to OWNER because
+ * CloudBase names its owner role after the instance. */
+const aclRows = async () => q(`
+  SELECT p.proname || '(' || oidvectortypes(p.proargtypes) || ')' AS sig,
+         CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+              WHEN a.grantee = p.proowner THEN 'OWNER'
+              ELSE pg_get_userbyid(a.grantee) END AS grantee,
+         a.privilege_type AS privilege,
+         a.is_grantable  AS grantable
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+   WHERE n.nspname = 'public'`);
+const aclMap = async () => {
+  const out = {};
+  for (const r of await aclRows()) {
+    (out[r.sig] ||= []).push(`${r.grantee}:${r.privilege}${r.grantable ? ':GRANTABLE' : ''}`);
+  }
+  for (const k of Object.keys(out)) out[k].sort();
+  return out;
+};
+const aclOnly = (map, names) => Object.fromEntries(
+  Object.entries(map).filter(([sig]) => names.some((n) => sig.startsWith(n + '('))));
+
+/* Canonical, order-independent text form: sorted signatures, each with its
+ * already-sorted grant list. Two ACLs are equal iff these strings are equal. */
+const aclKey = (map) => Object.keys(map).sort()
+  .map((k) => `${k}=[${map[k].join(',')}]`).join(';');
+const sameAcl = (a, b) => aclKey(a) === aclKey(b);
+
+const aclPreMigration = await aclMap();
+
+/* D0 — the isolated environment must start from the ACL production really has.
+ * A rollback test is worthless if the pre-migration baseline is invented. */
+const preAclOfTwo = aclOnly(aclPreMigration, ['r5_gate_status_core', 'r5_publish_today']);
+const preAclExpected = {
+  'r5_gate_status_core(text, boolean, boolean)': ['OWNER:EXECUTE', 'service_role:EXECUTE'],
+  'r5_publish_today(text, integer, boolean)':
+    ['OWNER:EXECUTE', 'authenticated:EXECUTE', 'service_role:EXECUTE'],
+};
+check('D0', 'the pre-migration ACL of the two gate functions equals the production read-only baseline',
+  sameAcl(preAclOfTwo, preAclExpected),
+  `got ${JSON.stringify(preAclOfTwo)}`);
+
+/* D0b — and the rest of the fixture matches the same read-only baseline,
+ * function by function, so nothing about privileges is guessed downstream. */
+const preAclDrift = Object.entries(PROD_ACL_2026_11_14)
+  .filter(([sig, want]) => JSON.stringify(aclPreMigration[sig] || null) !== JSON.stringify(want))
+  .map(([sig, want]) => `${sig}: want ${want} got ${aclPreMigration[sig] || 'absent'}`);
+check('D0b', 'every fixture function starts from its production grant set',
+  preAclDrift.length === 0, preAclDrift.join(' | '));
+
 
 /* Pre-migration baseline: what production looks like today. */
 const PROD_MD5 = {
@@ -122,15 +219,16 @@ const deploy = await grab(async () => {
 check('D1', '010 + legacy + 020 apply cleanly to the production-shaped schema',
   deploy.ok, deploy.message || `sql sha256 ${bytes(M010 + M020)}`);
 
-/* A full ACL snapshot of every function in the schema, so the migration can be
- * proven not to touch anything it does not own. */
-const aclSnapshot = async () => {
-  const rows = await q(`SELECT p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS sig,
-      coalesce(array_to_string(p.proacl, ' | '), '(default PUBLIC)') AS acl
-    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' ORDER BY 1`);
-  return Object.fromEntries(rows.map((r) => [r.sig, r.acl.replace(/cloudbase_postgres\w*/g, 'OWNER').replace(/postgres/g, 'OWNER')]));
-};
-const aclBaseline = await aclSnapshot();
+const aclAfterDeploy = await aclMap();
+/* nothing may gain a grant during deployment: the migration is allowed to
+ * narrow (it revokes), never to widen. */
+const widenedByDeploy = Object.keys(aclPreMigration).filter((sig) => {
+  const before = new Set(aclPreMigration[sig]);
+  return (aclAfterDeploy[sig] || []).some((g) => !before.has(g));
+});
+check('D7b', 'the migration grants no pre-existing function anything new',
+  widenedByDeploy.length === 0,
+  widenedByDeploy.map((s) => `${s}: ${aclPreMigration[s]} -> ${aclAfterDeploy[s]}`).join(' | '));
 
 const fns = (await q(`SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args,
     coalesce(array_to_string(p.proacl, ' | '), '(default PUBLIC)') AS acl, md5(p.prosrc) AS md5
@@ -174,14 +272,15 @@ const withPublic = fns.filter((r) => candidateNames.includes(r.proname)
 check('D7', 'no candidate function carries a PUBLIC EXECUTE grant',
   withPublic.length === 0, withPublic.map((r) => `${r.proname}:${r.acl}`).join(' | '));
 
-/* D8 — RLS on the four new tables, and no policy at all. */
+/* D8 — RLS on the new tables, and no policy at all. */
+const NEW_TABLES = ['r5_family_progress', 'r5_plan_audit', 'r5_credential_snapshot',
+  'r5_day_confirmation', 'r5_acl_baseline'];
 const rls = await q(`SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public'
-  AND tablename IN ('r5_family_progress','r5_plan_audit','r5_credential_snapshot','r5_day_confirmation')`);
+  AND tablename = ANY($1)`, [NEW_TABLES]);
 const policies = await q(`SELECT tablename, count(*)::int AS n FROM pg_policies WHERE schemaname='public'
-  AND tablename IN ('r5_family_progress','r5_plan_audit','r5_credential_snapshot','r5_day_confirmation')
-  GROUP BY tablename`);
-check('D8', 'all four new tables have RLS enabled and zero policies',
-  rls.length === 4 && rls.every((r) => r.rowsecurity) && policies.every((p) => p.n === 0),
+  AND tablename = ANY($1) GROUP BY tablename`, [NEW_TABLES]);
+check('D8', 'every new table has RLS enabled and zero policies',
+  rls.length === NEW_TABLES.length && rls.every((r) => r.rowsecurity) && policies.every((p) => p.n === 0),
   `${JSON.stringify(rls)} ${JSON.stringify(policies)}`);
 
 /* D9 — the migration itself wrote nothing. */
@@ -372,8 +471,8 @@ const rb = await grab(async () => { await exec(M900); });
 check('R1', '900_rollback.sql applies without error', rb.ok, rb.message || 'ok');
 
 const gone = await q(`SELECT count(*)::int AS n FROM pg_tables WHERE schemaname='public'
-  AND tablename IN ('r5_family_progress','r5_plan_audit','r5_credential_snapshot','r5_day_confirmation')`);
-check('R2', 'the four new tables are gone', gone[0].n === 0, gone[0].n);
+  AND tablename = ANY($1)`, [NEW_TABLES]);
+check('R2', 'every table 010 created is gone, including the ACL capture', gone[0].n === 0, gone[0].n);
 
 const fnsAfter = await q(`SELECT p.proname, md5(p.prosrc) AS md5,
     coalesce(array_to_string(p.proacl,' | '),'(default PUBLIC)') AS acl
@@ -383,10 +482,27 @@ check('R3', 'the production gate body is restored byte-for-byte',
   f2('r5_gate_status_core')[0].md5 === PROD_MD5.r5_gate_status_core, f2('r5_gate_status_core')[0].md5);
 check('R4', 'the production publish body is restored byte-for-byte',
   f2('r5_publish_today')[0].md5 === PROD_MD5.r5_publish_today, f2('r5_publish_today')[0].md5);
-check('R5', 'the rollback restores the PUBLIC EXECUTE default on both functions',
-  /(^|[ ,|])=[A-Za-z]*\//.test(f2('r5_gate_status_core')[0].acl)
-  && /(^|[ ,|])=[A-Za-z]*\//.test(f2('r5_publish_today')[0].acl),
-  `${f2('r5_gate_status_core')[0].acl} | ${f2('r5_publish_today')[0].acl}`);
+
+/* R5 — the rollback must restore the ACL that existed BEFORE the migration,
+ * function by function and signature by signature. Not "the default", not "a
+ * grant to PUBLIC": exactly what was there, and nothing else. */
+const aclAfter = await aclMap();
+const ROLLBACK_FNS = ['r5_gate_status_core', 'r5_publish_today'];
+const aclPreTwo = aclOnly(aclPreMigration, ROLLBACK_FNS);
+const aclPostTwo = aclOnly(aclAfter, ROLLBACK_FNS);
+check('R5', 'the rollback restores the pre-migration ACL of both replaced functions exactly',
+  sameAcl(aclPostTwo, aclPreTwo),
+  `want ${JSON.stringify(aclPreTwo)} got ${JSON.stringify(aclPostTwo)}`);
+
+const gatesAfter = aclPostTwo['r5_gate_status_core(text, boolean, boolean)'] || [];
+const pubAfter = aclPostTwo['r5_publish_today(text, integer, boolean)'] || [];check('R5b', 'the restored gate keeps no PUBLIC, anon or authenticated grant',
+  !gatesAfter.some((g) => /^(PUBLIC|anon|authenticated):/.test(g))
+  && gatesAfter.some((g) => g.startsWith('service_role:')),
+  gatesAfter.join(','));
+check('R5c', 'the restored publish function keeps authenticated + service_role and no PUBLIC/anon',
+  pubAfter.some((g) => g.startsWith('authenticated:')) && pubAfter.some((g) => g.startsWith('service_role:'))
+  && !pubAfter.some((g) => /^(PUBLIC|anon):/.test(g)),
+  pubAfter.join(','));
 
 const leftover = fnsAfter.filter((r) => candidateNames.includes(r.proname)
   && !['r5_gate_status_core', 'r5_publish_today'].includes(r.proname));
@@ -405,15 +521,21 @@ check('R7', 'rollback loses no learning record and rewrites no plan (all four fa
 check('R8', 'the 73 historical records are still exactly 73, byte-identical',
   (await fpRecords(REAL)).fp === baseline[REAL].rec.fp);
 
-/* Collateral-damage check: every function that existed before the migration and
- * is not part of the candidate must carry the exact same ACL afterwards. */
-const aclAfter = await aclSnapshot();
-const protectedSigs = Object.keys(aclBaseline).filter((sig) =>
-  !candidateNames.some((n) => sig.startsWith(n + '(')));
-const drifted = protectedSigs.filter((sig) => aclAfter[sig] !== aclBaseline[sig]);
-check('R10', 'no pre-existing function lost or gained a grant (full-schema ACL diff)',
-  drifted.length === 0, drifted.map((s) => `${s}: ${aclBaseline[s]} -> ${aclAfter[s]}`).join(' | ')
-  || `${protectedSigs.length} functions identical`);
+/* Collateral-damage check. The previous version excluded every candidate name
+ * from the comparison — which excluded the two functions the migration actually
+ * replaces, i.e. the only ones whose ACL the rollback has to touch. The diff is
+ * now over the *whole* pre-migration function set, replaced functions included,
+ * plus a check that nothing extra is left behind. */
+const drifted = Object.keys(aclPreMigration)
+  .filter((sig) => JSON.stringify(aclAfter[sig] || null) !== JSON.stringify(aclPreMigration[sig]));
+check('R10', 'every pre-existing function — replaced or untouched — carries the same grants after the rollback',
+  drifted.length === 0,
+  drifted.map((s) => `${s}: ${JSON.stringify(aclPreMigration[s])} -> ${JSON.stringify(aclAfter[s] || null)}`)
+    .join(' | ') || `${Object.keys(aclPreMigration).length} signatures identical`);
+
+const extraFns = Object.keys(aclAfter).filter((sig) => !(sig in aclPreMigration));
+check('R10b', 'the rollback leaves no function behind that production does not have',
+  extraFns.length === 0, extraFns.join(','));
 
 /* after rollback the legacy gate must still evaluate, or the site is down */
 await claims('u-parent');
@@ -421,6 +543,58 @@ const legacyStatus = await grab(() => q('SELECT public.r5_status($1) AS s', [REA
 check('R9', 'after the rollback the legacy gate still answers for the real family',
   legacyStatus.ok && legacyStatus.value[0].s && typeof legacyStatus.value[0].s.allowed === 'boolean',
   legacyStatus.message || JSON.stringify(legacyStatus.value[0].s).slice(0, 120));
+
+/* ------------------------------------------- N. post-rollback privilege probes
+ * The whole point of restoring the ACL is that `p_ignore_override` stays out of
+ * reach of a browser session. These run as real roles, not as the owner, so the
+ * ACL — not a superuser shortcut — decides. */
+const callAs = async (role, sql) => {
+  await resetRole();
+  await exec(`SET ROLE ${role}`);
+  try {
+    const rows = await q(sql);
+    return { ok: true, rows };
+  } catch (e) {
+    return { ok: false, code: e.code, message: String(e.message).split('\n')[0] };
+  } finally {
+    await resetRole();
+  }
+};
+const DENIED = '42501';
+const GATE_CALL = "SELECT public.r5_gate_status_core('iso-no-such-family', true, true) AS r";
+
+await clearClaims();
+const n1 = await callAs('authenticated', GATE_CALL);
+check('N1', 'after the rollback `authenticated` still cannot call the gate with p_ignore_override = true',
+  !n1.ok && n1.code === DENIED, `${n1.code || 'ok'} ${n1.message || ''}`);
+
+const n2 = await callAs('anon', GATE_CALL);
+check('N2', 'after the rollback `anon` cannot call the gate either',
+  !n2.ok && n2.code === DENIED, `${n2.code || 'ok'} ${n2.message || ''}`);
+
+const n3 = await callAs('service_role', GATE_CALL);
+check('N3', 'service_role still reaches the gate body — the refusal above is the ACL, not a broken function',
+  n3.code !== DENIED, `${n3.code || 'ok'} ${n3.message || ''}`);
+
+const PUB_CALL = "SELECT public.r5_publish_today('iso-no-such-family', 3, false) AS r";
+const n4 = await callAs('authenticated', PUB_CALL);
+check('N4', 'the rollback does not narrow the client path: `authenticated` still reaches r5_publish_today',
+  n4.code !== DENIED, `${n4.code || 'ok'} ${n4.message || ''}`);
+
+const n5 = await callAs('anon', PUB_CALL);
+check('N5', '`anon` still cannot call r5_publish_today (it never could)',
+  !n5.ok && n5.code === DENIED, `${n5.code || 'ok'} ${n5.message || ''}`);
+
+/* the real client session, not the owner: this is what the PWA does after a rollback */
+await claims('u-parent');
+const n6 = await callAs('authenticated', `SELECT public.r5_status('${REAL}') AS s`);
+check('N6', 'a logged-in client can still read r5_status after the rollback',
+  n6.ok && n6.rows[0].s && typeof n6.rows[0].s.allowed === 'boolean',
+  n6.message || JSON.stringify(n6.rows[0].s).slice(0, 120));
+
+const n7 = await callAs('authenticated', "SELECT public.r5_gate_status_core('iso-no-such-family', false, false) AS r");
+check('N7', '`authenticated` is denied the gate on the exact signature the app would use (false,false) too',
+  !n7.ok && n7.code === DENIED, `${n7.code || 'ok'} ${n7.message || ''}`);
 
 /* ============================================================= evidence file */
 await clearClaims(); await resetRole();
@@ -438,6 +612,19 @@ const summary = {
       'no CloudBase gateway/PostgREST layer: the HTTP RPC surface is not exercised here',
       'all connections share one backend session, so per-connection SET ROLE does not isolate; role switching is done per statement batch instead',
     ],
+  },
+  /* Privilege before/after, per function and per signature. `production_readonly`
+   * is what the live CloudBase instance grants today (SELECT-only query). */
+  acl: {
+    source: 'read-only pg_proc.proacl on CloudBase normal-goose-d5g4qyzr8bb389a4a, 2026-11-14',
+    functions: Object.keys({ ...aclPreMigration, ...aclAfter }).sort().map((sig) => ({
+      signature: sig,
+      production_readonly: PROD_ACL_2026_11_14[sig] || null,
+      pre_migration: aclPreMigration[sig] || null,
+      after_deploy: aclAfterDeploy[sig] || null,
+      after_rollback: aclAfter[sig] || null,
+      rollback_restored_exactly: JSON.stringify(aclAfter[sig] || null) === JSON.stringify(aclPreMigration[sig] || null),
+    })),
   },
   sql_sha256_16: { '010': bytes(M010), '020': bytes(M020), '900': bytes(M900) },
   totals: { pass: results.filter((r) => r.status === 'PASS').length, fail: results.filter((r) => r.status === 'FAIL').length, ms: Date.now() - t0 },

@@ -16,11 +16,34 @@ const ROOT = path.resolve(HERE, '../..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const BASE = read('fixtures/schema/base-schema.sql');
+const PROD_ACL = read('fixtures/schema/production-acl.sql');
 const M010 = read('candidate/sql/010_authoritative_day.sql');
 const LEGACY_GATE = read('candidate/sql/legacy/r5_gate_status_core.production.sql');
 const LEGACY_PUB = read('candidate/sql/legacy/r5_publish_today.production.sql');
 const M020 = read('candidate/sql/020_gate_and_publish.sql');
 const ROLLBACK_SQL = read('candidate/sql/900_rollback.sql');
+
+/* The pre-migration state must look like production, where both functions
+ * already exist and already carry an explicit ACL (no PUBLIC grant anywhere).
+ * The legacy files are the same bytes under a _legacy name. */
+const deLegacy = (src, from, to) => src.replace(`FUNCTION public.${from}(`, `FUNCTION public.${to}(`);
+const PROD_GATE = deLegacy(LEGACY_GATE, 'r5_gate_status_core_legacy', 'r5_gate_status_core');
+const PROD_PUB = deLegacy(LEGACY_PUB, 'r5_publish_today_legacy', 'r5_publish_today');
+
+/* Every EXECUTE grant in the schema, canonicalised, so "same ACL" is a set
+ * comparison rather than a regex over pg_proc's array literal. */
+const aclLines = async (db) => (await db.query(`
+  SELECT p.proname || '(' || oidvectortypes(p.proargtypes) || ')'
+         || '|' ||
+         CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+              WHEN a.grantee = p.proowner THEN 'OWNER'
+              ELSE pg_get_userbyid(a.grantee) END
+         || ':' || a.privilege_type AS line
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+   WHERE n.nspname = 'public'
+   ORDER BY 1`)).rows.map((r) => r.line);
 
 const suite = createSuite('sql-e2e');
 const num = (v) => (v === null || v === undefined ? v : Number(v));
@@ -30,6 +53,9 @@ const PROD_PUB_MD5 = 'b0d8d2deb58ab5240c9207e6b5081ea3';
 async function newDb({ candidate = true } = {}) {
   const db = new PGlite();
   await db.exec(BASE);
+  await db.exec(PROD_GATE);
+  await db.exec(PROD_PUB);
+  await db.exec(PROD_ACL);
   if (candidate) {
     await db.exec(M010);
     await db.exec(LEGACY_GATE);
@@ -38,6 +64,20 @@ async function newDb({ candidate = true } = {}) {
   }
   return db;
 }
+
+/* The grants the instance has BEFORE the migration — the target a rollback has
+ * to reproduce. Captured once from a throwaway instance so H10 compares against
+ * production's state and not against the candidate's own output. */
+const PRE_MIGRATION_ACL = await (async () => {
+  const db = new PGlite();
+  await db.exec(BASE);
+  await db.exec(PROD_GATE);
+  await db.exec(PROD_PUB);
+  await db.exec(PROD_ACL);
+  const lines = await aclLines(db);
+  await db.close();
+  return lines;
+})();
 
 async function today(db) {
   const r = await db.query("SELECT (timezone('Asia/Shanghai', clock_timestamp()))::date::text AS d");
@@ -487,6 +527,7 @@ async function derive(db, id) {
     guardError);
 
   await db.exec(ROLLBACK_SQL);
+
   const restoredGate = (await db.query(
     `SELECT md5(prosrc) AS m FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='public' AND p.proname='r5_gate_status_core'`)).rows[0].m;
@@ -515,13 +556,23 @@ async function derive(db, id) {
   const s = await status(db, id);
   suite.check('H9', 'after rollback the legacy gate still evaluates the same rows',
     s.study_day === 3 && s.allowed === false, `${s.study_day}/${s.reason}`);
-  const pubAcl = (await db.query(`SELECT proacl::text AS acl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-    WHERE n.nspname='public' AND p.proname='r5_publish_today'`)).rows[0].acl;
-  const gateAcl = (await db.query(`SELECT proacl::text AS acl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-    WHERE n.nspname='public' AND p.proname='r5_gate_status_core'`)).rows[0].acl;
-  suite.check('H10', 'rollback restores the production PUBLIC EXECUTE default on both functions',
-    /(^|,)=[A-Z]*\//.test(pubAcl || '') && /(^|,)=[A-Z]*\//.test(gateAcl || ''),
-    `${pubAcl} | ${gateAcl}`);
+  /* H10 — the grants are half of the rollback. Production has no PUBLIC grant on
+   * either function (r5_gate_status_core is service_role + owner only), so the
+   * rollback must restore exactly the grants that existed before the migration,
+   * not a remembered default. */
+  const aclAfterRollback = await aclLines(db);
+  const aclDelta = aclAfterRollback.filter((l) => !PRE_MIGRATION_ACL.includes(l))
+    .concat(PRE_MIGRATION_ACL.filter((l) => !aclAfterRollback.includes(l)));
+  suite.check('H10', 'rollback restores the pre-migration ACL of every function, grant for grant',
+    aclDelta.length === 0, aclDelta.join(' | '));
+  const gateGrantLine = (l) => l.startsWith('r5_gate_status_core(');
+  suite.check('H11', 'after rollback no function is reachable by PUBLIC — least of all the gate',
+    !aclAfterRollback.some((l) => l.includes('|PUBLIC:')),
+    aclAfterRollback.filter((l) => l.includes('|PUBLIC:')).join(' | '));
+  suite.check('H12', 'the restored gate is service_role + owner only',
+    aclAfterRollback.filter(gateGrantLine).map((l) => l.split('|')[1]).sort().join(',')
+      === 'OWNER:EXECUTE,service_role:EXECUTE',
+    aclAfterRollback.filter(gateGrantLine).join(' | '));
   await db.close();
 }
 

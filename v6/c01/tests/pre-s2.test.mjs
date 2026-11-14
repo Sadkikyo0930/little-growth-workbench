@@ -21,6 +21,14 @@ const SW_SELF = read('candidate/v6-selftest/sw.js');
 
 const suite = createSuite('pre-s2');
 
+/* Structural checks must look at code, not at prose: several comments in these
+ * files quote the very statements the gates forbid (for example "never GRANT ...
+ * TO PUBLIC"), and a comment must not be able to fail or satisfy a gate. */
+const stripSql = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+const C010 = stripSql(M010);
+const C020 = stripSql(M020);
+const C900 = stripSql(M900);
+
 const DML_RECORDS = /(insert\s+into|update|delete\s+from|truncate)\s+(public\.)?growth_learning_records/i;
 
 suite.check('P1', '010 never writes child records', !DML_RECORDS.test(M010));
@@ -125,18 +133,32 @@ const ALL_SQL = M010 + M020;
     `definers=${definers.length} unpinned=${unpinned.length}`);
 }
 
-/* P18 — no function or table may be opened to PUBLIC. */
-suite.check('P18', 'no candidate statement grants anything to PUBLIC except the rollback restore',
-  !/GRANT\s+[A-Z ,]+\s+ON\s+(FUNCTION|TABLE|SEQUENCE)[\s\S]{0,80}?\sTO\s+PUBLIC/i.test(ALL_SQL)
-  && /REVOKE ALL ON FUNCTION %s FROM PUBLIC/.test(M010)
-  && /REVOKE ALL ON FUNCTION %s FROM PUBLIC/.test(M020));
+/* P18 — no function or table may be opened to PUBLIC.
+ *
+ * This used to allow exactly one exception: the rollback's `GRANT ... TO PUBLIC`
+ * of the two production functions. That exception was wrong. Production carries
+ * an explicit ACL with no PUBLIC entry (r5_gate_status_core: service_role +
+ * owner), so granting PUBLIC on rollback is privilege escalation, not a restore.
+ *
+ * `TO PUBLIC` may now appear only inside the rollback's ACL-restore block, where
+ * it is emitted from the captured baseline row and the result is verified. A
+ * top-level, unconditional `GRANT ... TO PUBLIC;` is forbidden everywhere. */
+{
+  const topLevelPublicGrant = /^[ \t]*GRANT\s[^;]*?TO\s+PUBLIC\s*;/gim.test(C900);
+  const publicInMigrations = /GRANT\s[^;]{0,160}?TO\s+PUBLIC/i.test(C010 + C020);
+  suite.check('P18', 'nothing grants to PUBLIC unconditionally — not even the rollback',
+    !topLevelPublicGrant && !publicInMigrations
+    && /REVOKE ALL ON FUNCTION %s FROM PUBLIC/.test(M010)
+    && /REVOKE ALL ON FUNCTION %s FROM PUBLIC/.test(M020),
+    `toplevel=${topLevelPublicGrant} migrations=${publicInMigrations}`);
+}
 
-/* P19 — RLS must be enabled on all four new tables, never disabled. */
+/* P19 — RLS must be enabled on every new table, never disabled. */
 {
   const enabled = [...ALL_SQL.matchAll(/ALTER TABLE (public\.\w+)\s+ENABLE ROW LEVEL SECURITY/gi)].map((m) => m[1]);
   suite.check('P19', 'RLS is enabled on every new table and never disabled',
-    enabled.length === 4
-    && ['r5_family_progress', 'r5_plan_audit', 'r5_credential_snapshot', 'r5_day_confirmation']
+    enabled.length === 5
+    && ['r5_family_progress', 'r5_plan_audit', 'r5_credential_snapshot', 'r5_day_confirmation', 'r5_acl_baseline']
       .every((t) => enabled.includes('public.' + t))
     && !/DISABLE ROW LEVEL SECURITY/i.test(ALL_SQL),
     enabled.join(','));
@@ -160,15 +182,29 @@ suite.check('P22', 'progress_ensure refuses to invent a day for a family that al
   && /FROM public\.r5_daily_plan WHERE family_id = p_family_id/.test(M020)
   && /FROM public\.growth_learning_records WHERE family_id = p_family_id/.test(M020));
 
-/* P23 — the rollback must remove everything the candidate adds. */
+/* P23 — the rollback must remove everything the candidate adds, and put the two
+ * replaced functions back with the privileges they had — read from the baseline
+ * 010 captured, never from a hardcoded "default". */
 {
   const mustDrop = ['r5_initialize_authoritative_day', 'r5_initialization_snapshot',
-    'r5_initialization_snapshot_impl', 'r5_credential_derive_impl', 'r5_day_confirmation'];
-  suite.check('P23', 'rollback drops every new function and table, and restores the PUBLIC default',
+    'r5_initialization_snapshot_impl', 'r5_credential_derive_impl', 'r5_day_confirmation',
+    'r5_acl_baseline'];
+  suite.check('P23', 'rollback drops every new function/table and restores the captured ACL',
     mustDrop.every((n) => new RegExp(`DROP (FUNCTION|TABLE) IF EXISTS public\\.${n}`, 'i').test(M900))
-    && /GRANT EXECUTE ON FUNCTION public\.r5_publish_today\(text, integer, boolean\) TO PUBLIC/.test(M900),
+    && /FROM public\.r5_acl_baseline/.test(M900)
+    && /R5_ROLLBACK_ACL_MISMATCH/.test(M900)
+    && !/^[ \t]*GRANT\s[^;]*?TO\s+PUBLIC\s*;/gim.test(C900),
     mustDrop.filter((n) => !new RegExp(`DROP (FUNCTION|TABLE) IF EXISTS public\\.${n}`, 'i').test(M900)).join(','));
 }
+
+/* P23b — the ACL capture must happen before 020 rewrites the ACL, and must be
+ * locked down like every other new table. */
+suite.check('P23b', '010 captures the pre-migration ACL into a locked-down table',
+  /CREATE TABLE IF NOT EXISTS public\.r5_acl_baseline/.test(M010)
+  && /aclexplode\(coalesce\(p\.proacl, acldefault\('f', p\.proowner\)\)\)/.test(M010)
+  && /REVOKE ALL ON TABLE public\.r5_acl_baseline\s+FROM PUBLIC/.test(M010)
+  && /ALTER TABLE public\.r5_acl_baseline\s+ENABLE ROW LEVEL SECURITY/.test(M010),
+  'capture before the privilege block');
 
 /* P24 — a correction must never rewrite history: the plans a family already
  * lived through and the records of what the child actually did are read-only. */

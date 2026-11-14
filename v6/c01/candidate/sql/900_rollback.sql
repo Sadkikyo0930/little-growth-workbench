@@ -13,9 +13,14 @@
 --     Child records are never affected.
 --   * Re-creates r5_gate_status_core and r5_publish_today from the verbatim
 --     production bodies (md5 f78aceeba9c934fa8f4b5c754daba101 / b0d8d2deb58ab5240c9207e6b5081ea3).
+--   * Restores the EXACT pre-migration EXECUTE grants of those two functions
+--     (step 5). It never grants anything to PUBLIC unconditionally: production
+--     has no PUBLIC grant on either function, and r5_gate_status_core accepts
+--     p_ignore_override from its caller.
 --
--- Order matters: drop the guard trigger BEFORE dropping progress, and restore
--- the real functions BEFORE dropping the helper they depended on.
+-- Order matters: drop the guard trigger BEFORE dropping progress, restore the
+-- real functions BEFORE dropping the helper they depended on, and restore the
+-- ACL BEFORE dropping the table that captured it.
 -- =============================================================================
 BEGIN;
 
@@ -192,16 +197,135 @@ DROP FUNCTION IF EXISTS public.r5_subject_canonical(text);
 DROP FUNCTION IF EXISTS public.r5_publish_today_legacy(text, integer, boolean);
 DROP FUNCTION IF EXISTS public.r5_gate_status_core_legacy(text, boolean, boolean);
 
--- 5. drop C0.1 tables (no child data inside)
+-- 5. restore the EXACT pre-migration ACL of the two functions 020 replaced
+-- -----------------------------------------------------------------------------
+-- Restoring the body is only half a rollback: the grants are part of the
+-- contract. `CREATE OR REPLACE FUNCTION` preserves proacl, but 020 deliberately
+-- re-wrote it (REVOKE ALL FROM PUBLIC + explicit grants), so the ACL must be put
+-- back or the instance keeps the migration's privilege shape forever.
+--
+-- What it must go back to, read-only from production pg_proc on 2026-11-14:
+--
+--   r5_gate_status_core(text,boolean,boolean)  service_role + owner
+--   r5_publish_today(text,integer,boolean)     authenticated + service_role + owner
+--
+-- In particular there is NO PUBLIC grant. `CREATE OR REPLACE FUNCTION` on a
+-- function that never had one does not add it, and neither may the rollback:
+-- `r5_gate_status_core` accepts `p_ignore_override` from its caller, so PUBLIC
+-- EXECUTE on it is the parent-override bypass handed to `anon`.
+--
+-- Two sources, in order of authority:
+--   1. public.r5_acl_baseline — what 010 captured while it was still live;
+--   2. the literal production ACL above — only when 010 never ran here.
+-- Either way the result is read back and compared; a mismatch aborts the whole
+-- rollback instead of leaving a wider grant in place.
+DO $acl$
+DECLARE
+  v_fn           record;
+  v_have_baseline boolean := to_regclass('public.r5_acl_baseline') IS NOT NULL;
+  v_grantee      text;
+  v_grantable    boolean;
+  v_want         text[];
+  v_got          text[];
+BEGIN
+  CREATE TEMP TABLE IF NOT EXISTS _r5_acl_target (
+    grantee text, privilege text, grantable boolean) ON COMMIT DROP;
+
+  FOR v_fn IN
+    SELECT p.oid, p.proname, p.proowner,
+           p.proname || '(' || oidvectortypes(p.proargtypes) || ')' AS sig,
+           pg_get_userbyid(p.proowner) AS owner_name
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+       AND p.proname IN ('r5_gate_status_core', 'r5_publish_today')
+  LOOP
+    TRUNCATE _r5_acl_target;
+
+    -- (1) the captured pre-migration grants, when 010 left them behind
+    IF v_have_baseline THEN
+      EXECUTE format(
+        'INSERT INTO _r5_acl_target (grantee, privilege, grantable)
+           SELECT grantee, privilege, is_grantable
+             FROM public.r5_acl_baseline
+            WHERE obj_kind = %L AND signature = %L',
+        'function', v_fn.sig);
+    END IF;
+
+    -- (2) fall back to the production ACL only when nothing was captured
+    IF NOT EXISTS (SELECT 1 FROM _r5_acl_target) THEN
+      INSERT INTO _r5_acl_target (grantee, privilege, grantable)
+      SELECT g, 'EXECUTE', false
+        FROM unnest(
+          CASE v_fn.proname
+            WHEN 'r5_gate_status_core'
+              THEN ARRAY[v_fn.owner_name, 'service_role']
+            ELSE ARRAY[v_fn.owner_name, 'authenticated', 'service_role']
+          END) AS g;
+    END IF;
+
+    -- Revoke from every role that currently holds a grant (so a widened ACL can
+    -- never survive) plus PUBLIC and every role the target names. Revoking from
+    -- a role that holds nothing is a no-op, so this is idempotent.
+    FOR v_grantee IN
+      SELECT DISTINCT g FROM (
+        SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS g
+          FROM aclexplode(coalesce((SELECT proacl FROM pg_proc WHERE oid = v_fn.oid),
+                                   acldefault('f', v_fn.proowner))) a
+        UNION SELECT grantee FROM _r5_acl_target
+        UNION SELECT 'PUBLIC'
+      ) s
+    LOOP
+      IF v_grantee = 'PUBLIC' THEN
+        EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC', v_fn.sig);
+      ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_grantee) THEN
+        EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM %I', v_fn.sig, v_grantee);
+      END IF;
+    END LOOP;
+
+    FOR v_grantee, v_grantable IN
+      SELECT grantee, grantable FROM _r5_acl_target ORDER BY grantee
+    LOOP
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_grantee) THEN
+        RAISE EXCEPTION 'R5_ROLLBACK_ACL_ROLE_MISSING: role % no longer exists', v_grantee;
+      END IF;
+      IF v_grantee = 'PUBLIC' THEN
+        EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO PUBLIC%s', v_fn.sig,
+                       CASE WHEN v_grantable THEN ' WITH GRANT OPTION' ELSE '' END);
+      ELSE
+        EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO %I%s', v_fn.sig, v_grantee,
+                       CASE WHEN v_grantable THEN ' WITH GRANT OPTION' ELSE '' END);
+      END IF;
+    END LOOP;
+
+    -- Read it back. Order-insensitive set comparison, per function and per
+    -- signature: exactly the grants that existed before the migration, no more.
+    SELECT array_agg(g || ':' || p ORDER BY g, p) INTO v_got
+      FROM (SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                        WHEN a.grantee = v_fn.proowner THEN 'OWNER'
+                        ELSE pg_get_userbyid(a.grantee) END AS g,
+                   a.privilege_type AS p
+              FROM aclexplode(coalesce((SELECT proacl FROM pg_proc WHERE oid = v_fn.oid),
+                                       acldefault('f', v_fn.proowner))) a) s;
+    SELECT array_agg(w ORDER BY w) INTO v_want FROM (
+      SELECT CASE WHEN grantee = v_fn.owner_name THEN 'OWNER' ELSE grantee END
+             || ':' || privilege AS w
+        FROM _r5_acl_target) t2;
+
+    IF v_got IS DISTINCT FROM v_want THEN
+      RAISE EXCEPTION 'R5_ROLLBACK_ACL_MISMATCH: % expected [%] got [%]',
+        v_fn.sig, array_to_string(v_want, ', '), array_to_string(v_got, ', ');
+    END IF;
+  END LOOP;
+END;
+$acl$;
+
+-- 6. drop C0.1 tables (no child data inside)
 DROP TABLE IF EXISTS public.r5_day_confirmation;
 DROP TABLE IF EXISTS public.r5_credential_snapshot;
 DROP TABLE IF EXISTS public.r5_plan_audit;
 DROP TABLE IF EXISTS public.r5_family_progress;
-
--- 6. restore the production default privilege (EXECUTE to PUBLIC) on the two
---    functions this candidate hardened, so a rollback leaves the instance in
---    exactly the state S3 found it in
-GRANT EXECUTE ON FUNCTION public.r5_publish_today(text, integer, boolean) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.r5_gate_status_core(text, boolean, boolean) TO PUBLIC;
+-- the ACL capture has been consumed above; it belongs to the migration too
+DROP TABLE IF EXISTS public.r5_acl_baseline;
 
 COMMIT;
