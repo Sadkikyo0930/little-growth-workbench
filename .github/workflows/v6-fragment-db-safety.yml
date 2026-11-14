@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Verify approved drop rate does not activate production rewards
+        run: |
+          set -o pipefail
+          node tests/reward-approval-boundary.test.mjs | tee approval-boundary.log
+          grep -q "ALL 3 APPROVAL BOUNDARY CHECKS PASSED" approval-boundary.log
       - name: Verify current V6 Chinese and fragment-garage candidate
         run: |
           set -o pipefail
@@ -65,6 +70,7 @@ jobs:
           path: |
             authority.log
             reward-ui.log
+            approval-boundary.log
             v6-smoke.log
             authz.log
             atomicity.log
