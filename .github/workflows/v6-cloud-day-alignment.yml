@@ -15,4 +15,5 @@ jobs:
         with:
           node-version: '24'
       - run: node --check v6/pwa.js
+      - run: node --check v6/family-auto-sync.js
       - run: node tests/cloud-day-alignment.test.mjs
