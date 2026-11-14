@@ -32,17 +32,25 @@ a{color:#1264ad}#data{display:none}
 <p id="restorePreview" class="muted">请先登录并查看云端记录。</p>
 <button id="restoreMissing" class="secondary" type="button" disabled>预览并补全本机课程完成标记</button>
 <p id="restoreStatus" class="muted" role="status"></p>
+<button id="restoreAutoToggle" class="secondary" type="button" disabled>开启本机课程自动补全</button>
+<p id="restoreAutoState" class="muted">默认关闭。家长在本设备主动启用之后，打开 V6 时才会自动补缺失的课程完成标记。</p>
 </section>
 <p class="muted">仅显示已上传至 CloudBase 的记录。本机历史试做记录不会自动算作正式成绩；尚未同步时显示空列表属于正常情况。</p></section>
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-sync.html">妈妈云端同步中心</a> · <a href="./family-login-test.html">家庭登录诊断页</a></p>
 </main><script>
 (function(){"use strict";
 var FAMILY="little-growth-family-001",app,auth,verifiedRows=null,verifiedMember=null;
+var RESTORE_OPT_IN="v6-family-auto-restore-enabled";
+function drawRestoreToggle(){
+ var enabled=localStorage.getItem(RESTORE_OPT_IN)==="yes";
+ $("restoreAutoToggle").textContent=enabled?"关闭本机课程自动补全":"开启本机课程自动补全";
+ $("restoreAutoState").textContent=enabled?"已在此设备启用；仅同步已验证的课程完成标记，保留本机备份。":"当前设备尚未启用自动补全；不会覆盖现有答题或存档。";
+}
 var $=id=>document.getElementById(id);
 var cdns=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
 function setStatus(t){$("status").textContent=t}
 function err(e){return String(e&& (e.message||e.code||e.error_description)||e||"未知错误")}
-function reset(){ $("data").style.display="none";$("records").replaceChildren();verifiedRows=null;verifiedMember=null;$("restorePanel").hidden=true;$("restoreMissing").disabled=true }
+function reset(){ $("data").style.display="none";$("records").replaceChildren();verifiedRows=null;verifiedMember=null;$("restorePanel").hidden=true;$("restoreMissing").disabled=true;$("restoreAutoToggle").disabled=true }
 function load(i){
  if(i>=cdns.length){setStatus("SDK 加载失败，请检查网络后刷新。");return}
  var s=document.createElement("script");s.src=cdns[i];s.async=true;
@@ -130,12 +138,21 @@ $("form").addEventListener("submit",async function(e){
   if(foreign)throw Error("数据库返回了其他家庭的数据，请立即检查 RLS 策略。");
   verifiedRows=q.data;verifiedMember=members[0];
   render(q.data,members[0]);
-  $("restorePanel").hidden=false;$("restoreMissing").disabled=false;
+  $("restorePanel").hidden=false;$("restoreMissing").disabled=false;$("restoreAutoToggle").disabled=false;drawRestoreToggle();
   $("restorePreview").textContent="云端读取到 "+q.data.filter(x=>x.record_type==="course-complete").length+" 条课程完成记录。请先查看补全预览。";
   setStatus("✅ 登录成功，家庭身份检查通过，云端读取完成。当前读取到 "+q.data.length+" 条学习记录。此页面没有执行写入。");
  }catch(e){reset();$("password").value="";setStatus("❌ "+err(e))}
  finally{$("login").disabled=false}
 });
+$("restoreAutoToggle").onclick=function(){
+ if(!verifiedMember)return;
+ if(localStorage.getItem(RESTORE_OPT_IN)==="yes"){localStorage.removeItem(RESTORE_OPT_IN)}
+ else {
+  if(!confirm("确认在此设备启用自动补全吗？只补缺失的课程完成标记，不自动推进学习日，不覆盖答题、测评和赛车存档，并保留备份。"))return;
+  localStorage.setItem(RESTORE_OPT_IN,"yes");
+ }
+ drawRestoreToggle();
+};
 $("restoreMissing").onclick=async function(){
  if(!verifiedRows||!verifiedMember)return;
  $("restoreMissing").disabled=true;
