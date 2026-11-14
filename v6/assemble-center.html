@@ -325,6 +325,11 @@ const DEBUG = isDebug();
 let state = null;
 let progress = [];
 let pendingVehicle = null;
+const APPROVED_CARS = Object.freeze({
+  frag_car_common_01: { name: '雷霆破晓', note: '紫金火箭赛车，开放式驾驶舱与尾部推进器' },
+  frag_car_rare_01: { name: '秋名疾影', note: '黑白 AE86 赛车，专属碎片组装' },
+});
+
 /* device  = 赛车游戏发的设备凭证（老路，仍然支持）
  * member  = 家长登录身份（新路，V6 首页直接进来就是这条） */
 let mode = deviceToken() ? 'device' : 'member';
@@ -421,10 +426,7 @@ function render() {
     // 这两辆车已有验收过的缩略图和名称。旧云端目录的 placeholder
     // 仅是过时的视觉元数据，不应让卡片重新显示“开发占位”。
     // 余额、价格、归属与是否允许组装仍全部取云端结果。
-    const approvedCars = Object.freeze({
-      frag_car_common_01: { name: '雷霆破晓', note: '紫金火箭赛车，开放式驾驶舱与尾部推进器' },
-      frag_car_rare_01: { name: '秋名疾影', note: '黑白 AE86 赛车，专属碎片组装' },
-    });
+    const approvedCars = APPROVED_CARS;
     const approved = approvedCars[p.vehicle_id];
     const displayName = approved ? approved.name : p.name;
     const note = approved
@@ -451,7 +453,7 @@ function render() {
     const when = at && !isNaN(at) ? `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}` : '';
     return `<div class="row">
       <span class="em">${x.tier === 'rare' ? '💎' : '🏎️'}</span>
-      <span>${x.name}<small>${x.via}${when ? ' · ' + when : ''}</small></span>
+      <span>${(APPROVED_CARS[x.vehicle_id] || {}).name || x.name}<small>${x.via}${when ? ' · ' + when : ''}</small></span>
       <span class="st">✓ 已入库</span>
     </div>`;
   }).join('')}</div>` : `<div class="empty">还没有组装好的碎片赛车，先去学习攒碎片吧</div>`;
@@ -563,7 +565,7 @@ function openConfirm(vid) {
   if (!p) return;
   if (!p.ready) { toast(`还差 ${p.missing} 片碎片`); return; }
   pendingVehicle = vid;
-  $('sheetTitle').textContent = `组装「${p.name}」`;
+  $('sheetTitle').textContent = `组装「${(APPROVED_CARS[p.vehicle_id] || {}).name || p.name}」`;
   $('sheetBody').textContent = '组装成功后这辆车会永久加入车库，碎片不会退回。';
   $('sheetCost').textContent = '消耗：' + p.rows.map(r => `${r.name} ${r.need} 片`).join(' + ')
     + `（现有 ${p.rows.map(r => `${r.name} ${r.have} 片`).join(' · ')}）`;
@@ -620,11 +622,11 @@ async function doAssemble() {
 }
 
 function showWin(p) {
-  const name = (p && p.name) || '新赛车';
+  const name = (p && ((APPROVED_CARS[p.vehicle_id] || {}).name || p.name)) || '新赛车';
   $('winEmoji').textContent = (p && p.tier === 'rare') ? '💎' : '🏎️';
   $('winTitle').textContent = '组装完成！';
   $('winName').textContent = name;
-  $('winBody').textContent = '已经永久加进你的车库。外观做好之后就能在赛车游戏里开上赛道。';
+  $('winBody').textContent = '已经永久加进家庭车库。赛车游戏更新后，完成云端同步就能使用。';
   $('win').classList.add('show');
   burst();
 }
