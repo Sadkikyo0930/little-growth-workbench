@@ -539,6 +539,41 @@ console.log('\n=== M V6 组装同步到 V2 可驾驶车辆 ID ===');
   await db.close();
 }
 
+/* ============================================================ N member claim
+ * V6 parent-authenticated claim is the SAME ledger, not a second reward system.
+ * These checks use synthetic families only; production remains closed.
+ */
+console.log('\n=== N 家长登录模式领取碎片 · 设备令牌非必需 ===');
+{
+  const db=await newStack({rewardsActive:false});
+  await asAnon(db);
+  const anon=await denied(()=>rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r"));
+  ok('N1','匿名用户无家长领取 RPC 的 EXECUTE 权限',anon.denied&&anon.code==='42501',anon);
+  await asParent(db,'nobody-at-all');
+  const stranger=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
+  ok('N2','非家庭成员禁止领取且零写',stranger.status==='NOT_MEMBER'&&stranger.zero_write===true,stranger);
+  await asParent(db,'u-two-families');
+  const amb=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
+  ok('N3','一个账号归属两家时拒绝代选',amb.status==='AMBIGUOUS_MEMBER'&&amb.zero_write===true,amb);
+  await asParent(db,MOM);
+  const cross=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
+  ok('N4','家长不能拿别家学习记录领碎片',cross.status==='RECORD_NOT_FOUND'&&cross.zero_write===true,cross);
+  await asParent(db,'r5-selftest-parent');
+  const paused=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
+  ok('N5','即使已登录家长，奖励未启用仍零写',paused.status==='REWARD_NOT_ACTIVE'&&paused.zero_write===true,paused);
+  await setConfig(db,{status:'active',drop_percent:100});
+  await asParent(db,'r5-selftest-parent');
+  const earned=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
+  ok('N6','隔离启用后家长模式复用 60% 所属的服务端领取规则',
+     earned.status==='CLAIMED'&&Number(earned.granted_normal)===1,earned);
+  const repeat=await rpc(db,"SELECT public.r5_fragment_member_claim('lr-other-today-1') AS r");
+  ok('N7','家长重复领取幂等，零写且无额外碎片',
+    repeat.status==='ALREADY_CLAIMED'&&repeat.zero_write===true,repeat);
+  const sig=await one(db,"SELECT p.pronargs::int n, array_to_string(p.proargnames,',') args FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace WHERE ns.nspname='public' AND p.proname='r5_fragment_member_claim'");
+  ok('N8','家长领取 RPC 只接受 record_id，不接受 family/cost/probability',sig.n===1&&sig.args==='p_record_id',sig);
+  await db.close();
+}
+
 /* ================================================================ 汇总 */
 console.log('\n' + '='.repeat(60));
 console.log(`TOTAL  ${passed}/${passed + failed} passed, ${failed} failed`);
