@@ -3,10 +3,10 @@
   "total": 13,
   "passed": 13,
   "failed": 0,
-  "skipped": 9,
+  "skipped": 0,
   "failures": [],
-  "verified": false,
-  "mode": "UNVERIFIED",
+  "verified": true,
+  "mode": "LIVE",
   "commit": "54012efe4e7d0555491050bde17318a0cbe4818c",
   "repo": "Sadkikyo0930/little-racing-v2",
   "results": [
@@ -30,66 +30,57 @@
     },
     {
       "id": "L4",
-      "title": "racing commit is reachable",
+      "title": "racing commit is reachable through the GitHub API",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L5",
       "title": "racing commit SHA matches the manifest",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L6:docs/index.html",
-      "title": "docs/index.html blob matches the manifest",
+      "title": "docs/index.html blob matches the manifest (size 4430)",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L6:docs/gate.html",
-      "title": "docs/gate.html blob matches the manifest",
+      "title": "docs/gate.html blob matches the manifest (size 25018)",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L6:docs/manifest.webmanifest",
-      "title": "docs/manifest.webmanifest blob matches the manifest",
+      "title": "docs/manifest.webmanifest blob matches the manifest (size 917)",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L6:docs/r5/paths.mjs",
-      "title": "docs/r5/paths.mjs blob matches the manifest",
+      "title": "docs/r5/paths.mjs blob matches the manifest (size 2690)",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L6:docs/r5/race-guard.mjs",
-      "title": "docs/r5/race-guard.mjs blob matches the manifest",
+      "title": "docs/r5/race-guard.mjs blob matches the manifest (size 3441)",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L6:docs/r5/config.mjs",
-      "title": "docs/r5/config.mjs blob matches the manifest",
+      "title": "docs/r5/config.mjs blob matches the manifest (size 1707)",
       "pass": true,
-      "skipped": true,
-      "detail": "HTTP_403"
+      "detail": ""
     },
     {
       "id": "L7",
       "title": "V6 main has not moved since capture",
       "pass": true,
-      "skipped": true,
-      "detail": "NETWORK_UNAVAILABLE"
+      "detail": ""
     },
     {
       "id": "L8",

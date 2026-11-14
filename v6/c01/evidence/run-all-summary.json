@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-11-13T22:06:22.212Z",
+  "started_at": "2026-11-14T00:37:13.971Z",
   "node": "v22.22.2",
   "pglite": true,
   "suites": [
@@ -7,8 +7,8 @@
       "suite": "pre-s2",
       "status": "PASS",
       "exit_code": 0,
-      "total": 23,
-      "passed": 23,
+      "total": 26,
+      "passed": 26,
       "failed": 0,
       "skipped": 0,
       "verified": null,
@@ -59,6 +59,17 @@
       "failures": []
     },
     {
+      "suite": "real-history",
+      "status": "PASS",
+      "exit_code": 0,
+      "total": 45,
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "verified": null,
+      "failures": []
+    },
+    {
       "suite": "security",
       "status": "PASS",
       "exit_code": 0,
@@ -76,17 +87,17 @@
       "total": 13,
       "passed": 13,
       "failed": 0,
-      "skipped": 9,
-      "verified": false,
+      "skipped": 0,
+      "verified": true,
       "failures": []
     }
   ],
   "totals": {
-    "total": 272,
-    "passed": 272,
+    "total": 320,
+    "passed": 320,
     "failed": 0,
-    "skipped": 9
+    "skipped": 0
   },
   "verdict": "PASS",
-  "finished_at": "2026-11-13T22:06:37.500Z"
+  "finished_at": "2026-11-14T00:37:40.112Z"
 }

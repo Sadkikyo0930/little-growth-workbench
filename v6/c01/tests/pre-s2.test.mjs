@@ -151,7 +151,7 @@ suite.check('P20', 'every client-facing function authenticates before touching a
 /* P21 — the privileged initialiser must stay out of the client API. */
 suite.check('P21', 'r5_initialize_authoritative_day is never granted to authenticated/anon',
   !/GRANT EXECUTE ON FUNCTION public\.r5_initialize_authoritative_day/i.test(ALL_SQL)
-  && /public\.r5_initialize_authoritative_day\(text,integer,text,text\)/.test(M010)
+  && /public\.r5_initialize_authoritative_day\(text,integer,text,text,jsonb\)/.test(M010)
   && /internal_fns text\[\] := ARRAY\[[\s\S]*?r5_initialize_authoritative_day/.test(M010));
 
 /* P22 — a family with history must fail closed, not be created at day 1. */
@@ -168,6 +168,35 @@ suite.check('P22', 'progress_ensure refuses to invent a day for a family that al
     mustDrop.every((n) => new RegExp(`DROP (FUNCTION|TABLE) IF EXISTS public\\.${n}`, 'i').test(M900))
     && /GRANT EXECUTE ON FUNCTION public\.r5_publish_today\(text, integer, boolean\) TO PUBLIC/.test(M900),
     mustDrop.filter((n) => !new RegExp(`DROP (FUNCTION|TABLE) IF EXISTS public\\.${n}`, 'i').test(M900)).join(','));
+}
+
+/* P24 — a correction must never rewrite history: the plans a family already
+ * lived through and the records of what the child actually did are read-only. */
+{
+  const writes = [
+    /UPDATE\s+public\.r5_daily_plan/i,
+    /DELETE\s+FROM\s+public\.r5_daily_plan/i,
+    /UPDATE\s+public\.growth_learning_records/i,
+    /DELETE\s+FROM\s+public\.growth_learning_records/i,
+    /TRUNCATE[^;]*growth_learning_records/i,
+  ];
+  const hit = writes.find((re) => re.test(ALL_SQL));
+  suite.check('P24', 'no candidate statement rewrites a plan row or a learning record',
+    !hit, hit ? String(hit) : '');
+}
+
+/* P25 — the correction path is subordinate to the hard blockers: the body must
+ * refuse R5_INIT_BLOCKED before it ever looks at a correction payload. */
+{
+  const body = M010.slice(M010.indexOf('CREATE OR REPLACE FUNCTION public.r5_initialize_authoritative_day'));
+  const iBlock = body.indexOf("RAISE EXCEPTION 'R5_INIT_BLOCKED'");
+  const iCorr = body.indexOf("RAISE EXCEPTION 'R5_INIT_CORRECTION_REQUIRED'");
+  suite.check('P25', 'hard blockers are evaluated before any correction is considered',
+    iBlock > 0 && iCorr > iBlock, `blocked@${iBlock} correction@${iCorr}`);
+  suite.check('P26', 'only a historical rollback is offered as a correction',
+    /v_corrections := array_append\(v_corrections, 'PLAN_HISTORY_ROLLBACK'\)/.test(M010)
+    && (M010.match(/array_append\(v_corrections, '/g) || []).length === 1,
+    String((M010.match(/array_append\(v_corrections, '[A-Z_]+'\)/g) || []).join(',')));
 }
 
 const summary = suite.print();

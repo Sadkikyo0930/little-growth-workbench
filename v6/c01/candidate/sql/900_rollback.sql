@@ -178,6 +178,7 @@ END $function$;
 -- 4. drop C0.1 helper functions (deepest dependency first: the SQL-language
 --    *_impl bodies depend on r5_subject_canonical and on the 010 tables)
 DROP FUNCTION IF EXISTS public.r5_refresh_credential_snapshot(text);
+DROP FUNCTION IF EXISTS public.r5_initialize_authoritative_day(text, integer, text, text, jsonb);
 DROP FUNCTION IF EXISTS public.r5_initialize_authoritative_day(text, integer, text, text);
 DROP FUNCTION IF EXISTS public.r5_initialization_snapshot(text);
 DROP FUNCTION IF EXISTS public.r5_initialization_snapshot_impl(text);

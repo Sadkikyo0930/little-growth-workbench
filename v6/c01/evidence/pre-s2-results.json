@@ -1,7 +1,7 @@
 {
   "suite": "pre-s2",
-  "total": 23,
-  "passed": 23,
+  "total": 26,
+  "passed": 26,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -141,6 +141,24 @@
     {
       "id": "P23",
       "title": "rollback drops every new function and table, and restores the PUBLIC default",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P24",
+      "title": "no candidate statement rewrites a plan row or a learning record",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P25",
+      "title": "hard blockers are evaluated before any correction is considered",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P26",
+      "title": "only a historical rollback is offered as a correction",
       "pass": true,
       "detail": ""
     }

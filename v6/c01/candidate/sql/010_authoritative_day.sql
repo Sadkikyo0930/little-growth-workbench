@@ -112,7 +112,9 @@ COMMENT ON TABLE public.r5_credential_snapshot IS
 --      inserts day 1 with provenance 'new_family_day_1';
 --   2. existing family -> an operator runs r5_initialize_authoritative_day() with
 --      the runtime snapshot fingerprint and an explicit parent-confirmed day.
---      Missing confirmation / device disagreement / thin evidence block it.
+--      Missing confirmation / device disagreement / thin evidence block it; a
+--      historical plan rollback additionally needs an acknowledged correction
+--      with a written reason (see the snapshot below).
 -- Anything else stops with R5_DAY_NOT_INITIALIZED.
 CREATE TABLE IF NOT EXISTS public.r5_day_confirmation (
   confirmation_id    bigserial PRIMARY KEY,
@@ -122,15 +124,29 @@ CREATE TABLE IF NOT EXISTS public.r5_day_confirmation (
   confirmed_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
   snapshot           jsonb NOT NULL,
   snapshot_fingerprint text NOT NULL,
+  corrections_applied text[] NOT NULL DEFAULT '{}',
+  correction_reason  text,
   CONSTRAINT r5_day_confirmation_day_range CHECK (confirmed_day BETWEEN 1 AND 30),
   CONSTRAINT r5_day_confirmation_actor_not_blank CHECK (btrim(confirmed_by) <> '')
 );
+
+/* Upgrade path: a database that already ran the C0.1 version of this file has
+ * the table without the correction columns. Adding them is the only change the
+ * reviewer has to make to an existing installation. */
+ALTER TABLE public.r5_day_confirmation
+  ADD COLUMN IF NOT EXISTS corrections_applied text[] NOT NULL DEFAULT '{}';
+ALTER TABLE public.r5_day_confirmation
+  ADD COLUMN IF NOT EXISTS correction_reason text;
 
 CREATE INDEX IF NOT EXISTS r5_day_confirmation_family_time_idx
   ON public.r5_day_confirmation (family_id, confirmed_at DESC);
 
 COMMENT ON TABLE public.r5_day_confirmation IS
-  'C0.1: append-only record of accepted initialisations, with the exact read-only snapshot they were judged against. A refused attempt raises and is therefore NOT persisted (an exception rolls the whole function body back); the refusal is identified by its error code.';
+  'C0.1: append-only record of accepted initialisations, with the exact read-only snapshot they were judged against, which correction codes were acknowledged and the written reason. A refused attempt raises and is therefore NOT persisted (an exception rolls the whole function body back); the refusal is identified by its error code.';
+COMMENT ON COLUMN public.r5_day_confirmation.corrections_applied IS
+  'Correction codes the parent/operator explicitly acknowledged (e.g. PLAN_HISTORY_ROLLBACK). Empty for a clean initialisation.';
+COMMENT ON COLUMN public.r5_day_confirmation.correction_reason IS
+  'Written reason supplied with a correction. NULL when no correction was needed.';
 
 -- -----------------------------------------------------------------------------
 -- 5. r5_subject_canonical — alias normalisation used ONLY for attribution
@@ -434,15 +450,26 @@ COMMENT ON FUNCTION public.r5_credential_derive(text, jsonb) IS
 -- INTERNAL (no EXECUTE grant). Reads, never writes. Everything the initialisation
 -- decision is judged on, computed at call time — never cached, never stored first.
 --
--- Blocking reasons (any one of them stops initialisation):
---   PLAN_NOT_MONOTONIC         the highest-day plan is not the latest plan row
---                              (a newer row with an older day is stale writeback)
+-- Blocking reasons (HARD — no confirmation may bypass them):
 --   DEVICE_DAY_DISAGREEMENT    records dated on the latest plan date carry more
 --                              than one learning_day (two devices disagree)
 --   RECORD_DAY_AHEAD_OF_PLAN   a record on that date claims a day the plan never
 --                              published (device ran ahead: cannot be confirmed)
 --   NO_PUBLISHED_PLAN_BUT_RECORDS  records exist but no plan was ever published
 --   PLAN_DAY_OUT_OF_RANGE      highest plan day outside 1..30
+--
+-- Corrections (explainable, require an explicit reasoned confirmation):
+--   PLAN_HISTORY_ROLLBACK      the latest published plan day is BELOW the
+--                              family's high-water plan day, i.e. an older day
+--                              was written back after a newer one. The real
+--                              family looks like this (11-11 day2, 11-12 day2,
+--                              11-13 day1). The plans and the learning records
+--                              are left exactly as they are; the parent states
+--                              which day is current, and both the reason and the
+--                              acknowledged code are recorded.
+--
+-- A correction NEVER downgrades a hard blocker: if a family has both a rollback
+-- and, say, a device disagreement, initialisation still raises R5_INIT_BLOCKED.
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_initialization_snapshot_impl(p_family_id text)
  RETURNS jsonb
@@ -454,11 +481,15 @@ AS $function$
 DECLARE
   v_plan_max integer;
   v_plan_days integer[];
+  v_history jsonb;
+  v_hw_date date;
+  v_rollback_rows jsonb;
   v_latest_date date;
   v_latest_day integer;
   v_rec_days integer[];
   v_latest_rec_days integer[];
   v_block text[] := ARRAY[]::text[];
+  v_corrections text[] := ARRAY[]::text[];
   v_min integer;
   v_max integer;
   v_evidence jsonb;
@@ -468,6 +499,28 @@ BEGIN
     INTO v_plan_days, v_plan_max
     FROM public.r5_daily_plan p
    WHERE p.family_id = p_family_id AND p.published;
+
+  SELECT jsonb_agg(jsonb_build_object('date', p.study_date, 'day', p.day_index) ORDER BY p.study_date)
+    INTO v_history
+    FROM public.r5_daily_plan p
+   WHERE p.family_id = p_family_id AND p.published;
+
+  -- The high-water date is the FIRST day the family reached its highest plan
+  -- day. Everything published after it that sits below that high-water mark is a
+  -- historical rollback (a stale device writing an older day back), which is a
+  -- different thing from an unexplained anomaly.
+  SELECT min(p.study_date)
+    INTO v_hw_date
+    FROM public.r5_daily_plan p
+   WHERE p.family_id = p_family_id AND p.published AND p.day_index = v_plan_max;
+
+  SELECT jsonb_agg(jsonb_build_object('date', p.study_date, 'day', p.day_index) ORDER BY p.study_date)
+    INTO v_rollback_rows
+    FROM public.r5_daily_plan p
+   WHERE p.family_id = p_family_id AND p.published
+     AND v_hw_date IS NOT NULL
+     AND p.study_date > v_hw_date
+     AND p.day_index < v_plan_max;
 
   SELECT p.study_date, p.day_index
     INTO v_latest_date, v_latest_day
@@ -500,8 +553,11 @@ BEGIN
   IF v_plan_max IS NOT NULL AND (v_plan_max < 1 OR v_plan_max > 30) THEN
     v_block := array_append(v_block, 'PLAN_DAY_OUT_OF_RANGE');
   END IF;
-  IF v_plan_max IS NOT NULL AND v_latest_day IS DISTINCT FROM v_plan_max THEN
-    v_block := array_append(v_block, 'PLAN_NOT_MONOTONIC');
+  -- A plan published after the high-water date with a LOWER day is a historical
+  -- rollback. It is explainable (stale device writeback), so it does not block on
+  -- its own: it demands an explicit, reasoned correction confirmation.
+  IF v_plan_max IS NOT NULL AND v_latest_day IS NOT NULL AND v_latest_day < v_plan_max THEN
+    v_corrections := array_append(v_corrections, 'PLAN_HISTORY_ROLLBACK');
   END IF;
   IF coalesce(array_length(v_latest_rec_days, 1), 0) > 1 THEN
     v_block := array_append(v_block, 'DEVICE_DAY_DISAGREEMENT');
@@ -524,10 +580,13 @@ BEGIN
 
   v_evidence := jsonb_build_object(
     'family_id', p_family_id,
+    'plan_history', coalesce(v_history, '[]'::jsonb),
     'plan_days', to_jsonb(coalesce(v_plan_days, ARRAY[]::integer[])),
     'plan_max_day', v_plan_max,
+    'plan_high_water_date', v_hw_date,
     'latest_plan_date', v_latest_date,
     'latest_plan_day', v_latest_day,
+    'rollback_plan_rows', coalesce(v_rollback_rows, '[]'::jsonb),
     'record_learning_days', to_jsonb(coalesce(v_rec_days, ARRAY[]::integer[])),
     'latest_plan_date_record_days', to_jsonb(coalesce(v_latest_rec_days, ARRAY[]::integer[])),
     'allowed_min_day', v_min,
@@ -536,7 +595,8 @@ BEGIN
   );
 
   v_payload := v_evidence || jsonb_build_object(
-    'evidence_ok', (array_length(v_block, 1) IS NULL),
+    'corrections_required', to_jsonb(v_corrections),
+    'evidence_ok', (array_length(v_block, 1) IS NULL AND array_length(v_corrections, 1) IS NULL),
     'confirmation_required', true,
     'snapshot_fingerprint', md5(v_evidence::text),
     'generated_at', to_char(timezone('Asia/Shanghai', clock_timestamp()), 'YYYY-MM-DD"T"HH24:MI:SS'));
@@ -578,16 +638,26 @@ COMMENT ON FUNCTION public.r5_initialization_snapshot(text) IS
 --   * a non-blank confirmer identity;
 --   * the snapshot fingerprint re-computed NOW matches the one that was reviewed
 --     (evidence cannot drift between review and write);
---   * the snapshot has zero blocking reasons;
+--   * the snapshot has zero HARD blocking reasons;
+--   * every required correction is acknowledged explicitly, with a written reason;
 --   * the family is not initialised yet (never overwrites, never lowers).
--- A refusal raises a specific error (R5_INIT_BLOCKED / _REGRESSION_REJECTED /
--- _JUMP_REJECTED / _SNAPSHOT_STALE / _CONFIRMATION_REQUIRED) and writes nothing:
--- it runs in one statement, so an audit row would be rolled back with it.
+-- A refusal raises a specific error (R5_INIT_BLOCKED / _CORRECTION_REQUIRED /
+-- _CORRECTION_INCOMPLETE / _CORRECTION_UNKNOWN / _CORRECTION_REASON_REQUIRED /
+-- _CORRECTION_NOT_NEEDED / _REGRESSION_REJECTED / _JUMP_REJECTED /
+-- _SNAPSHOT_STALE / _CONFIRMATION_REQUIRED) and writes nothing: it runs in one
+-- statement, so an audit row would be rolled back with it.
+--
+-- p_correction shape (only when the snapshot lists corrections_required):
+--   {"acknowledged":["PLAN_HISTORY_ROLLBACK"],"reason":"..."}
+-- The reason must be substantive (>= 8 chars). Passing a correction when nothing
+-- is required is refused, so the flag can never become a blanket bypass.
+DROP FUNCTION IF EXISTS public.r5_initialize_authoritative_day(text, integer, text, text);
 CREATE OR REPLACE FUNCTION public.r5_initialize_authoritative_day(
   p_family_id text,
   p_confirmed_day integer,
   p_confirmed_by text,
-  p_snapshot_fingerprint text
+  p_snapshot_fingerprint text,
+  p_correction jsonb DEFAULT NULL
 ) RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -598,8 +668,12 @@ DECLARE
   snap jsonb;
   cur record;
   reasons text[];
+  need text[];
+  ack text[];
+  v_reason text;
   v_min integer;
   v_max integer;
+  v_event text := 'initialize_authoritative_day';
 BEGIN
   -- Defence in depth: this is an operator function, so it also refuses a client
   -- session even if a future migration accidentally grants EXECUTE to it.
@@ -633,10 +707,50 @@ BEGIN
                                               snap->>'snapshot_fingerprint');
   END IF;
 
+  -- Hard blockers first: no correction can reach past this point.
   reasons := ARRAY(SELECT jsonb_array_elements_text(coalesce(snap->'blocking', '[]'::jsonb)));
   IF array_length(reasons, 1) IS NOT NULL THEN
     RAISE EXCEPTION 'R5_INIT_BLOCKED' USING ERRCODE = '40001',
       DETAIL = array_to_string(reasons, ',');
+  END IF;
+
+  need := ARRAY(SELECT jsonb_array_elements_text(coalesce(snap->'corrections_required', '[]'::jsonb)));
+
+  IF array_length(need, 1) IS NULL THEN
+    IF p_correction IS NOT NULL AND p_correction <> '{}'::jsonb THEN
+      RAISE EXCEPTION 'R5_INIT_CORRECTION_NOT_NEEDED' USING ERRCODE = '22023',
+        DETAIL = 'this snapshot has no correction to acknowledge; re-read it before confirming';
+    END IF;
+    ack := ARRAY[]::text[];
+    v_reason := NULL;
+  ELSE
+    IF p_correction IS NULL OR jsonb_typeof(p_correction) <> 'object'
+       OR jsonb_typeof(p_correction->'acknowledged') IS DISTINCT FROM 'array' THEN
+      RAISE EXCEPTION 'R5_INIT_CORRECTION_REQUIRED' USING ERRCODE = '40001',
+        DETAIL = array_to_string(need, ',');
+    END IF;
+
+    ack := ARRAY(SELECT jsonb_array_elements_text(p_correction->'acknowledged'));
+
+    IF EXISTS (SELECT 1 FROM unnest(ack) a WHERE a <> ALL (need)) THEN
+      RAISE EXCEPTION 'R5_INIT_CORRECTION_UNKNOWN' USING ERRCODE = '22023',
+        DETAIL = format('acknowledged %s, required %s',
+                        array_to_string(ack, ','), array_to_string(need, ','));
+    END IF;
+
+    IF NOT (need <@ ack) THEN
+      RAISE EXCEPTION 'R5_INIT_CORRECTION_INCOMPLETE' USING ERRCODE = '22023',
+        DETAIL = format('required %s, acknowledged %s',
+                        array_to_string(need, ','), array_to_string(coalesce(ack, ARRAY[]::text[]), ','));
+    END IF;
+
+    v_reason := btrim(coalesce(p_correction->>'reason', ''));
+    IF v_reason IS NULL OR length(v_reason) < 8 THEN
+      RAISE EXCEPTION 'R5_INIT_CORRECTION_REASON_REQUIRED' USING ERRCODE = '22023',
+        DETAIL = 'a written reason (>= 8 characters) is mandatory for a historical correction';
+    END IF;
+
+    v_event := 'initialize_authoritative_day_corrected';
   END IF;
 
   v_min := (snap->>'allowed_min_day')::integer;
@@ -658,26 +772,33 @@ BEGIN
   ON CONFLICT (family_id) DO NOTHING;
 
   INSERT INTO public.r5_day_confirmation
-    (family_id, confirmed_day, confirmed_by, snapshot, snapshot_fingerprint)
-  VALUES (p_family_id, p_confirmed_day, p_confirmed_by, snap, snap->>'snapshot_fingerprint');
+    (family_id, confirmed_day, confirmed_by, snapshot, snapshot_fingerprint,
+     corrections_applied, correction_reason)
+  VALUES (p_family_id, p_confirmed_day, p_confirmed_by, snap, snap->>'snapshot_fingerprint',
+          coalesce(ack, ARRAY[]::text[]), v_reason);
 
   INSERT INTO public.r5_plan_audit
     (family_id, occurred_on, event, authoritative_day, actor, detail)
-  VALUES (p_family_id, today_date, 'initialize_authoritative_day', p_confirmed_day,
+  VALUES (p_family_id, today_date, v_event, p_confirmed_day,
           p_confirmed_by,
           jsonb_build_object('confirmed_day', p_confirmed_day,
                              'plan_max_day', snap->>'plan_max_day',
+                             'corrections_applied', to_jsonb(coalesce(ack, ARRAY[]::text[])),
+                             'correction_reason', v_reason,
+                             'rollback_plan_rows', coalesce(snap->'rollback_plan_rows', '[]'::jsonb),
                              'snapshot_fingerprint', snap->>'snapshot_fingerprint'));
 
   RETURN jsonb_build_object('result', 'initialized',
                             'authoritative_day', p_confirmed_day,
                             'initialized_from', 'parent_confirmed',
+                            'corrections_applied', to_jsonb(coalesce(ack, ARRAY[]::text[])),
+                            'correction_reason', v_reason,
                             'snapshot', snap);
 END;
 $function$;
 
-COMMENT ON FUNCTION public.r5_initialize_authoritative_day(text, integer, text, text) IS
-  'C0.1 ADMIN ONLY: initialise authoritative day from a clean snapshot + verified parent confirmation. Never called by clients.';
+COMMENT ON FUNCTION public.r5_initialize_authoritative_day(text, integer, text, text, jsonb) IS
+  'C0.1 ADMIN ONLY: initialise authoritative day from a reviewed snapshot + verified parent confirmation. A historical rollback must be acknowledged with a written reason; hard anomalies can never be acknowledged away. Never called by clients.';
 
 -- -----------------------------------------------------------------------------
 -- 11. Privileges — deny by default, grant the client API only
@@ -707,7 +828,7 @@ DECLARE
   internal_fns text[] := ARRAY[
     'public.r5_credential_derive_impl(text,jsonb)',
     'public.r5_initialization_snapshot_impl(text)',
-    'public.r5_initialize_authoritative_day(text,integer,text,text)'
+    'public.r5_initialize_authoritative_day(text,integer,text,text,jsonb)'
   ];
 BEGIN
   FOREACH fn IN ARRAY internal_fns LOOP
