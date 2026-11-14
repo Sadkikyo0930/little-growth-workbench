@@ -10,6 +10,7 @@
  * 也不保留任何本地碎片余额副本（不新造第二套存档）。
  */
 import { R5_CONFIG } from './config.mjs';
+import {memberClaim} from './member-fragments.mjs';
 import {normalizeClaimResponse,validateFragmentSnapshot} from './fragment-contract.mjs';
 
 const BASE = String(R5_CONFIG.base || '').replace(/\/$/, '');
@@ -99,10 +100,18 @@ export async function loadState() {
 
 /** 用一条真实学习记录结算碎片；服务端可能返回 CLAIMED / ALREADY_CLAIMED / 封顶 */
 export async function claimFragment(recordId) {
+  const id=String(recordId||'');
   try {
-    return normalizeClaimResponse(await post('/v1/racing/fragment/claim', { learning_record_id: String(recordId || '') }));
-  } catch (e) {
-    if (e && (e.message === 'BAD_CLAIM_RESPONSE' || e.message === 'BAD_CLAIM_COUNTS')) throw new FragmentError('SERVER', e.message);
+    if(!deviceToken()) return normalizeClaimResponse(await memberClaim(id));
+    try {
+      return normalizeClaimResponse(await post('/v1/racing/fragment/claim',{learning_record_id:id}));
+    }catch(e){
+      if(!(e instanceof FragmentError) || e.code!=='DEVICE') throw e;
+      return normalizeClaimResponse(await memberClaim(id));
+    }
+  }catch(e){
+    if(e && (e.message==='BAD_CLAIM_RESPONSE'||e.message==='BAD_CLAIM_COUNTS'))
+      throw new FragmentError('SERVER',e.message);
     throw e;
   }
 }

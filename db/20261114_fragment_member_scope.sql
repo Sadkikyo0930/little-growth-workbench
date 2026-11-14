@@ -167,7 +167,73 @@ END;
 $function$;
 
 -- ---------------------------------------------------------------------------
--- 3. 授权：只给已登录用户。anon 一律没有执行权。
+-- 3. Identity-based V6 claim: family comes exclusively from JWT membership.
+CREATE OR REPLACE FUNCTION public.r5_fragment_member_claim(p_record_id text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$
+DECLARE v_uid text; v_fams text[]; v_family text;
+BEGIN
+  v_uid := NULLIF(auth.jwt()->>'sub','');
+  IF v_uid IS NULL THEN RETURN jsonb_build_object('status','UNAUTHENTICATED','zero_write',true); END IF;
+  SELECT array_agg(DISTINCT family_id) INTO v_fams FROM public.growth_family_members
+    WHERE user_id=v_uid AND member_role IN ('owner','parent','grandparent');
+  IF v_fams IS NULL THEN RETURN jsonb_build_object('status','NOT_MEMBER','zero_write',true); END IF;
+  IF array_length(v_fams,1)<>1 THEN RETURN jsonb_build_object('status','AMBIGUOUS_MEMBER','zero_write',true); END IF;
+  v_family:=v_fams[1];
+  IF v_family IS NULL OR v_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.r5_fragment_member_snapshot() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.r5_fragment_member_assemble(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.r5_fragment_member_claim(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.r5_fragment_member_claim(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.r5_fragment_member_snapshot() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.r5_fragment_member_assemble(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.r5_fragment_member_claim(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.r5_fragment_member_claim(text) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 4. 预检（只读，跑完看清楚再决定是否继续）
+-- ---------------------------------------------------------------------------
+-- 4.1 正式家庭的成员：**应当是 3 行**（owner / parent / grandparent），
+--     并且每个 user_id 只能出现在 1 个家庭里。期望输出：
+--       little-growth-family-001 | owner       | 1
+--       little-growth-family-001 | parent      | 1
+--       little-growth-family-001 | grandparent | 1
+--       (0 rows)  ← 第二段「一个账号挂多个家庭」必须是空
+--
+-- SELECT family_id, member_role, count(*) AS members
+--   FROM public.growth_family_members
+--  WHERE family_id = 'little-growth-family-001'
+--  GROUP BY 1, 2 ORDER BY 2;
+--
+-- SELECT user_id, count(DISTINCT family_id) AS families
+--   FROM public.growth_family_members
+--  GROUP BY 1 HAVING count(DISTINCT family_id) > 1;
+--
+-- 4.2 正式家庭当前的碎片/车辆（应当是 0 片、无车）
+-- SELECT public.r5_fragment_snapshot('little-growth-family-001');
+--
+-- 4.3 应用后自检：两个新函数的权限（anon 必须没有）
+-- SELECT p.proname,
+--        has_function_privilege('anon', p.oid, 'EXECUTE')          AS anon_can,
+--        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_can
+--   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+--  WHERE n.nspname = 'public'
+--    AND p.proname IN ('r5_fragment_member_snapshot','r5_fragment_member_assemble');
+--
+-- 5. 旧函数的 p_family 口子：**不在本文件处理**，见
+--    20261114_fragment_scope_guard.sql（同样未执行，需要单独批准）。
+-- ============================================================================
+ THEN
+    RETURN jsonb_build_object('status','BAD_FAMILY','zero_write',true);
+  END IF;
+  IF p_record_id IS NULL OR p_record_id='' OR length(p_record_id)>160 THEN
+    RETURN jsonb_build_object('status','BAD_RECORD_ID','zero_write',true);
+  END IF;
+  RETURN public.r5_fragment_claim(v_family,'v6:'||v_uid,p_record_id,'{}'::jsonb);
+END;
+$function$;
+
+-- 4. 授权：只给已登录用户。anon 一律没有执行权。
 -- ---------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.r5_fragment_member_snapshot() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.r5_fragment_member_assemble(text) FROM PUBLIC;

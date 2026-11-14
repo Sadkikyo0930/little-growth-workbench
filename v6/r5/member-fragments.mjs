@@ -158,6 +158,18 @@ export async function memberAssemble(vehicleId) {
   }
 }
 
+/** 只发 recordId；云端从 JWT 反查唯一家庭后复用现有领取逻辑。 */
+export async function memberClaim(recordId) {
+  const id=String(recordId||'');
+  if(!id || id.length>160) throw new MemberError('BAD_RECORD_ID');
+  try {
+    const who=await currentMember();
+    const out=await rpc('r5_fragment_member_claim',{p_record_id:id},who.token);
+    if(!out || typeof out!=='object') throw new MemberError('SERVER','INVALID_CLAIM_RESPONSE');
+    if(STATUS_ERROR[out.status]) throw new MemberError(STATUS_ERROR[out.status],String(out.status));
+    return out;
+  }catch(e){throw wrap(e);}
+}
 /** 身份模式的「这是谁」提示，只给页面显示用，不含令牌 */
 export async function memberBadge() {
   try {

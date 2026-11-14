@@ -11,7 +11,8 @@
  *   · 不做本地余额累加，所有数字都来自服务端返回的快照。
  */
 
-import { claimFragment, loadState, buildProgress, FragmentError, messageOf } from './fragment-client.mjs';
+import { claimFragment, loadState, deviceToken, buildProgress, FragmentError, messageOf } from './fragment-client.mjs';
+import {memberState} from './member-fragments.mjs';
 
 /**
  * Fail-closed reward status policy.
@@ -136,7 +137,7 @@ export async function showFragmentReward(opts = {}) {
   try {
     result = await claimFragment(recordId);
   } catch (e) {
-    const code = e instanceof FragmentError ? e.code : 'SERVER';
+    const code = (e && e.code) || (e instanceof FragmentError ? e.code : 'SERVER');
     overlay.querySelector('.card').innerHTML = `${STAR}
       <h3>还没结算成功</h3>
       <p class="sub">奖励没有发出去，等网络好一点再来一次也没关系</p>
@@ -163,7 +164,12 @@ export async function showFragmentReward(opts = {}) {
   }
 
   let state = null;
-  try { state = await loadState(); } catch { state = null; }
+  try {
+    state = deviceToken() ? await loadState().catch(async e => {
+      if(e && e.code === 'DEVICE') return memberState();
+      throw e;
+    }) : await memberState();
+  } catch { state = null; }
   const program = (state && state.program) || {};
   const progress = state ? buildProgress(state) : [];
   // 优先展示「还差一点就成」的那辆车；全部集齐时展示第一辆
