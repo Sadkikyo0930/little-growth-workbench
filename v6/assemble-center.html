@@ -405,10 +405,14 @@ function render() {
   const pctTxt = prog.drop_percent_status === 'active'
     ? `普通碎片基础掉落概率 ${pct}%。`
     : `普通碎片基础掉落概率已确定为 ${pct}%；<b>奖励尚未启用</b>，当前不会发放任何新碎片。`;
-  const rareSources = Array.isArray(prog.rare_record_types) ? prog.rare_record_types : [];
-  const rareTxt = rareSources.length
-    ? '专属碎片仅由云端验证的合格成就产生，仍受每日上限控制。'
-    : '秋名疾影所需的专属碎片发放来源尚未接入，暂时无法靠新学习记录获得。';
+  // A missing rare_record_types property means the snapshot did not expose
+  // the server configuration. Do not confuse missing metadata with no reward source.
+  const rareSources = Array.isArray(prog.rare_record_types) ? prog.rare_record_types : null;
+  const rareTxt = rareSources === null
+    ? '秋名疾影的专属碎片需由云端认可的成就记录结算；当前页面未提供来源明细，不代表功能未接入。'
+    : rareSources.length
+      ? '专属碎片由云端验证的合格成就记录产生，仍受每日上限控制。'
+      : '目前云端未配置专属碎片的合格记录类型，暂不能通过新成就领取。';
   $('noticeText').innerHTML = `${rareTxt}<br>${pctTxt}`;
 
   // 待组装
