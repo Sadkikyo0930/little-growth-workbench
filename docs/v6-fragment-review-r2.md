@@ -184,3 +184,115 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.<table> TO service_role;
    数据一行都不会动。
 
 > 今天没有执行任何一条正式 SQL，没有改正式家庭数据、60% 概率、生日车或学习进度。
+
+---
+
+## 7. 正式库实测（本轮新增，全部只读 `SELECT`）
+
+隔离库只证明「逻辑对」，不证明「列名对」。所以本轮直接对生产库核了一遍结构与角色，结论如下。
+
+### 7.1 `growth_learning_records`（164 行）
+
+实际九列：`record_id text PK · family_id text NN · record_type text NN · subject text ·
+learning_day integer · record_data jsonb NN default '{}' · created_by text ·
+created_at timestamptz NN default now() · updated_at timestamptz NN`
+
+与 `db/isolated/schema.sql` 的同名建表语句**逐列同类同默认值**。
+
+**关键口径（差点写错）**：`learning_day` **不是日历日期**，是「课程第几天」。
+实测取值只有 `1 / 2 / 3 / 6 / 9 / null`（46 / 28 / 38 / 2 / 47 / 3 行）。
+因此守卫里判「今天」只能取 `(created_at AT TIME ZONE 'Asia/Shanghai')::date`，
+**不能**拿 `learning_day` 与日期比。当前实现正是前者。
+
+`record_type` 实际分布：`answer 135 / course-complete 24 / sync-test 3 / weekly-goal 2`。
+守卫默认可用类型 `ARRAY['answer','course-complete']` 恰好覆盖真实学习数据。
+北京时间今天新建的记录：answer 35 条、course-complete 3 条 —— 不会把今天可领的奖励误判成不可领。
+
+### 7.2 三张被引用 / 被收权的表
+
+| 表 | 关键列（实测） | 与隔离库 |
+|---|---|---|
+| `r5_fragment_state` | `family_id` PK / `pity_points` / `pity_total` / `daily_day date` / `daily_normal_count` / `daily_rare_count` / `updated_at` | 一致 |
+| `r5_fragment_drops` | PK `(family_id, source_record_id)` / `record_day date` / `record_kind` / `subject` / `outcome` / `fragment_id` / `fragment_count` / `rare_fragment_id` / `rare_count` / `pity_before` / `pity_after` / `daily_index` / `device` / `created_at` | 一致 |
+| `r5_device` | `device_uid` PK / `family_id` / `label` / `bound_by` / `bound_at` / `revoked_at` / `last_seen` | 一致 |
+
+`growth_family_members` = `family_id / user_id / member_role / joined_at`；
+`auth.jwt()`、`auth.uid()`、`auth.role()`、`public.growth_is_family_member(text)` 均存在。
+
+### 7.3 正式网关的真实数据库角色
+
+这是必须实测的一步：判错角色，要么放太宽，要么把赛车挡在门外。
+
+```sql
+SELECT current_user, session_user, current_setting('role', true);
+-- cloudbase_postgres_postgres_130fh140 | 同名 | 同名
+
+SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
+ WHERE rolname IN ('cloudbase_postgres_postgres_130fh140','service_role','anon','authenticated');
+-- cloudbase_postgres_postgres_130fh140 | f | t     ← 平台通道（网关 / 云函数 / 迁移）
+-- service_role                        | f | t
+-- anon / authenticated                | f | f
+```
+
+结论：
+
+1. 线上既不是 `postgres` 也不是 `none`，而是**环境专属角色** `cloudbase_postgres_postgres_130fh140`，且带 **BYPASSRLS**。
+2. `r5_fragment_is_privileged()` 因此走 `rolbypassrls = true` 分支返回 true ——
+   赛车网关、云函数、迁移通道**全部照常放行**，不依赖白名单表里有这一行。
+3. `r5_backend_role` 里的 `postgres` / `service_role` 只是给「非 BYPASSRLS 的部署」做补充；
+   换环境时先跑第 6 节的探针。
+4. 线上三个旧函数的 `proowner` 就是这个角色，`proacl` 实测
+   `anon=X / authenticated=X / service_role=X` —— **漏洞今天在正式库是活的**。
+5. 三个旧函数签名与守卫 `CREATE OR REPLACE` 的目标签名完全一致，不会新建重载、不会失效旧调用方：
+   `r5_fragment_snapshot(text)`、`r5_fragment_claim(text,text,text,jsonb)`、`r5_fragment_assemble(text,text,text,jsonb)`。
+
+---
+
+## 8. 执行顺序与回滚（正式发布用）
+
+### 8.1 顺序（必须同批、按序）
+
+| 序 | 文件 | 做了什么 | 漏了会怎样 |
+|---|---|---|---|
+| 1 | `db/20261114_fragment_server_authority.sql` | 三张权威表 + `r5_fragment_caller_role()` / `r5_fragment_is_privileged()` / `r5_fragment_program_json()` | 第 2 份引用的函数不存在，直接报错 |
+| 2 | `db/20261114_fragment_scope_guard.sql` | 三个旧函数改写（角色判定 + 服务端权威）+ `snapshot_internal` + 五张表收权 | 旧函数仍信任客户端 `p_cfg` / `p_cost`，漏洞照旧 |
+| 3 | `db/20261114_fragment_member_scope.sql` | 家长身份 RPC（0 参数 / 只收 `vehicle_id`），快照带回 `program` | V6「我的车库」读不到数据（前端退回本地兜底目录，不白屏） |
+
+apply 前先跑只读探针：
+
+```sql
+SELECT public.r5_fragment_caller_role(), public.r5_fragment_is_privileged();
+-- 期望 cloudbase_postgres_postgres_130fh140 / true
+```
+
+apply 后立刻验四条：
+
+1. `anon` 调 `r5_fragment_snapshot('little-growth-family-001')` → `FORBIDDEN_SCOPE`；
+2. `anon` 直接 `SELECT * FROM r5_fragment_state` → `42501`；
+3. 家长会话调 `r5_fragment_member_snapshot()` → `OK`；
+4. 赛车进站 → `CLAIMED`（不是 `FORBIDDEN_SCOPE`）。
+
+### 8.2 回滚（逐层可退，数据一行不动）
+
+1. **表权限**：`GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_{fragment_state,fragment_drops,racing_events,racing_saves,device} TO anon, authenticated;`
+2. **三个旧函数**：用 `db/isolated/functions-before.sql` 原文重新 `CREATE OR REPLACE`（签名一致，直接覆盖）。
+3. **成员 RPC**：`REVOKE EXECUTE ON FUNCTION public.r5_fragment_member_snapshot(), public.r5_fragment_member_assemble(text) FROM authenticated;`
+   （或直接 `DROP`；前端会自动退回本地兜底目录，不白屏。）
+4. **新表**：`r5_reward_config` / `r5_vehicle_recipe` / `r5_backend_role` 不被旧函数引用，
+   留着或 `DROP` 都不影响回滚正确性；建议保留，便于下次重上。
+
+`r5_fragment_state` / `r5_fragment_drops` 的既有行在回滚过程中**不删、不改**。
+
+---
+
+## 9. 本轮上线状态
+
+| 项 | 状态 |
+|---|---|
+| 远程分支 head | `5db9167`（在 `b260a49` 上 fast-forward，未 force） |
+| PR #3 | 仍为 Draft，未合并 |
+| `main` | `ea09745`，未动；GitHub Pages 仍是旧版 |
+| 正式 SQL | **未执行**（线上匿名越权仍然存在，直到 apply） |
+| 正式家庭数据 / 碎片数量 | 零写入（只读过结构与聚合计数） |
+| 60% 掉落概率 | 未定稿，`status = pending-parent-confirmation` |
+| 生日车 / 金币车 / 赛车 V2 | 未动 |
