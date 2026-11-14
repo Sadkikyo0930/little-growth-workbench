@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Verify native SQL and gateway fragment response contracts
+        run: |
+          set -o pipefail
+          node tests/fragment-rpc-compat.test.mjs | tee fragment-rpc.log
+          grep -q "ALL 14 FRAGMENT RPC COMPATIBILITY TESTS PASSED" fragment-rpc.log
       - name: Check both fragment cars and stale-token family fallback
         run: |
           set -o pipefail
@@ -95,6 +100,7 @@ jobs:
             family-progress.log
             family-auto-restore.log
             garage-device.log
+            fragment-rpc.log
             v6-smoke.log
             authz.log
             atomicity.log
