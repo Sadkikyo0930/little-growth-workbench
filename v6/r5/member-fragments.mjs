@@ -180,3 +180,21 @@ export async function memberBadge() {
     return { ok: false, code: err.code };
   }
 }
+
+/**
+ * 每周目标达成的服务端结算：没有任何客户端可传的天数、积分或 family_id。
+ * DB 自行验证本周云端课程完成记录，返回达标天数或原子发放结果。
+ */
+export async function memberWeeklyClaim() {
+  try {
+    const who = await currentMember();
+    const out = await rpc('r5_fragment_member_weekly_claim', {}, who.token);
+    if (!out || typeof out !== 'object') throw new MemberError('SERVER', 'INVALID_WEEKLY_RESPONSE');
+    const status = String(out.status || '');
+    if (STATUS_ERROR[status]) throw new MemberError(STATUS_ERROR[status], status);
+    if (!['CLAIMED','ALREADY_CLAIMED','WEEKLY_GOAL_NOT_MET',
+          'WEEKLY_RARE_DAY_LIMIT','REWARD_NOT_ACTIVE'].includes(status))
+      throw new MemberError('SERVER', status || 'INVALID_WEEKLY_STATUS');
+    return out;
+  } catch (e) { throw wrap(e); }
+}
