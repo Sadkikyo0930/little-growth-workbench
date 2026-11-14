@@ -1,0 +1,235 @@
+{
+  "scope": "GO-LIVE PREP — read-only only. Zero DDL, zero DML, zero function replacement, zero CloudBase write.",
+  "captured_at": "2026-11-14T09:39:46+08:00",
+  "captured_by": "C0.1.4 go-live readiness check",
+  "env_id": "normal-goose-d5g4qyzr8bb389a4a",
+  "env_count_in_account": 1,
+  "env_package": "baas_personal / SHARED tenant (no dedicated instance, no second environment)",
+  "schema": "public",
+
+  "code_baseline": {
+    "repo": "Sadkikyo0930/little-growth-workbench",
+    "main_sha_remote": "1a593fc9771c72c9a6e0bf05e51004a237de41b9",
+    "candidate_branch": "c01/authoritative-day-candidate",
+    "candidate_sha_remote": "e4afc8c60d7dfd1de6f96928048c28312fa4ff8c",
+    "main_unchanged": true,
+    "verified_via": "git ls-remote",
+    "verified_at": "2026-11-14T09:41+08:00"
+  },
+
+  "formal_family": {
+    "family_id": "little-growth-family-001",
+    "learning_records_count": 73,
+    "learning_records_created_today": 0,
+    "record_groups_verified": [
+      {"subject": "科学", "learning_day": 1, "record_type": "answer", "n": 5},
+      {"subject": "科学", "learning_day": 1, "record_type": "course-complete", "n": 1, "ts": "2026-11-11T10:19:38.551Z"},
+      {"subject": "英语", "learning_day": 1, "record_type": "answer", "n": 14},
+      {"subject": "英语", "learning_day": 1, "record_type": "course-complete", "n": 1, "ts": "2026-11-12T11:27:49.852Z"},
+      {"subject": "数学", "learning_day": 6, "record_type": "answer", "n": 2},
+      {"subject": "语文", "learning_day": 9, "record_type": "answer", "n": 47},
+      {"subject": "系统检测", "learning_day": null, "record_type": "sync-test", "n": 3}
+    ],
+    "record_groups_match_previous_baseline": true,
+    "plan_rows": 6,
+    "plans": [
+      {"study_date": "2026-11-08", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-09", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-10", "day_index": 1, "subjects": ["英语", "科学"]},
+      {"study_date": "2026-11-11", "day_index": 2, "subjects": ["语文", "数学"]},
+      {"study_date": "2026-11-12", "day_index": 2, "subjects": ["语文", "数学"]},
+      {"study_date": "2026-11-13", "day_index": 1, "subjects": ["英语", "科学"]}
+    ],
+    "plan_max_day": 2,
+    "plan_high_water_date": "2026-11-11",
+    "plan_rows_for_today_2026_11_14": 0,
+    "parent_settings": {"daily_seconds": 1800, "bonus_seconds": 0, "enabled": true},
+    "waiver_rows": 0,
+    "member_rows": 3,
+    "members": [
+      {"user": "growth_mom", "uid": "2118316498342715393", "role": "owner"},
+      {"user": "growth_dad", "uid": "2118318220867104770", "role": "parent"},
+      {"user": "growth_grandma", "uid": "2118318551127629825", "role": "grandparent"}
+    ],
+    "bound_devices": 5,
+    "device_last_seen": {
+      "r5dev_8c43…(生日赛车 iPad)": "2026-11-12 19:39:52+08",
+      "r5dev_d932…(外婆的手机)": "2026-11-13 18:00:39+08",
+      "r5dev_c62f…(妈妈的手机)": "2026-11-13 08:49:13+08",
+      "r5dev_902b…(妈妈的手机)": "2026-11-13 11:38:28+08",
+      "r5dev_c78c…(妈妈的手机)": "2026-11-14 08:32:48+08"
+    },
+    "devices_verified_today": 1,
+    "devices_unverified_today": 4,
+    "racings_saves_rows_for_formal_family": 0,
+    "daily_usage_last_row": {
+      "play_date": "2026-11-13",
+      "used_seconds": 103,
+      "active": true,
+      "last_beat": "2026-11-13 21:46:32+08",
+      "note": "dangling open session from 11-13; not closed by session_close"
+    },
+    "daily_usage_rows_for_today": 0
+  },
+
+  "isolated_family": {
+    "family_id": "r5-selftest-family",
+    "learning_records_count": 53,
+    "plan_rows": 4,
+    "member_rows": 7,
+    "members": [
+      {"user": "r5-selftest-parent", "uid": "r5-selftest-parent", "role": "owner", "independent": true},
+      {"user": "r5test_mom", "uid": "2121059513385820162", "role": "owner", "independent": true},
+      {"user": "r5_selftest", "uid": "2119398471278612482", "role": "grandparent", "independent": true},
+      {"user": "r5test_dad", "uid": "2121059497908838401", "role": "parent", "independent": true},
+      {"user": "growth_mom", "uid": "2118316498342715393", "role": "owner", "WRONGLY_ADDED": true, "joined": "2026-11-13"},
+      {"user": "growth_dad", "uid": "2118318220867104770", "role": "parent", "WRONGLY_ADDED": true, "joined": "2026-11-13"},
+      {"user": "growth_grandma", "uid": "2118318551127629825", "role": "grandparent", "WRONGLY_ADDED": true, "joined": "2026-11-13"}
+    ],
+    "racing_saves": {"rows": 1, "revision": 168, "coins_balance": 270, "current_vehicle": "turtle", "updated_at": "2026-11-12 13:56:31+08"},
+    "parent_settings": {"daily_seconds": 1800, "bonus_seconds": 0, "enabled": true}
+  },
+
+  "database_structure": {
+    "public_tables": 20,
+    "public_relations_r_and_s": 22,
+    "candidate_tables_absent": {
+      "r5_family_progress": true,
+      "r5_plan_audit": true,
+      "r5_credential_snapshot": true,
+      "r5_day_confirmation": true,
+      "r5_acl_baseline": true
+    },
+    "migration_history_rows": 11,
+    "migration_latest": {"version": "20261113111500", "name": "session_binding_guard"},
+    "migration_history_versions": [
+      "20261110214435 birthday_claims_init",
+      "20261111080100 racing_family_save_init",
+      "20261111101000 racing_coins_nonneg",
+      "20261111232000 fragment_engine",
+      "20261111235500 fragment_rare_isolation",
+      "20261112020000 fragment_pool_guard",
+      "20261113093000 parent_game_override",
+      "20261113093500 parent_game_override_status",
+      "20261113101500 parent_override_single_use",
+      "20261113110500 session_binding",
+      "20261113111500 session_binding_guard"
+    ],
+    "candidate_migration_registered": false,
+    "note": "cloudbase_migrations.schema_migrations exists and is the version registry; 010/020 are NOT registered"
+  },
+
+  "functions": {
+    "count": 38,
+    "frozen_md5_match_previous_baseline": true,
+    "key_acl": {
+      "r5_gate_status_core(text,boolean,boolean)": "service_role + owner  (NO authenticated, NO anon, NO PUBLIC)",
+      "r5_publish_today(text,integer,boolean)": "authenticated + service_role + owner",
+      "r5_status(text)": "authenticated + service_role + owner",
+      "r5_child_entry(text)": "authenticated + service_role + owner"
+    },
+    "preexisting_public_execute": ["r5_racing_backups_immutable()"],
+    "preexisting_anon_execute": ["r5_fragment_assemble", "r5_fragment_claim", "r5_fragment_snapshot", "r5_racing_backups_immutable"]
+  },
+
+  "cloud_functions": {
+    "count": 3,
+    "items": [
+      {"name": "r5-gateway", "runtime": "Nodejs18.15", "version": "$LATEST", "mod_time": "2026-11-13 10:43:47", "code_sha256": "c95c3d4b961f9441bf6dcb9b0947f4ba29095ca63f15538734a4abc26e22636c", "health_version": "1.5.0-session-bound", "routes": 18},
+      {"name": "r5-racing-save", "runtime": "Nodejs18.15", "version": "$LATEST", "mod_time": "2026-11-12 01:10:02", "code_sha256": "834022c8db5c4fc13200f76e5affff067992dcd74be484f45c39ac4fec41d0d3"},
+      {"name": "r5-birthday-claim", "runtime": "Nodejs18.15", "version": "$LATEST", "mod_time": "2026-11-11 09:02:39", "code_sha256": "646da6a8fb0ff5afdb990a7a905115d84a02464caf7270416ce540614ffa9cfb"}
+    ],
+    "gateway_env_keys": ["R5_ALLOWED_FAMILIES", "R5_ENV_ID", "R5_INTERNAL_SECRET", "R5_MD_FAMILIES", "R5_PARENT_SECRET", "R5_PARENT_UID", "R5_REGION"],
+    "gateway_env_values_read": false,
+    "gateway_md_engine_families_len": 43,
+    "gateway_md_engine_note": "R5_MD_FAMILIES has the same length as 'little-growth-family-001,r5-selftest-family', i.e. the multi-device engine is already enabled for BOTH families; value itself not read"
+  },
+
+  "gateway_routes": [
+    {"domain": "normal-goose-d5g4qyzr8bb389a4a-1526110019.tcloudbaseapp.com", "path": "/", "upstream": "STATIC_STORE", "access": "DIRECT"},
+    {"domain": "*", "path": "/r5", "upstream": "SCF:r5-gateway", "access": "CDN"}
+  ],
+
+  "static_hosting": {
+    "bucket": "9357-static-normal-goose-d5g4qyzr8bb389a4a-1526110019",
+    "v6_prefix_files": 54,
+    "v6_last_modified_all": "2026-11-08",
+    "v6_contains_sw_js": false,
+    "v6_contains_r5_bridge_js": false,
+    "selftest_prefix_v6_c01_files": 0,
+    "note": "CloudBase static hosting is a 2026-11-08 snapshot, not the live V6 origin; live V6 is GitHub Pages main /docs"
+  },
+
+  "candidate_deployment_impact": {
+    "ddl_on_shared_tables": [
+      "CREATE TRIGGER r5_daily_plan_day_guard BEFORE INSERT OR UPDATE ON public.r5_daily_plan"
+    ],
+    "shared_functions_replaced": [
+      "r5_publish_today(text,integer,boolean)",
+      "r5_gate_status_core(text,boolean,boolean)"
+    ],
+    "new_objects": ["5 tables", "10 functions", "2 indexes"],
+    "gate_path_after_deploy_for_uninitialised_family": "DEGRADED_BUT_SERVING — wrapper delegates to _legacy, auth_day falls back to legacy study_day, no credential backfill",
+    "publish_path_after_deploy_for_uninitialised_family": "FAILS_CLOSED — r5_progress_ensure raises R5_DAY_NOT_INITIALIZED when plan/record history exists",
+    "trigger_effect_for_uninitialised_family": "NO-OP — r5_guard_plan_day returns NEW when no r5_family_progress row",
+    "consequence": "Between stage B and stage F the formal family cannot publish a daily plan, and today (2026-11-14) has no plan row yet"
+  },
+
+  "initialisation_window_evidence": {
+    "function": "r5_initialization_snapshot",
+    "plan_days_sequence": [1, 1, 1, 2, 2, 1],
+    "plan_max_day": 2,
+    "latest_plan_day": 1,
+    "latest_plan_lt_max": true,
+    "expected_corrections_required": ["PLAN_HISTORY_ROLLBACK"],
+    "expected_window": {"min": 3, "max": 3},
+    "expected_blocking_codes": [],
+    "record_days_all": [1, 6, 9],
+    "record_days_scoped_to_latest_plan_date": [],
+    "latest_plan_date": "2026-11-13",
+    "record_day_scope_note": "v_latest_rec_days is scoped to records whose own answer/completion date equals the latest plan date (2026-11-13). Nothing in the family's data falls on 2026-11-13 (英语 day1 completed 11-12, 科学 day1 completed 11-11, 数学 day6 answered 11-06, 语文 day9 answered 11-09), so the scoped set is empty and neither RECORD_DAY_AHEAD_OF_PLAN nor DEVICE_DAY_DISAGREEMENT fires. If ANY record with learning_day > 2 existed on 2026-11-13 the family would hard-block instead.",
+    "device_day_disagreement": false,
+    "record_day_ahead_of_plan": false,
+    "conclusion": "the ONLY value the candidate accepts for this family is day 3; day 1 and day 2 are rejected by design"
+  },
+
+  "deltas_vs_previous_baseline": [
+    {
+      "item": "learning_records_fingerprint_md5",
+      "previous": "45c6e9d338df99c7868200eeb37da2d2",
+      "recomputed": "not reproducible",
+      "severity": "REPORT_ONLY",
+      "explanation": "the previous baseline recorded the aggregate as pseudo-code (md5(string_agg(record_id|subject|learning_day|record_data ORDER BY record_id))) without the delimiter, sort key type or null handling. Five variants were recomputed this round (delimiter '|' / '' / newline, order by record_id vs record_id::text, with and without coalesce) and none reproduced 45c6e9d3… . Count (73), per-group shape, per-group dates and the 1800s/0 bonus settings all match, so this is a non-reproducible baseline definition, not data drift.",
+      "action": "record the new explicit definition going forward; do not treat as a training-data change"
+    },
+    {
+      "item": "members_fingerprint_md5",
+      "previous": "562a7e167166e0a871a33b5f30031529",
+      "recomputed": "not attempted",
+      "severity": "REPORT_ONLY",
+      "explanation": "same class of issue; member rows (3) and roles are identical",
+      "action": "none"
+    },
+    {
+      "item": "r5_daily_usage dangling open session",
+      "previous": "not recorded",
+      "current": "2026-11-13 used 103s, active=true, last_beat 2026-11-13 21:46:32+08",
+      "severity": "REPORT_ONLY",
+      "explanation": "the previous baseline did not snapshot r5_daily_usage. A 11-13 session was never closed; it does not block anything because quota is computed per play_date and today has no row.",
+      "action": "note it; session_close on 11-13 is not needed and must not be replayed"
+    }
+  ],
+
+  "zero_write_guarantee": {
+    "ddl_executed": 0,
+    "dml_executed": 0,
+    "function_replaced": 0,
+    "cloudbase_write": 0,
+    "github_write": 0,
+    "main_merge": 0,
+    "pages_update": 0,
+    "credential_values_printed": 0,
+    "record_data_exported": false,
+    "readonly_tool_used": "mcp__cloudbase__queryPgDatabase (SELECT only), queryFunctions, queryGateway, queryHosting, queryEnv"
+  }
+}
