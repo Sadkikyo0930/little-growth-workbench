@@ -467,6 +467,40 @@ console.log('\n=== K 家长未批准时所有奖励发放路径必须零写入 =
   await db.close();
 }
 
+/* ============================================================ L 稀有奖励通道
+ * Only an isolated synthetic fixture uses rare_record_types=['answer'] here.
+ * It is NOT a proposal to grant rare fragments for ordinary answers in production.
+ */
+console.log('\n=== L 稀有碎片端到端契约（仅合成库测试，正式来源仍关闭） ===');
+{
+  const db=await newStack();
+  await asServer(db);
+  const defaultRare=await one(db,"SELECT cardinality(rare_record_types) AS n FROM public.r5_reward_config WHERE family_id='*'");
+  ok('L1','默认稀有奖励来源关闭，不能自动给真实家庭发专属碎片',Number(defaultRare.n)===0,defaultRare);
+  await setConfig(db,{drop_percent:0,rare_record_types:['answer'],rare_daily_cap:1});
+  const first=await rpc(db,`SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
+  ok('L2','合成启用白名单后，第一条真实学习记录获得 1 片稀有碎片',
+    first.status==='CLAIMED'&&Number(first.granted_rare)===1&&Number(first.granted_normal)===0,first);
+  const firstAgain=await rpc(db,`SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
+  ok('L3','重复请求稀有奖励不会重复发放',
+    firstAgain.status==='ALREADY_CLAIMED'&&firstAgain.zero_write===true,firstAgain);
+  const second=await rpc(db,`SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-2','{}'::jsonb) AS r`);
+  ok('L4','同一天第二条记录触发稀有每日上限',
+    second.status==='CLAIMED'&&Number(second.granted_rare)===0,second);
+  const snap=await snapOf(db,OTHER);
+  ok('L5','云端碎片快照中恰好保留 1 片稀有碎片',
+    Number(snap.fragments?.frag_scholar||0)===1,snap.fragments);
+  const audit=await one(db,`SELECT count(*)::int AS n FROM public.r5_racing_events
+    WHERE family_id='${OTHER}' AND kind='fragment_change'
+      AND payload->>'item_id'='frag_scholar'`);
+  ok('L6','稀有碎片只产生一条审计事件',Number(audit.n)===1,audit);
+  await setConfig(db,{status:'paused'});
+  const afterPause=await rpc(db,`SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-3','{}'::jsonb) AS r`);
+  ok('L7','暂停后稀有发奖立即禁止（即使稀有类型白名单仍存在）',
+    afterPause.status==='REWARD_NOT_ACTIVE'&&afterPause.zero_write===true,afterPause);
+  await db.close();
+}
+
 /* ================================================================ 汇总 */
 console.log('\n' + '='.repeat(60));
 console.log(`TOTAL  ${passed}/${passed + failed} passed, ${failed} failed`);
