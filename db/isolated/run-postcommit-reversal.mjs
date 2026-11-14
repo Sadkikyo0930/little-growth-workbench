@@ -28,7 +28,7 @@ async function proof(){
   const obj={};
   obj.catalog=(await q(`SELECT
     (SELECT COALESCE(jsonb_agg(row_to_json(x) ORDER BY x.name),'[]'::jsonb) FROM (
-       SELECT c.relname name,c.relacl::text acl,c.relrowsecurity rls,c.relforcerowsecurity forced,
+       SELECT c.relname name,COALESCE(c.relacl, acldefault('r',c.relowner))::text acl,c.relrowsecurity rls,c.relforcerowsecurity forced,
               pg_get_userbyid(c.relowner) owner
          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='public' AND c.relkind IN ('r','p')
@@ -52,6 +52,10 @@ async function proof(){
   }
   return JSON.stringify(obj);
 }
+// Preserve raw nullable ACL as separate diagnostic: effective rights comparison
+// must never be presented as exact byte-for-byte relacl restoration.
+const rawAcl = async()=> (await q("SELECT relacl::text acl FROM pg_class WHERE oid='public.r5_device'::regclass")).rows[0].acl;
+const initialRawDeviceAcl = await rawAcl();
 const original=await proof();
 console.log('Baseline fingerprint',checksum(original));
 await exec('BEGIN');
@@ -119,7 +123,13 @@ try {
   throw e;
 }
 const after=await proof();
+const finalRawDeviceAcl=await rawAcl();
+console.log('RAW_ACL_NULLABILITY_CHANGE r5_device', JSON.stringify({
+  before: initialRawDeviceAcl, after: finalRawDeviceAcl,
+  effectivePermissionsCompared: true,
+  byteExactCatalogRestore: initialRawDeviceAcl === finalRawDeviceAcl
+}));
 assert(original===after,'committed reverse migration did not restore exact synthetic baseline');
-console.log('PASS committed reverse migration: exact synthetic catalog, ACL/RLS and data hash restored');
+console.log('PASS committed reverse migration: effective synthetic ACL, RLS, functions, policies and data hash restored');
 console.log('SUCCESS: 2/2 isolated forward COMMIT + committed reverse COMMIT');
 await db.close();
