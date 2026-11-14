@@ -1,12 +1,12 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261114-weekly-rare-v1';
+const VERSION='20261114-cloud-day-align-v1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
 const ROOT=new URL(self.registration.scope);
 const CORE_FILES=[
 './','./index.html','./manifest.webmanifest','./app-icon.svg',
-'./weekly-exam.js','./clean-art.js','./chinese-classroom.js','./family-auto-sync.js',
+'./weekly-exam.js','./clean-art.js','./chinese-classroom.js','./family-auto-sync.js','./pwa.js',
 './chinese-classroom.css','./v6-home-clean.jpg','./v6-assessment-clean.jpg',
 './growth_background.png','./english-classroom-fixed.html',
 './science-classroom.html','./math-calendar-preview.html',

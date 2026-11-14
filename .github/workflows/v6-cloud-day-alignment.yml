@@ -1,0 +1,19 @@
+name: V6 cloud day alignment (isolated)
+on:
+  push:
+    branches: [fix/v6-cloud-day-multidevice-20261114]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check v6/pwa.js
+      - run: node --check v6/family-auto-sync.js
+      - run: node tests/cloud-day-alignment.test.mjs

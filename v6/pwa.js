@@ -3,6 +3,52 @@
  */
 (function(){
 'use strict';
+// C0.1 multi-device repair: the real curriculum day comes from an authenticated
+// R5 status read, NOT from this browser's completedDays. No learning records,
+// course completion flags, or quiz scores are changed here.
+const CLOUD_BRIDGE_STATUS = 'v6-r5-bridge-status';
+const VALID_DAY_STATES = new Set([
+  'stale_device_day', 'device_ahead', 'ok', 'partial',
+  'unverified', 'no_local_records'
+]);
+const todayShanghai = () => new Date(Date.now() + 8 * 3600000).toISOString().slice(0,10);
+function confirmedCloudDay() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLOUD_BRIDGE_STATUS) || 'null');
+    if (!v || !VALID_DAY_STATES.has(v.state)) return null;
+    // Do not trust yesterday's cached plan, or an in-progress/error state that
+    // retained an old cloud_day through Object.assign in the bridge.
+    if (new Date(new Date(v.at).getTime()+8*3600000).toISOString().slice(0,10) !== todayShanghai()) return null;
+    const day = Number(v.cloud_day);
+    if (!Number.isInteger(day) || day < 1 || day > 30) return null;
+    return day;
+  } catch (_) { return null; }
+}
+const localCourseDay = typeof window.v6CourseDay === 'function' ? window.v6CourseDay : null;
+if (localCourseDay) {
+  window.v6CourseDay = function() {
+    // Cloud value changes the currently selected lesson only. It does not
+    // backfill completedDays or silently advance the server's plan.
+    return confirmedCloudDay() || localCourseDay();
+  };
+  let seenDay = null;
+  function refreshDayView() {
+    const day = confirmedCloudDay();
+    if (day === null || day === seenDay || document.hidden) return;
+    seenDay = day;
+    try {
+      if (typeof novSelected !== 'undefined') novSelected = day;
+      if (typeof novRender === 'function') novRender();
+      if (typeof refreshHomeMode === 'function') refreshHomeMode();
+    } catch (_) { /* Learning data is never mutated on a visual refresh. */ }
+  }
+  window.addEventListener('pageshow', refreshDayView);
+  window.addEventListener('online', refreshDayView);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDayView(); });
+  // The R5 bridge refreshes asynchronously, typically 3s after page opening.
+  setInterval(refreshDayView, 2000);
+}
+
 const MAIN='growth-workbench-v6-adaptive-2';
 const belongs=k=>{const syncInternal=k.startsWith('v6-family-sync-')||k.startsWith('v6-family-auto-sync-');return !syncInternal&&(k===MAIN||k.startsWith('v6_')||k.startsWith('v6-'))};
 function snapshot(){

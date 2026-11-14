@@ -104,7 +104,9 @@ async function run(){
  }finally{running=false}
 }
 async function restoreMissing(){
- if(restoreRunning||localStorage.getItem(RESTORE_OPT_IN)!=="yes"||!navigator.onLine)return;
+ // Family members who are already authenticated can safely pull *verified*
+// course completion marks; no local records are replaced or erased.
+if(restoreRunning||!navigator.onLine)return;
  if(Date.now()-lastRestoreAttempt<60000)return;
  restoreRunning=true;lastRestoreAttempt=Date.now();
  try{
@@ -136,7 +138,7 @@ async function restoreMissing(){
   var plan=mod.planMerge(local,rows,FAMILY);
   if(!plan.additions.length){restoreStatus("已与当前读取到的云端课程完成标记对齐","synced");return}
   // Never write on session changes, revocation of opt-in, or concurrent learning.
-  if(localStorage.getItem(RESTORE_OPT_IN)!=="yes")return;
+  if(!navigator.onLine)return;
   var verifiedAgain=await auth.getSession();
   var activeUser=verifiedAgain&&verifiedAgain.data&&verifiedAgain.data.session&&verifiedAgain.data.session.user;
   if(!activeUser||String(activeUser.id)!==String(user.id)){
@@ -148,6 +150,15 @@ async function restoreMissing(){
   localStorage.setItem(backupKey,original);
   if(localStorage.getItem(backupKey)!==original)throw Error("本机备份失败，拒绝修改原档");
   localStorage.setItem(KEY,JSON.stringify(merged.state));
+  // Keep the running V6 page's in-memory state consistent with the restored
+  // persisted state. Otherwise the next save() could overwrite the merge.
+  try {
+   if(typeof state!=="undefined"&&state&&Array.isArray(state.records)){
+    state=merged.state;
+    if(typeof refreshHomeMode==="function")refreshHomeMode();
+    if(typeof novRender==="function")novRender();
+   }
+  }catch(_){/* Persisted backup remains valid even if UI redraw fails. */}
   restoreStatus("已补全 "+merged.added+" 个缺失的课程完成标记，并保留原始备份","synced",merged.added);
  }catch(e){restoreStatus("补全失败，本机原始记录保留："+error(e),"error")}
  finally{restoreRunning=false}
@@ -162,7 +173,7 @@ function schedule(){
    import("./r5/reward-hook.mjs").then(function(m){return m.resumeRewardQueue()}).catch(function(){});
   }catch(e){}
   if(localStorage.getItem(ENABLED)==="yes")Promise.resolve(run()).catch(function(e){saveStatus("自动上传执行异常："+error(e),{state:"error"})});
-  if(localStorage.getItem(RESTORE_OPT_IN)==="yes")Promise.resolve(restoreMissing()).catch(function(e){restoreStatus("自动补全异常："+error(e),"error")});
+  Promise.resolve(restoreMissing()).catch(function(e){restoreStatus("自动补全异常："+error(e),"error")});
  }catch(e){saveStatus("同步初始化异常："+error(e),{state:"error"})}
 }
 window.addEventListener("online",schedule);document.addEventListener("visibilitychange",function(){if(!document.hidden)schedule()});
