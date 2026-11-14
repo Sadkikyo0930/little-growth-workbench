@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Check both fragment cars and stale-token family fallback
+        run: |
+          set -o pipefail
+          node tests/garage-device-fallback.test.mjs | tee garage-device.log
+          grep -q "ALL 10 GARAGE CROSS-DEVICE THUMBNAIL CHECKS PASSED" garage-device.log
       - name: Test cross-device additive progress recovery
         run: |
           set -o pipefail
@@ -83,6 +88,7 @@ jobs:
             approval-boundary.log
             preflight-validation.log
             family-progress.log
+            garage-device.log
             v6-smoke.log
             authz.log
             atomicity.log

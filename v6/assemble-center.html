@@ -339,7 +339,13 @@ function toast(msg, ms = 2600) {
 
 /** 占位缩略图：绝不画最终外观，只表示「这一格留给设计稿」 */
 function thumbHTML(p) {
-  const art = p.art || {};
+  // Only artwork URLs are local. Vehicle costs, eligibility and owned state
+  // still come exclusively from the authenticated server response.
+  const thumbById = Object.freeze({
+    frag_car_common_01: './assets/cars/frag_common_01-thumb.png',
+    frag_car_rare_01: './assets/cars/frag_rare_01-thumb.png',
+  });
+  const art = { ...(p.art || {}), thumb: thumbById[p.vehicle_id] || (p.art && p.art.thumb) };
   /* 资源到位（服务端目录里 placeholder=false 且给了 thumb）→ 直接显示真车图；
    * 任何一个条件不满足都退回占位格，不会出现破图。 */
   if (!p.placeholder && art.thumb) {
@@ -495,7 +501,19 @@ function showAuthCard(code) {
 async function refresh() {
   try {
     mode = deviceToken() ? 'device' : 'member';
-    state = mode === 'member' ? await memberState() : await loadState();
+    if (mode === 'device') {
+      try {
+        state = await loadState();
+      } catch (deviceError) {
+        // A stale local racing token must not lock out an otherwise signed-in parent.
+        // The fallback always performs fresh JWT + family membership validation.
+        if ((deviceError && deviceError.code) !== 'DEVICE') throw deviceError;
+        state = await memberState();
+        mode = 'member';
+      }
+    } else {
+      state = await memberState();
+    }
     progress = buildProgress(state);
     $('authCard').hidden = true;
     render();
