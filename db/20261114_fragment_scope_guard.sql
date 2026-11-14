@@ -275,6 +275,18 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('status', 'CONFIG_MISSING', 'zero_write', true);
   END IF;
+
+  -- Explicit parent approval is a hard authorization gate, not merely a UI label.
+  -- Must exit before any claim row, pity counter, fragment event or save revision write.
+  -- A zero drop percent is NOT a substitute: pity and rare awards have separate paths.
+  IF v_cfg.status IS DISTINCT FROM 'active' THEN
+    RETURN jsonb_build_object(
+      'status', 'REWARD_NOT_ACTIVE',
+      'config_status', v_cfg.status,
+      'zero_write', true
+    );
+  END IF;
+
   v_cap := GREATEST(0, v_cfg.daily_cap);
   v_pity_target := GREATEST(2, v_cfg.pity_target);
   v_frag := NULLIF(v_cfg.common_fragment_id, '');

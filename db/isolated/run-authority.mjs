@@ -67,7 +67,7 @@ async function denied(fn) {
   catch (e) { return { denied: true, code: e && e.code, msg: (e && e.message || '').slice(0, 60) }; }
 }
 
-async function newStack() {
+async function newStack({ rewardsActive = true } = {}) {
   const db = new PGlite();
   await db.exec(SCHEMA);
   await db.exec(BEFORE);
@@ -75,6 +75,9 @@ async function newStack() {
   await db.exec(GUARD);
   await db.exec(MEMBER);
   await asServer(db);
+  // Existing authority/compatibility fixtures explicitly opt in to rewards.
+  // Production default remains pending-parent-confirmation and never auto-activates.
+  if (rewardsActive) await db.exec("UPDATE public.r5_reward_config SET status = 'active' WHERE family_id = '*'");
   return db;
 }
 
@@ -419,6 +422,48 @@ console.log('\n=== J 赛车兼容：真实网关形态 + 老设备令牌 ===');
   const j8 = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-4','{}'::jsonb) AS r`);
   ok('J8', '设备被撤销后立刻停用（撤销是真实的解除授权）', j8.status === 'FORBIDDEN_SCOPE', j8.status);
 
+  await db.close();
+}
+
+/* ============================================================ K 家长审批硬开关 */
+console.log('\n=== K 家长未批准时所有奖励发放路径必须零写入 ===');
+{
+  const db = await newStack({ rewardsActive: false });
+  await asServer(db);
+  const before = await one(db, `SELECT
+    (SELECT count(*)::int FROM public.r5_fragment_drops WHERE family_id='${OTHER}') AS drops,
+    (SELECT count(*)::int FROM public.r5_racing_events WHERE family_id='${OTHER}') AS events,
+    (SELECT revision::int FROM public.r5_racing_saves WHERE family_id='${OTHER}') AS revision,
+    (SELECT count(*)::int FROM public.r5_fragment_state WHERE family_id='${OTHER}') AS states`);
+  const pending = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{"want":"drop","daily_cap":99}'::jsonb) AS r`);
+  ok('K1', '待确认不能发奖，明确 REWARD_NOT_ACTIVE + zero_write',
+    pending.status === 'REWARD_NOT_ACTIVE' && pending.zero_write === true, pending);
+  const after = await one(db, `SELECT
+    (SELECT count(*)::int FROM public.r5_fragment_drops WHERE family_id='${OTHER}') AS drops,
+    (SELECT count(*)::int FROM public.r5_racing_events WHERE family_id='${OTHER}') AS events,
+    (SELECT revision::int FROM public.r5_racing_saves WHERE family_id='${OTHER}') AS revision,
+    (SELECT count(*)::int FROM public.r5_fragment_state WHERE family_id='${OTHER}') AS states`);
+  ok('K2', '待确认不写领取记录、碎片事件、保底状态或存档 revision',
+    JSON.stringify(before) === JSON.stringify(after), {before,after});
+  const repeat = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
+  ok('K3', '待确认重复请求不消耗记录且始终拒绝', repeat.status === 'REWARD_NOT_ACTIVE' && repeat.zero_write === true, repeat);
+
+  await setConfig(db, { status: 'paused', drop_percent: 100, pity_target: 2, rare_record_types: ['answer'] });
+  const paused = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-2','{}'::jsonb) AS r`);
+  ok('K4', '暂停状态下即使概率 100% 且稀有和保底已开启仍不得发奖',
+    paused.status === 'REWARD_NOT_ACTIVE' && paused.zero_write === true, paused);
+  const pausedAfter = await one(db, `SELECT
+    (SELECT count(*)::int FROM public.r5_fragment_drops WHERE family_id='${OTHER}') AS drops,
+    (SELECT count(*)::int FROM public.r5_racing_events WHERE family_id='${OTHER}') AS events,
+    (SELECT revision::int FROM public.r5_racing_saves WHERE family_id='${OTHER}') AS revision,
+    (SELECT count(*)::int FROM public.r5_fragment_state WHERE family_id='${OTHER}') AS states`);
+  ok('K5', '暂停后仍完全零写入', JSON.stringify(before) === JSON.stringify(pausedAfter), {before,pausedAfter});
+
+  await setConfig(db, { status: 'active', drop_percent: 100, rare_record_types: [] });
+  const active = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
+  ok('K6', '只有明确 active 才能首次领取原记录', active.status === 'CLAIMED' && Number(active.granted_normal) === 1, active);
+  const duplicate = await rpc(db, `SELECT public.r5_fragment_claim('${OTHER}','${DEV_OTHER}','lr-other-today-1','{}'::jsonb) AS r`);
+  ok('K7', '启用后同一学习记录仍幂等，不重复发放', duplicate.status === 'ALREADY_CLAIMED' && duplicate.zero_write === true, duplicate);
   await db.close();
 }
 

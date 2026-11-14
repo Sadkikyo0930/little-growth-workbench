@@ -39,6 +39,9 @@ async function newStack() {
   await db.exec(AUTHORITY);   // step 1：配置表 + 角色白名单 + 目录
   await db.exec(GUARD);       // step 2：按角色重写守卫 + 服务端权威的 claim/assemble + 表收权
   await db.exec(MEMBER);      // step 3：成员 RPC
+  // Existing simulated reward-success tests intentionally opt in.
+  // Migration itself keeps the production default pending-parent-confirmation.
+  await db.exec("UPDATE public.r5_reward_config SET status = 'active' WHERE family_id = '*'");
   return db;
 }
 
