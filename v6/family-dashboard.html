@@ -126,10 +126,13 @@ $("form").addEventListener("submit",async function(e){
   setStatus("正在验证账号……");
   var result=await auth.signInWithPassword({username:username,password:password});if(result&&result.error)throw result.error;
   $("password").value="";setStatus("已登录，正在检查家庭成员权限……");
-  var db=app.rdb();var m=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY);
+  var session=await auth.getSession();
+  var sessionUser=session&&session.data&&session.data.session&&session.data.session.user;
+  if(!sessionUser||!sessionUser.id)throw Error("登录身份无效，已停止读取");
+  var db=app.rdb();var m=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY).eq("user_id",sessionUser.id);
   if(m&&m.error)throw m.error;
   var members=Array.isArray(m&&m.data)?m.data:[];
-  if(members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role))throw Error("家庭成员查询结果异常，已停止读取学习记录。");
+  if(members.length!==1||members[0].family_id!==FAMILY||String(members[0].user_id)!==String(sessionUser.id)||!["owner","parent","grandparent"].includes(members[0].member_role))throw Error("家庭成员查询结果异常，已停止读取学习记录。");
   setStatus("家庭身份已确认，正在读取云端学习记录……");
   var q=await db.from("growth_learning_records").select("record_id,family_id,record_type,subject,learning_day,record_data,created_at");
   if(q&&q.error)throw q.error;
