@@ -95,6 +95,8 @@ async function run(){
    }
   }
   lastFingerprint=fp;
+  // 云端学习记录写入成功后，再询问服务器是否已完成本周目标。
+  import("./r5/weekly-goal.mjs").then(function(m){return m.resumeWeeklyGoal()}).catch(function(){});
   saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",{state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()});
  }catch(e){
   // Never discard local records; next online/foreground trigger will retry.
@@ -152,6 +154,10 @@ async function restoreMissing(){
 }
 function schedule(){
  try{
+  // 已达标的家庭在重新打开工作台时也能自动补领本周唯一奖励。
+  // 只有服务端返回 CLAIMED 才弹奖；客户端不自行生成碎片。
+  if(localStorage.getItem(ENABLED)==="yes")
+   import("./r5/weekly-goal.mjs").then(function(m){return m.resumeWeeklyGoal()}).catch(function(){});
   try{if(localStorage.getItem("v6-fragment-pending-v1"))
    import("./r5/reward-hook.mjs").then(function(m){return m.resumeRewardQueue()}).catch(function(){});
   }catch(e){}
