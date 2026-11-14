@@ -4,6 +4,7 @@
  */
 import { memberWeeklyClaim, memberState } from './member-fragments.mjs';
 import { showFragmentReward } from './fragment-reward.mjs';
+import { normalizeClaimResponse } from './fragment-contract.mjs';
 let busy = false;
 let lastAttempt = 0;
 export async function resumeWeeklyGoal() {
@@ -12,7 +13,7 @@ export async function resumeWeeklyGoal() {
   busy = true;
   lastAttempt = Date.now();
   try {
-    const result = await memberWeeklyClaim();
+    const result = normalizeClaimResponse(await memberWeeklyClaim());
     const status = String(result?.status || '');
     if (status === 'CLAIMED') {
       // 与普通课程奖励共用已存在的弹窗，但绝不二次调用领取 RPC。
