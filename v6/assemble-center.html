@@ -346,9 +346,9 @@ function thumbHTML(p) {
     frag_car_rare_01: './assets/cars/frag_rare_01-thumb.png',
   });
   const art = { ...(p.art || {}), thumb: thumbById[p.vehicle_id] || (p.art && p.art.thumb) };
-  /* 资源到位（服务端目录里 placeholder=false 且给了 thumb）→ 直接显示真车图；
-   * 任何一个条件不满足都退回占位格，不会出现破图。 */
-  if (!p.placeholder && art.thumb) {
+  /* 两辆正式设计稿已存在于本仓库，服务端早期 placeholder 标记可能仍为 true。
+   * 对有白名单缩略图的两辆车优先展示已验收图片；其它车依然遵守占位限制。 */
+  if (art.thumb && (thumbById[p.vehicle_id] || !p.placeholder)) {
     return `<div class="thumb ready">
     <img src="${art.thumb}" alt="${p.name}" loading="lazy" decoding="async">
   </div>`;
