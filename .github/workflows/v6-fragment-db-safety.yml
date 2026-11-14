@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Test cross-device additive progress recovery
+        run: |
+          set -o pipefail
+          node tests/family-progress-merge.test.mjs | tee family-progress.log
+          grep -q "ALL 12 FAMILY PROGRESS RESTORE CHECKS PASSED" family-progress.log
       - name: Rehearse production read-only preflight against synthetic schema drift
         run: |
           set -o pipefail
@@ -77,6 +82,7 @@ jobs:
             reward-ui.log
             approval-boundary.log
             preflight-validation.log
+            family-progress.log
             v6-smoke.log
             authz.log
             atomicity.log

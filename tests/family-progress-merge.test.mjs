@@ -1,0 +1,24 @@
+import {strict as a} from 'node:assert';
+import {planMerge,applyMerge} from '../v6/family-progress-merge.mjs';
+const family='synthetic-family-001';
+const today=new Date().toISOString();
+const row=(id,day,subject,extra={})=>({record_id:id,family_id:family,record_type:'course-complete',subject,learning_day:day,record_data:{source:'v6',day,completed_at:today},...extra});
+let tests=0;
+function check(name,fn){fn();tests++;console.log('PASS',name)}
+const local={records:[{subject:'cn',correct:true}],v6Course:{subjects:{1:{'数学':'2026-11-10T00:00:00.000Z'}},completedDays:{1:'2026-11-11T00:00:00Z'}},weeklyExams:{x:{correct:3}},coin:73};
+const remote=[row('remote01',1,'语文'),row('remote02',1,'数学'),row('remote03',2,'英语')];
+const plan=planMerge(local,remote,family);
+check('only adds missing completed subjects',()=>a.equal(plan.additions.length,2));
+const merged=applyMerge(local,plan);
+check('keeps local answer and unrelated fields intact',()=>{a.deepEqual(merged.state.records,local.records);a.equal(merged.state.coin,73);a.deepEqual(merged.state.weeklyExams,local.weeklyExams)});
+check('retains local completion and authoritative completedDays',()=>{a.equal(merged.state.v6Course.subjects[1]['数学'],local.v6Course.subjects[1]['数学']);a.deepEqual(merged.state.v6Course.completedDays,local.v6Course.completedDays)});
+check('restores missing subjects',()=>a.equal(merged.state.v6Course.subjects[2]['英语'],today));
+check('idempotent when the same cloud data is restored again',()=>a.equal(planMerge(merged.state,remote,family).additions.length,0));
+check('rejects cross-family rows without partial mutation',()=>a.throws(()=>planMerge(local,[row('x',1,'语文'),{...row('y',1,'英语'),family_id:'other'}],family),/其他家庭/));
+check('ignores non-course records and sync-test data',()=>a.equal(planMerge(local,[{...row('z',1,'语文'),record_type:'sync-test'}],family).additions.length,0));
+check('rejects invalid or missing completed_at',()=>a.equal(planMerge(local,[row('x',1,'语文',{record_data:{source:'v6',day:1,completed_at:'bogus'}})],family).additions.length,0));
+check('rejects spoofed record provenance',()=>a.equal(planMerge(local,[row('x',1,'语文',{record_data:{source:'external',day:1,completed_at:today}})],family).additions.length,0));
+check('does not change original object',()=>a.equal(local.v6Course.subjects[2],undefined));
+check('does not create new learning days',()=>a.deepEqual(Object.keys(merged.state.v6Course.completedDays),['1']));
+check('rejects missing local records array',()=>a.throws(()=>planMerge({},remote,family),/格式异常/));
+console.log(`ALL ${tests} FAMILY PROGRESS RESTORE CHECKS PASSED`);
