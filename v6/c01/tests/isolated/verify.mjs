@@ -122,6 +122,16 @@ const deploy = await grab(async () => {
 check('D1', '010 + legacy + 020 apply cleanly to the production-shaped schema',
   deploy.ok, deploy.message || `sql sha256 ${bytes(M010 + M020)}`);
 
+/* A full ACL snapshot of every function in the schema, so the migration can be
+ * proven not to touch anything it does not own. */
+const aclSnapshot = async () => {
+  const rows = await q(`SELECT p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS sig,
+      coalesce(array_to_string(p.proacl, ' | '), '(default PUBLIC)') AS acl
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' ORDER BY 1`);
+  return Object.fromEntries(rows.map((r) => [r.sig, r.acl.replace(/cloudbase_postgres\w*/g, 'OWNER').replace(/postgres/g, 'OWNER')]));
+};
+const aclBaseline = await aclSnapshot();
+
 const fns = (await q(`SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args,
     coalesce(array_to_string(p.proacl, ' | '), '(default PUBLIC)') AS acl, md5(p.prosrc) AS md5
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -395,6 +405,16 @@ check('R7', 'rollback loses no learning record and rewrites no plan (all four fa
 check('R8', 'the 73 historical records are still exactly 73, byte-identical',
   (await fpRecords(REAL)).fp === baseline[REAL].rec.fp);
 
+/* Collateral-damage check: every function that existed before the migration and
+ * is not part of the candidate must carry the exact same ACL afterwards. */
+const aclAfter = await aclSnapshot();
+const protectedSigs = Object.keys(aclBaseline).filter((sig) =>
+  !candidateNames.some((n) => sig.startsWith(n + '(')));
+const drifted = protectedSigs.filter((sig) => aclAfter[sig] !== aclBaseline[sig]);
+check('R10', 'no pre-existing function lost or gained a grant (full-schema ACL diff)',
+  drifted.length === 0, drifted.map((s) => `${s}: ${aclBaseline[s]} -> ${aclAfter[s]}`).join(' | ')
+  || `${protectedSigs.length} functions identical`);
+
 /* after rollback the legacy gate must still evaluate, or the site is down */
 await claims('u-parent');
 const legacyStatus = await grab(() => q('SELECT public.r5_status($1) AS s', [REAL]));
@@ -408,7 +428,7 @@ await client.end();
 
 const summary = {
   generated_at: new Date().toISOString(),
-  commit: '242e2a8cdea81399e66b2198f479a53357cc03e8',
+  commit: process.env.ISO_COMMIT || '(unset)',
   environment: {
     kind: 'separate PostgreSQL server, own data dir, own TCP port, separate process',
     engine: 'PostgreSQL 18.6 (WASM build, PGlite 0.5.16) behind a wire-protocol TCP endpoint',
