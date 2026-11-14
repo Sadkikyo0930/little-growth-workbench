@@ -25,7 +25,10 @@ function build(s,b){
  var course=s.v6Course||{},subjs=course.subjects||{};
  Object.keys(subjs).forEach(function(day){var n=Number(day);if(!Number.isInteger(n)||n<1||n>30)return;
   var m=subjs[day];if(!m||typeof m!=="object")return;
-  Object.keys(m).forEach(function(name){if(!m[name]||!Number.isFinite(Date.parse(m[name]))||Date.parse(m[name])<Date.parse(b.start))return;
+  Object.keys(m).forEach(function(name){
+   // Do not upload records previously restored from this family's cloud.
+   if(course.remoteRestored&&course.remoteRestored[day]&&course.remoteRestored[day][name])return;
+   if(!m[name]||!Number.isFinite(Date.parse(m[name]))||Date.parse(m[name])<Date.parse(b.start))return;
    arr.push({record_id:"v6-"+prefix+"-course-"+n+"-"+(map[name]||encodeURIComponent(name)),record_type:"course-complete",subject:name,learning_day:n,record_data:{version:1,source:"v6",day:n,completed_at:m[name]}})
   })
  });
