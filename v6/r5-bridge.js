@@ -1,26 +1,43 @@
 /* ============================================================================
- * v6/r5-bridge.js — V6 学习平台 → 腾讯云 R5 赛车闸门 的桥接器（v2）
+ * v6/r5-bridge.js — V6 学习平台 → 腾讯云 R5 赛车闸门 的桥接器（C0.1 候选）
  *
- * v2 相对 v1 的关键变化（对应第四轮「成绩记录修复」）：
- *   1. **不再只看 state.records**：数学课件、科学课件、英语课件各自把逐题结果写在
- *      自己的 localStorage 键里，这里直接把真实结果读出来，不重复开发题库；
- *   2. **语文页面闯关**（只有得分、没有逐题明细的那种）按「题组」如实折算：
- *      score 题记正确、其余记错误，总数与得分都不变，并打上 derived 标记；
- *   3. **同题去重**：每道题一天只算一次（首次作答），重复点击 / 反复练习不会重复计数；
- *   4. **主观活动排除**：拼音跟读（语音识别）、描红（画布）没有客观正确率，
- *      一律不采集、不按 100% 计算；
- *   5. 记录 ID 与「第几题」解耦，重跑不会因为数组顺序变化而重复上传。
+ * 本版是「权威学习日」修复的候选实现（分支 c01/authoritative-day-candidate，
+ * 未合并 main、未部署）。相对线上 2026-11-09.multidevice-4：
  *
- * 判定仍然完全在云端：r5_status 只认「course-complete + answer 条数>0 + 正确率≥80%」。
- * 这里不做阈值判断，不写孩子的历史成绩，不补题、不改课。
+ *   1. 学习日不再由本机决定。云端返回 study_day（今天已发布计划的课次）与
+ *      authoritative_day（下一次允许发布的课次）时，一律以云端为准。
+ *   2. 本机落后（STALE_DEVICE_DAY）：不上传、不发布、不推进，只在状态里说明，
+ *      等本机课程表更新。绝不把本机旧课次的成绩写到云端新学习日。
+ *   3. 本机超前（DEVICE_AHEAD）：不上传、不自动发布，避免用「还没验证的
+ *      进度」推进权威学习日。
+ *   3b. 唯一的放宽：本机恰好超前 1 天，且云端当天计划**已由家长发布**时，
+ *      允许把「当天」（云端课次）的记录传上去——本机超前一天的真实含义是
+ *      「今天两科已经学完、点了进入下一学习日」，当天成绩必须能落库。上传
+ *      仍按每一项自己的 day 过滤，day>云端的一律不收；不发布、不推进。本机
+ *      超前 1 天以上、或计划尚未发布，仍然一律拒绝。
+ *   4. 上传时 learning_day 恒等于 item 自己的学习日（collectAnswers 过滤），
+ *      绝不改写；day1 的英语不会因为云端到了 day3 就变成 day3 英语。
+ *   5. 成绩待同步（COMPLETED_UNSCORED / PENDING_SCORE_SYNC）与历史归属待核实
+ *      （PENDING_VERIFICATION）原样上报，不补题、不猜、不伪造完成。
+ *   6. 云端今天是 D、上传后云端变成 D-1（回退）时立即停机并报
+ *      CLOUD_DAY_REGRESSION，不再继续写。
+ *   7. 两科都通过后只解锁赛车，**不**自动推进学习日。权威日的推进只发生在
+ *      家长发布下一学习日的计划时（云端 r5_publish_today → maybe_advance，
+ *      确认上一天达标后恰好 +1）。因此本构建的 RPC 面与线上版本完全相同。
  *
- * 依赖：V6 页面里的全局 state / v6CourseDay() / V6_SUBJECT_DAYS（同页脚本可直接访问）。
+ * 兼容性（老接口签名一个都没改）：
+ *   r5_status{p_family_id} / r5_publish_today{p_family_id,p_day_index,p_no_tasks}
+ *   / r5_claim_answers{p_family_id,p_items} / growth_learning_records REST
+ *   老云端不返回 authoritative_day 时，退回 study_day；仍然没有就按旧逻辑
+ *   用本机 day 发布一次——但一旦云端给出课次，就以云端为准。
+ *
+ * 判定仍然完全在云端：本文件不做阈值判断、不写历史成绩、不补题、不改课。
  * ==========================================================================*/
 (function () {
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-09.multidevice-4';
+  var BRIDGE_BUILD = '2026-11-14.authoritative-day-c01.3';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -31,7 +48,6 @@
     deviceKey: 'v6-family-sync-device-id',
     statusKey: 'v6-r5-bridge-status',
     offKey: 'v6-r5-bridge-off',
-    // 各课件自己的进度键（真实成绩来源，见 docs/GRADING_AUDIT.md）
     courseKey: {
       ma: 'v6_math_course_20261109_progress_v1',
       sc: 'v6_science_course_20261109_progress_v1',
@@ -80,10 +96,8 @@
 
   function today() { return ymd(new Date()); }
 
-  /* v1.8.0-rc2 / r5-prodlink-date-fix
-   * 课件进度里的 at 是 new Date().toISOString()（UTC）。东八区 00:00-08:00 之间
-   * 用 at.slice(0,10) 取到的是「昨天」，会把当天成绩整批判成过期丢弃。
-   * 这里统一按本地时区解析；纯 YYYY-MM-DD 字符串原样返回。 */
+  /* 课件进度里的 at 是 UTC ISO 串；东八区 00:00-08:00 直接 slice(0,10) 会取到昨天。
+   * 这里统一按本地时区取日期，纯 YYYY-MM-DD 原样返回。 */
   function ymdOf(v) {
     if (v == null || v === '') return '';
     var s = String(v);
@@ -177,8 +191,8 @@
 
   /**
    * 课次 → 学习日。
-   * V6 的规则：某科目的第 N 课，排在该科目出现的第 N 个学习日。
-   * 直接用 V6_SUBJECT_DAYS 推导，不另存一份日期表（避免两边不同步）。
+   * V6 规则：某科目的第 N 课，排在该科目出现的第 N 个学习日。
+   * 用 V6_SUBJECT_DAYS 推导，不另存一份日期表（避免两边不同步）。
    */
   function dayForLesson(subjectName, lesson) {
     var table = subjectDays();
@@ -191,6 +205,60 @@
       }
     }
     return 0;
+  }
+
+  /* ------------------------------------------------------- 权威学习日读取 */
+
+  /**
+   * 从 r5_status 读出「今天用哪一天」。
+   *   plan_day          今天已发布计划的课次（云端今天真正在上的那一天）
+   *   authoritative_day 下一次允许发布的课次（完成当天后 +1，可能比 plan_day 大 1）
+   *   today             本机今天应该对齐的课次 = plan_day ?? authoritative_day
+   * 老云端两个字段都可能缺失，此时 today 为 null，调用方退回旧逻辑。
+   */
+  function readDayState(st) {
+    var planDay = null, authDay = null;
+    if (st && typeof st === 'object') {
+      if (st.study_day !== null && st.study_day !== undefined && st.study_day !== ''
+          && isFinite(Number(st.study_day))) planDay = Number(st.study_day);
+      if (st.authoritative_day !== null && st.authoritative_day !== undefined
+          && st.authoritative_day !== '' && isFinite(Number(st.authoritative_day))) {
+        authDay = Number(st.authoritative_day);
+      } else if (planDay !== null) {
+        authDay = planDay; // 老云端：没有独立进度，studying_day 就是权威日
+      }
+    }
+    var todayDay = planDay !== null ? planDay : authDay;
+    return {
+      plan_day: planDay,
+      authoritative_day: authDay,
+      today: todayDay,
+      published: !!(st && st.schedule_published === true),
+      advanced: (planDay !== null && authDay !== null && authDay > planDay),
+      source: (st && st.authoritative_day !== undefined) ? 'cloud_authoritative' : 'cloud_study_day',
+    };
+  }
+
+  /** 今日「完成了但成绩还没同步」的科目；用于家长可见状态，不影响放行。 */
+  function pendingScoreSyncOf(st) {
+    var mods = (st && Array.isArray(st.modules)) ? st.modules : [];
+    return mods.filter(function (m) {
+      return m && (m.pending_score_sync === true
+        || m.evidence === 'COMPLETED_UNSCORED'
+        || m.credential_status === 'PENDING_SCORE_SYNC');
+    }).map(function (m) {
+      return { subject: m.subject, completed: m.completed === true, total: Number(m.total) || 0 };
+    });
+  }
+
+  /** 今日「历史归属待核实」的科目；只上报，不放行。 */
+  function pendingVerifyOf(st) {
+    var mods = (st && Array.isArray(st.modules)) ? st.modules : [];
+    return mods.filter(function (m) {
+      return m && (m.pending_verification === true || m.credential_status === 'PENDING_VERIFICATION');
+    }).map(function (m) {
+      return { subject: m.subject, reasons: m.pending_reasons || [] };
+    });
   }
 
   /* ------------------------------------------------------------------ 身份 */
@@ -263,12 +331,44 @@
     return rpc('r5_status', { p_family_id: CFG.familyId }, who);
   }
 
+  /* 旧签名：p_family_id / p_day_index / p_no_tasks 三个参数一个都不改。
+   * p_day_index 是「本机认为的课次」，由云端判定是否采纳。 */
   function publishPlan(who, day, noTasks) {
     return rpc('r5_publish_today', {
       p_family_id: CFG.familyId,
       p_day_index: day,
       p_no_tasks: !!noTasks,
     }, who);
+  }
+
+  /* C0.1.5 刻意不提供「自动推进学习日」的客户端调用。
+   *
+   * 业务规则：第三学习日两科达标只解锁赛车，不自动进入第四学习日。旧候选版本
+   * 在这里调用 r5_advance_day，双科一达标就把云端权威学习日推到 4，导致同一台
+   * 设备上「云端已到第 4 天、本机还是第 3 天」，之后任何补传都会被
+   * stale_device_day 挡下，第二天家长没点「进入下一学习日」之前也发不了计划。
+   *
+   * 推进权威日的正确时机是「家长发布下一学习日的计划」：r5_publish_today 内部
+   * 会调用 r5_progress_maybe_advance，确认上一天（day_index = 权威日）真的达标
+   * 后恰好 +1。这既是家长动作触发的，也不会在当天提前跳日。
+   * r5_advance_day 仍然保留在云端供人工纠正，但本构建不调用它。 */
+
+  /* 云端还没为这个家庭确定权威学习日（C0.1 起不再按历史计划自动猜）。
+   * 这是「必须家长确认」的状态，不是网络错误：一次都不上传，也不落任何成绩。 */
+  function isDayNotInitialised(e) {
+    var code = String((e && (e.code || e.message)) || '');
+    return /R5_DAY_NOT_INITIALIZED/.test(code);
+  }
+
+  function dayNotInitialisedStatus(extra) {
+    var s = {
+      state: 'day_not_initialized',
+      message: '云端还没有为这个家庭设定权威学习日（需要家长确认一次当前进度），本次不上传任何成绩，本机记录原样保留。',
+      pending: null, pending_known: false,
+      cloud_verified: false, cloud_verified_reason: 'DAY_NOT_INITIALIZED',
+    };
+    if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) s[k] = extra[k]; } }
+    return saveStatus(s);
   }
 
   /* ------------------------------------------------------- 采集「今天的真实记录」 */
@@ -341,8 +441,8 @@
 
   /**
    * 3) 课件自己的进度键：数学 / 科学 / 英语。
-   *    - 数学：results[].firstTry（课件定义就是「首次答对」，不是我们改的口径）
-   *    - 科学：answers[].correct + correctIndex
+   *    - 数学：results[].firstTry（课件定义就是「首次答对」）
+   *    - 科学：answers[].correct
    *    - 英语：answers[].correct
    */
   function fromCourseProgress(state, day, todayStr, add) {
@@ -401,9 +501,7 @@
 
   /**
    * 4) 语文页面闯关：官方只上报 score/total（没有逐题明细）。
-   *    按「题组」如实折算：得分几题就记几题正确，总数不变。
-   *    这类记录带 derived:'quiz-aggregate'，方便日后核对，不代表具体哪一题对错。
-   *    如果同一页面被 DOM 抓取过（cnPageQuiz），只在没有官方数据时才用，避免重复。
+   *    按「题组」如实折算：得分几题就记几题正确，总数不变，并打 derived 标记。
    */
   function fromChineseQuiz(state, day, todayStr, add) {
     var daily = state.dailyChinese || {};
@@ -490,11 +588,15 @@
       family_id: CFG.familyId,
       record_type: 'answer',
       subject: CFG.subjectName[item.subj],
-      learning_day: item.day,
+      learning_day: item.day,     // 恒等于该题自己的学习日，绝不改写
       record_data: { version: 1, source: item.source, index: item.index, answer: answer },
     };
   }
 
+  /**
+   * 只采「本学习日」的记录。item.day 与 day 不等的一律丢弃，
+   * 不会因为云端今天到了第 3 天，就把第 1 天的英语重新标成第 3 天。
+   */
   function collectAnswers(state, day, todayStr) {
     var device = deviceId();
     return collectItems(state, day, todayStr)
@@ -541,18 +643,9 @@
   }
 
   /**
-   * 服务端原子抢占（首选路径，依赖 007_answer_dedupe.sql）。
-   *
-   * r5_answer_dedupe 的主键 (family_id, subject, answer_date, track, q_index) 就是
-   * 唯一约束，服务端用 INSERT ... ON CONFLICT DO NOTHING 完成抢占 —— 两台设备
-   * 同时上传同一道题时，只有一台能 RETURNING 到行，另一台拿到 duplicates。
-   * 这是数据库层的原子保证，不是「先查再判断」的时序假设。
-   *
-   * 服务端对「同一台设备 + 同一个 record_id」的重试会返回 reclaimed：
-   * 本机上次抢到了但 POST 失败时，10 分钟内重试不会被自己判成已同步。
-   *
-   * 返回 null 表示 RPC 不可用（未部署 / 网络失败 / 权限不足），
-   * 调用方降级到「读云端当天记录再过滤」，同步本身永不中断。
+   * 服务端原子抢占（依赖 007_answer_dedupe.sql）。两台设备同时上传同一道题时，
+   * 只有一台能 RETURNING 到行；另一台拿到 duplicates。返回 null 表示 RPC 不可用，
+   * 调用方降级为「读云端当天记录再过滤」，同步永不中断。
    */
   async function claimOnServer(items, who) {
     var payload = items.map(function (r) {
@@ -581,10 +674,9 @@
   }
 
   /**
-   * 降级路径：云端当天已有的「答题/完成指纹」集合。
+   * 降级路径：云端已有的「答题/完成指纹」集合。
    * 指纹 = 学科|日期|关卡|题号；课程完成记录用 track='__course__', index=0。
-   * 读不到就返回 null，保持原有的按 record_id 去重。
-   * 注意：并发下两台设备可能同时读到空集合，这条路只做兜底，不作为并发保证。
+   * 并发下两台设备可能同时读到空集合，这条路只做兜底。
    */
   async function cloudQuestionKeys(who, day) {
     try {
@@ -621,7 +713,7 @@
     return r.subject + '|' + (c ? ymdOf(c) : ymdOf(new Date())) + '|__course__|0';
   }
 
-  /** 按 record_id 精确回查：只查本机这批 id，不会因为历史记录多而被 limit 截断。 */
+  /** 按 record_id 精确回查：只查本机这批 id，不会被历史记录条数截断。 */
   async function persistedIds(who, ids) {
     if (!ids.length) return { ok: true, ids: {}, scanned: 0 };
     try {
@@ -642,7 +734,7 @@
     } catch (e) { return { ok: false, ids: {}, scanned: 0 }; }
   }
 
-  /** 当天题目指纹（用于判断「别的设备已经传过这道题」），带截断标记。 */
+  /** 当天题目指纹（判断「别的设备已经传过这道题」），带截断标记。 */
   async function dayFingerprints(who, day) {
     var limit = 3000;
     try {
@@ -671,13 +763,8 @@
 
   /**
    * 回读云端，逐条确认「本机认为应有成绩」的每一条是否真的落库。
-   *
-   * 为什么不能看 r5_status：r5_status 的 modules 只说明云端有这个科目的记录，
-   * 可能全部来自另一台设备；本机 POST 静默失败时它照样返回 modules。
-   * 所以 cloud_verified 只能建立在「按 record_id 或题目指纹能在正表里找到」之上。
-   *
-   * known=false 表示这次没能力判断（读不到 / 当天记录超过上限），
-   * 此时 pending 必须是 null，绝不能报 0。
+   * 不能看 r5_status：它的 modules 可能全部来自另一台设备。
+   * known=false 表示这次没能力判断（读不到/超上限），此时 pending 必须是 null。
    */
   async function verifyPersisted(rows, who, day) {
     if (!rows.length) return { known: true, missing: [], confirmed: 0, scanned: 0 };
@@ -707,10 +794,7 @@
 
   function sleepMs(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
 
-  /**
-   * 另一台设备可能正在写同一天的记录。给 0.6 秒再确认一次，
-   * 避免把「正在上传」误报成「没落库」——但绝不把「确认不到」当成已确认。
-   */
+  /** 给 0.6 秒再确认一次，避免把「正在上传」误报成「没落库」；绝不把「确认不到」当已确认。 */
   async function verifyWithRetry(rows, who, day) {
     var vf = await verifyPersisted(rows, who, day);
     if (!rows.length || (vf.known && !vf.missing.length)) return vf;
@@ -720,11 +804,8 @@
   }
 
   /**
-   * 上传。返回值是统计对象，不再是条数：
-   *   uploaded   本次真正写入的条数
-   *   already    云端本来就有（按 record_id）
-   *   duplicates 别的设备抢占在先（按题目指纹）
-   *   reclaimed  本机重试自己上次没落库的占位
+   * 上传。返回值是统计对象：
+   *   uploaded / already / duplicates / reclaimed
    */
   async function upload(rows, who) {
     var out = { uploaded: 0, already: 0, duplicates: 0, reclaimed: 0 };
@@ -736,12 +817,10 @@
 
     var claim = await claimOnServer(fresh, who);
     if (claim) {
-      // ① 原子抢占：只上传本机抢到的，其余是别的设备已经传过的
       out.reclaimed = claim.reclaimed.size;
       fresh = fresh.filter(function (r) { return claim.claimed.has(r.record_id); });
       out.duplicates += claim.duplicates.size;
     } else {
-      // ② RPC 不可用：降级为读后过滤（不保证并发安全，但不阻塞同步）
       var day = fresh[0].learning_day;
       var seenQ = await cloudQuestionKeys(who, day);
       if (seenQ) {
@@ -786,70 +865,169 @@
     }
 
     running = true;
-    saveStatus({ state: 'running' });
+    saveStatus({ state: 'running', build: BRIDGE_BUILD });
+    var rows;
     try {
       var who = await identity();
-      var day = courseDay();
-      var subs = subjectsFor(day);
-      var rest = subs.length === 0;
-
+      var localDay = courseDay();
+      var todayStr = today();
       var st = await cloudStatus(who);
-      if ((!st || st.schedule_published !== true) && diagnostic) return saveStatus({ state: 'plan_unpublished', local_day: day, local_subjects: subs, message: '云端当天计划尚未发布，本次诊断未上传。' });
-      if (!st || st.schedule_published !== true) {
+      var ds = readDayState(st);
+      /* 本机恰好超前一天（当天两科已学完并点了「进入下一学习日」）时，
+       * 仍然要把「当天」的真实记录传上去，否则孩子做完的数学英语永远进不了
+       * 云端。只放宽上传：不发布、不推进、不改写 learning_day。 */
+      var aheadSync = false;
+
+      /* 老云端 + 今天还没计划：按旧行为用本机 day 发布一次。
+       * 新云端会忽略这个 day（以权威日为准），并在返回里给出真实课次。 */
+      if (ds.today === null) {
+        if (diagnostic) {
+          return saveStatus({ state: 'plan_unpublished', local_day: localDay,
+            local_subjects: subjectsFor(localDay),
+            message: '云端当天计划尚未发布，本次诊断未上传。' });
+        }
         try {
-          await publishPlan(who, day, rest);
+          await publishPlan(who, localDay, subjectsFor(localDay).length === 0);
         } catch (e) {
-          if (e.code === 'R5_TODAY_PLAN_ALREADY_PUBLISHED') {
-            st = await cloudStatus(who);
-            saveStatus({
-              state: 'plan_conflict',
-              message: '今天云端已发布别的学习计划（第 ' + (st && st.study_day) + ' 天），本机是第 ' + day + ' 天，已停止上传以免错记。',
-              cloud_day: st && st.study_day, local_day: day,
-            });
-            return readStatus();
-          }
+          if (isDayNotInitialised(e)) return dayNotInitialisedStatus({ local_day: localDay });
           throw e;
         }
         st = await cloudStatus(who);
+        ds = readDayState(st);
+      }
+      if (ds.today === null) {
+        return saveStatus({ state: 'cloud_unavailable',
+          local_day: localDay,
+          message: '云端没有返回学习日（计划未发布且无权威日），本次不上传。',
+          pending: null, pending_known: false,
+          cloud_verified: false, cloud_verified_reason: 'CLOUD_DAY_UNKNOWN' });
       }
 
-      var cloudDay = Number(st && st.study_day) || day;
-      var todayStr = today();
-
-      if (cloudDay !== day) {
-        saveStatus({
-          state: 'day_mismatch',
-          message: '云端今天是第 ' + cloudDay + ' 天，V6 本机是第 ' + day + ' 天；已停止上传，请家长确认。',
-          cloud_day: cloudDay, local_day: day,
+      /* ---- 关键闸门 1：本机落后于云端 ---- */
+      if (ds.today > localDay) {
+        return saveStatus({
+          state: 'stale_device_day',
+          message: '云端已到第 ' + ds.today + ' 天，本机还是第 ' + localDay
+            + ' 天；本机这次不上传，避免把旧课次的成绩记到新学习日。请刷新课程表后再试。',
+          cloud_day: ds.today, local_day: localDay,
+          authoritative_day: ds.authoritative_day,
+          pending: null, pending_known: false,
+          cloud_verified: false, cloud_verified_reason: 'STALE_DEVICE_DAY',
         });
-        return readStatus();
+      }
+
+      /* ---- 关键闸门 2：本机超前于云端 ---- */
+      if (ds.today < localDay) {
+        /* 唯一放宽项：超前正好 1 天，且云端当天计划已发布。
+         * 这时本机代表「今天已经学完了」，当天记录必须能上传；本机多出来的
+         * 那一天（ds.today+1）的任何作答都不会被 collected（collectAnswers
+         * 按 cloudDay 过滤）。超前 1 天以上，或计划还没发布，一律不提。 */
+        if (ds.today + 1 === localDay && ds.published === true) {
+          aheadSync = true;
+        } else {
+          return saveStatus({
+            state: 'device_ahead',
+            message: '本机是第 ' + localDay + ' 天，云端权威学习日还是第 ' + ds.today
+              + ' 天；不会用本机进度自动推进，请家长在家长入口确认。',
+            cloud_day: ds.today, local_day: localDay,
+            authoritative_day: ds.authoritative_day,
+            pending: null, pending_known: false,
+            cloud_verified: false, cloud_verified_reason: 'DEVICE_AHEAD',
+          });
+        }
+      }
+
+      /* ---- 今天计划未发布：发布权威日 ---- */
+      if (!ds.published) {
+        if (diagnostic) {
+          return saveStatus({ state: 'plan_unpublished', cloud_day: ds.today, local_day: localDay,
+            local_subjects: subjectsFor(ds.today), cloud_subjects: [],
+            message: '云端当天计划尚未发布，本次诊断未上传。' });
+        }
+        var conflict = null;
+        try {
+          await publishPlan(who, ds.today, subjectsFor(ds.today).length === 0);
+        } catch (e) {
+          if (isDayNotInitialised(e)) return dayNotInitialisedStatus({ local_day: localDay, cloud_day: ds.today });
+          if (e.code === 'R5_TODAY_PLAN_ALREADY_PUBLISHED') conflict = e;
+          else throw e;
+        }
+        st = await cloudStatus(who);
+        ds = readDayState(st);
+        if (conflict && ds.today !== localDay) {
+          return saveStatus({
+            state: ds.today !== null && ds.today > localDay ? 'stale_device_day' : 'cloud_day_regression',
+            message: '云端今天已发布第 ' + ds.today + ' 天的计划，本机是第 ' + localDay
+              + ' 天；已停止上传，以免错记。',
+            cloud_day: ds.today, local_day: localDay,
+            authoritative_day: ds.authoritative_day,
+            pending: null, pending_known: false,
+            cloud_verified: false, cloud_verified_reason: 'PLAN_LOCKED_OTHER_DAY',
+          });
+        }
+      }
+
+      var cloudDay = ds.today;
+      if (cloudDay !== localDay && !(aheadSync === true && cloudDay + 1 === localDay)) {
+        return saveStatus({
+          state: cloudDay > localDay ? 'stale_device_day' : 'device_ahead',
+          message: '云端第 ' + cloudDay + ' 天，本机第 ' + localDay + ' 天；已停止上传，请家长确认。',
+          cloud_day: cloudDay, local_day: localDay,
+          authoritative_day: ds.authoritative_day,
+          pending: null, pending_known: false,
+          cloud_verified: false, cloud_verified_reason: 'DAY_MISMATCH',
+        });
       }
 
       var cloudSubjects = Array.isArray(st && st.modules)
         ? st.modules.map(function (m) { return m.subject; }).sort() : null;
-      var localSubjects = subs.slice().sort();
+      var localSubjects = subjectsFor(cloudDay).slice().sort();
       if (!cloudSubjects || JSON.stringify(cloudSubjects) !== JSON.stringify(localSubjects)) {
         return saveStatus({ state: 'subject_mismatch',
           message: '本机与云端当天课程不一致，已停止上传，请家长确认。',
-          cloud_day: cloudDay, local_day: day,
-          cloud_subjects: cloudSubjects, local_subjects: localSubjects });
+          cloud_day: cloudDay, local_day: localDay,
+          cloud_subjects: cloudSubjects, local_subjects: localSubjects,
+          authoritative_day: ds.authoritative_day,
+          pending: null, pending_known: false,
+          cloud_verified: false, cloud_verified_reason: 'SUBJECT_MISMATCH' });
       }
-      var rows = collectAnswers(state, cloudDay, todayStr).concat(collectCompletions(state, cloudDay, todayStr));
-      if (diagnostic && !rows.length) return saveStatus({ state: 'no_local_records', cloud_day: cloudDay, cloud_subjects: cloudSubjects, local_day: day, local_subjects: localSubjects, message: '当前窗口没有匹配当天的真实成绩，没有上传。' });
+
+      /* learning_day 恒为 cloudDay（= 本机 day），item 自己的学习日不会被改写。 */
+      rows = collectAnswers(state, cloudDay, todayStr)
+        .concat(collectCompletions(state, cloudDay, todayStr));
+
+      if (diagnostic && !rows.length) {
+        return saveStatus({ state: 'no_local_records', cloud_day: cloudDay,
+          cloud_subjects: cloudSubjects, local_day: localDay,
+          local_subjects: localSubjects,
+          message: '当前窗口没有匹配当天的真实成绩，没有上传。' });
+      }
+
       var up = await upload(rows, who);
       st = await cloudStatus(who);
 
-      /* 关键修正（r5-birthday-multidevice v4）：
-       * 不能再用「r5_status 有没有 modules」当 cloud_verified —— modules 可能全部
-       * 来自另一台设备，本机这条 POST 失败它照样有值。这里回读正表逐条确认：
-       *   先按 record_id 精确查本机这批（不会被历史条数截断），
-       *   查不到的再按「学科|日期|关卡|题号」指纹判断是否已被别的设备传过。
-       * 任何一步读不到 → pending 记 null（未知），绝不报 0。 */
+      /* ---- 关键闸门 3：云端课次不允许回退 ---- */
+      var after = readDayState(st);
+      if (after.today !== null && after.today < cloudDay) {
+        return saveStatus({
+          state: 'cloud_day_regression',
+          message: '云端学习日从第 ' + cloudDay + ' 天回退到第 ' + after.today
+            + ' 天，已立即停止后续写入，请家长检查。',
+          cloud_day: after.today, previous_cloud_day: cloudDay,
+          authoritative_day: after.authoritative_day,
+          uploaded: up.uploaded,
+          pending: null, pending_known: false,
+          cloud_verified: false, cloud_verified_reason: 'CLOUD_DAY_REGRESSION',
+        });
+      }
+
       var vf = await verifyWithRetry(rows, who, cloudDay);
       var pending = vf.known ? vf.missing.length : null;
       var noRows = rows.length === 0;
       var allThere = vf.known && vf.missing.length === 0 && !noRows;
       var stateName = !vf.known ? 'unverified' : (vf.missing.length ? 'partial' : 'ok');
+      var pendingSync = pendingScoreSyncOf(st);
+      var pendingVerify = pendingVerifyOf(st);
       var msg;
       if (noRows) {
         msg = '第 ' + cloudDay + ' 天 · 本机还没有需要上传的成绩';
@@ -863,19 +1041,35 @@
         msg = '第 ' + cloudDay + ' 天 · 成绩已提交，但没能回读确认'
           + '（网络或当天记录超过查询上限），下次同步再核对';
       }
+      if (pendingSync.length) {
+        msg += '；' + pendingSync.map(function (x) { return x.subject; }).join('、')
+          + ' 已完成课程但成绩还没同步，赛车暂不解锁，等成绩上来会自动重算。';
+      }
+
+      /* 当天两科都通过后「不解锁下一天」，只解锁赛车。
+       * 权威学习日的推进只发生在家长发布下一学习日的计划那一刻（见文件头注释）。 */
+      var adv = null;
+
       saveStatus({
         state: stateName,
         message: msg,
         cloud_day: cloudDay,
+        authoritative_day: ds.authoritative_day,
+        next_day: (adv && adv.authoritative_day) || ds.authoritative_day,
+        local_day: localDay,
+        day_source: ds.source,
         subjects: (st && st.modules || []).map(function (m) {
-          return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%') + (m.passed ? ' ✓' : ' ✗');
+          return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%')
+            + (m.passed ? ' ✓' : ' ✗');
         }),
         grading: gradingOf(state, cloudDay, todayStr),
         allowed: !!(st && st.allowed),
         reason: st && st.reason,
-        // pending：确认未落库的条数；null = 这次无法判断（不是 0）
         pending: pending,
         pending_known: vf.known,
+        device_ahead_by_one: aheadSync === true,
+        pending_score_sync: pendingSync,
+        pending_verification: pendingVerify,
         uploaded: up.uploaded,
         skipped_duplicates: up.already + up.duplicates,
         reclaimed: up.reclaimed,
@@ -890,16 +1084,18 @@
           scanned: vf.scanned,
           truncated: !!vf.truncated,
         },
+        advance: adv,
+        build: BRIDGE_BUILD,
         verified_at: new Date().toISOString(),
       });
-      log('同步完成', cloudDay, '新增', up.uploaded, '条', '待确认', pending, st && st.reason);
+      log('同步完成', cloudDay, '新增', up.uploaded, '条', '待确认', pending,
+        '待同步科目', pendingSync.length, st && st.reason);
       return readStatus();
     } catch (e) {
       var code = (e && (e.code || e.message)) || 'UNKNOWN';
       var hint = code === 'NO_SESSION' || code === 'NO_TOKEN'
         ? '这台设备还没有家长登录云端的凭证：请在「家庭同步」页登录一次（成绩仍安全保存在本机）。'
         : String(code);
-      // 上传失败：本机这批一律算「待上传」，让家长看到真实的 pending
       saveStatus({
         state: 'error', error: code,
         message: hint + ' 本机成绩已保留，下次同步会自动重试。',
@@ -907,6 +1103,7 @@
         pending_known: false,
         cloud_verified: false,
         cloud_verified_reason: 'UPLOAD_FAILED',
+        build: BRIDGE_BUILD,
       });
       log('同步失败', code);
       return readStatus();
@@ -948,7 +1145,7 @@
   /* -------------------------------------------------- 语文页面得分抓取（只读） */
 
   /**
-   * V6 有 5 个语文页面（第 4/6/7/9/11/13 天）会算出成绩但不向父页面汇报。
+   * V6 有 5 个语文页面会算出成绩但不向父页面汇报。
    * 这里在父页面侧注入一段**只读**观察脚本：只监听页面上出现的「答对 X / Y 题」，
    * 不碰课程任何逻辑、不改题目、不改答案。抓不到就等于没抓，不会影响孩子上课。
    */
@@ -1025,11 +1222,42 @@
   /* ------------------------------------------------------ 对外接口 & 触发器 */
 
   window.R5Bridge = {
-    version: '2026-11-09.prodlink-rc2',
+    version: BRIDGE_BUILD,
+    build: BRIDGE_BUILD,
     run: run,
     inspectCloud: async function () {
       var st = await cloudStatus(await identity());
-      return { cloud_day: st && st.study_day, cloud_subjects: (st && st.modules || []).map(function(m){return m.subject;}), schedule_published: !!(st && st.schedule_published), reason: st && st.reason };
+      var ds = readDayState(st);
+      return {
+        cloud_day: ds.plan_day,
+        authoritative_day: ds.authoritative_day,
+        today_day: ds.today,
+        cloud_subjects: (st && st.modules || []).map(function (m) { return m.subject; }),
+        schedule_published: !!(st && st.schedule_published),
+        pending_score_sync: pendingScoreSyncOf(st),
+        pending_verification: pendingVerifyOf(st),
+        reason: st && st.reason,
+      };
+    },
+    /**
+     * 权威学习日对照：本机 vs 云端。
+     * 家长入口/自检页只读调用，不会触发任何写入。
+     */
+    dayInfo: async function () {
+      var st = await cloudStatus(await identity());
+      var ds = readDayState(st);
+      var localDay = courseDay();
+      return {
+        local_day: localDay,
+        cloud_day: ds.plan_day,
+        authoritative_day: ds.authoritative_day,
+        today_day: ds.today,
+        aligned: ds.today === localDay,
+        stale_device_day: ds.today !== null && ds.today > localDay,
+        device_ahead: ds.today !== null && ds.today < localDay,
+        day_source: ds.source,
+        build: BRIDGE_BUILD,
+      };
     },
     runNow: function () { return run(true); },
     status: readStatus,
@@ -1057,6 +1285,7 @@
         },
         grading: s ? gradingOf(s, day, today()) : [],
         cloud: readStatus(),
+        build: BRIDGE_BUILD,
       };
     },
     collectAnswers: function () {

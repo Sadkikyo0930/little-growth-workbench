@@ -64,7 +64,7 @@ async function run(){
   var sessionResult;try{sessionResult=await auth.getSession()}catch(e){if(/credentials not found|session not found|not authenticated|invalid.refresh.token/i.test(error(e))){saveStatus("当前浏览器没有有效的 CloudBase 登录凭证，请到家庭同步中心重新登录。学习成绩已保存在本机",{state:"auth_required",pending:rows.length});return}throw e}if(sessionResult&&sessionResult.error){if(/credentials not found|session not found|not authenticated|invalid.refresh.token/i.test(error(sessionResult.error))){saveStatus("当前浏览器没有有效的 CloudBase 登录凭证，请到家庭同步中心重新登录。学习成绩已保存在本机",{state:"auth_required",pending:rows.length});return}throw sessionResult.error}
   var session=sessionResult&&sessionResult.data&&sessionResult.data.session;
   if(!session||!session.user||!session.user.id){saveStatus("需要家长重新登录授权；本机成绩安全保留",{state:"auth_required",pending:rows.length});return}
-  var membersResult=await db.from("growth_family_members").select("family_id,user_id,member_role");
+  var membersResult=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY).eq("user_id",session.user.id);
   if(membersResult&&membersResult.error)throw membersResult.error;
   var members=membersResult&&membersResult.data;
   if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role)||String(members[0].user_id)!==String(session.user.id)){

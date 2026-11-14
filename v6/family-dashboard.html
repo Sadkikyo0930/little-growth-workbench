@@ -89,7 +89,7 @@ $("form").addEventListener("submit",async function(e){
   setStatus("正在验证账号……");
   var result=await auth.signInWithPassword({username:username,password:password});if(result&&result.error)throw result.error;
   $("password").value="";setStatus("已登录，正在检查家庭成员权限……");
-  var db=app.rdb();var m=await db.from("growth_family_members").select("family_id,user_id,member_role");
+  var db=app.rdb();var m=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY);
   if(m&&m.error)throw m.error;
   var members=Array.isArray(m&&m.data)?m.data:[];
   if(members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role))throw Error("家庭成员查询结果异常，已停止读取学习记录。");
