@@ -74,12 +74,27 @@ C0.1.1 把它判为 `PLAN_NOT_MONOTONIC` 并直接 `R5_INIT_BLOCKED`，导致正
 
 ## 阻碍二：SECURITY DEFINER 收紧（010 + 020）
 
-- 4 张新表：`REVOKE ALL FROM PUBLIC` + `ENABLE ROW LEVEL SECURITY`（无 policy），只有 owner 可访问，客户端一律走函数。
-- 所有新函数 `REVOKE ALL FROM PUBLIC`。仅 5 个客户端 API `GRANT EXECUTE TO authenticated`：`r5_publish_today`、`r5_gate_status_core`、`r5_advance_day`、`r5_credential_derive`、`r5_initialization_snapshot`。`anon` 一个都没有。
-- 内部函数（`*_impl`、`r5_day_passed`、`r5_progress_ensure`、`r5_progress_maybe_advance`、`r5_refresh_credential_snapshot`、两个 `_legacy`、`r5_guard_plan_day`、`r5_initialize_authoritative_day`）owner-only。
+- 5 张新表（进度 / 审计 / 凭证快照 / 日确认 / **ACL 基线**）：`REVOKE ALL FROM PUBLIC` + `ENABLE ROW LEVEL SECURITY`（无 policy），只有 owner 可访问，客户端一律走函数。
+- 所有新函数 `REVOKE ALL FROM PUBLIC`。客户端 API 只授 `authenticated`：`r5_publish_today`、`r5_advance_day`、`r5_credential_derive`、`r5_initialization_snapshot`。`anon` 一个都没有。
+- **`r5_gate_status_core` 不在客户端 API 里**：正式库对它的 ACL 是 `service_role + owner`，故意不给 `authenticated`。它直接接受调用方的 `p_ignore_override`，授给浏览器会话等于把家长 override 绕过权交给客户端。客户端走 `r5_status() → r5_gate_status() → r5_gate_status_core()`，这三层都是 SECURITY DEFINER，以 owner 身份运行。
+- 内部函数（`*_impl`、`r5_day_passed`、`r5_progress_ensure`、`r5_progress_maybe_advance`、`r5_refresh_credential_snapshot`、两个 `_legacy`、`r5_guard_plan_day`、`r5_initialize_authoritative_day`、`r5_gate_status_core`）owner-only；其中两个生产函数额外显式授 `service_role`，以复刻正式 ACL。
 - 每个客户端函数自己做身份校验：`r5_credential_derive` / `r5_initialization_snapshot` 调 `r5_assert_member`；`r5_advance_day` 要求 **owner/parent**；`r5_publish_today` / `r5_gate_status_core` 保持原判据。
 - 初始化函数额外拒绝 `role=authenticated` 的会话（`R5_ADMIN_ONLY`），即使将来误授权也无效。
 - 没有删除认证、没有关闭 RLS、没有放宽任何权限；1800 秒与旧签名逐字未动。
+
+### 权限基线来自正式库只读查询，不是假设
+
+2026-11-14 对 `normal-goose-d5g4qyzr8bb389a4a` 做 `SELECT ... pg_proc.proacl`（只读，零写入）：
+
+| 函数 | 正式 CloudBase ACL |
+| --- | --- |
+| `r5_gate_status_core(text,boolean,boolean)` | `service_role` + owner |
+| `r5_gate_status(text,boolean)` | `service_role` + owner |
+| `r5_override_active(text,text,boolean)` | `service_role` + owner |
+| `r5_publish_today(text,integer,boolean)` | `authenticated` + `service_role` + owner |
+| `r5_status` / `r5_claim_answers` / `r5_assert_member` / `r5_child_entry` / `r5_parent_waive` | `authenticated` + `service_role` + owner |
+
+**没有任何一个函数带 `PUBLIC` 授权。** 因此回滚也不能"恢复 PUBLIC 默认值"——那是提权。
 
 ## 目录
 
@@ -87,12 +102,13 @@ C0.1.1 把它判为 `PLAN_NOT_MONOTONIC` 并直接 `R5_INIT_BLOCKED`，导致正
 | --- | --- |
 | `v6/r5-bridge.js` | 候选桥接（权威学习日、三道 stale 闸门、待同步、未初始化状态） |
 | `v6/sw.js`、`v6-selftest/sw.js` | 正式 / 自测 Service Worker（独立 cache PREFIX） |
-| `v6/sql/c01/010_*` | 进度表 + 确认表 + 快照/初始化（含纠错）+ 凭证派生 + 权限块 |
+| `v6/sql/c01/010_*` | 进度表 + 确认表 + ACL 基线 + 快照/初始化（含纠错）+ 凭证派生 + 权限块 |
 | `v6/sql/c01/020_*` | 闸门包装、发布、推进、防回退触发器、权限块 |
-| `v6/sql/c01/900_*` | 回滚（先删触发器 → 逐字节恢复生产函数体 → 删表 → 恢复 PUBLIC 默认授权） |
+| `v6/sql/c01/900_*` | 回滚（删触发器 → 逐字节恢复生产函数体 → 按基线逐函数恢复 EXECUTE → 删表） |
 | `v6/sql/c01/legacy/*` | 生产函数体副本（仅改函数名，供 md5 校验） |
-| `v6/c01/tests/` | 八套测试（26 + 71 + 30 + 90 + 18 + 45 + 27 + 13） |
-| `v6/c01/fixtures/` | 生产形状 schema、只读基线、赛车资源 pin 清单 |
+| `v6/c01/tests/` | 九套测试（27 + 71 + 30 + 92 + 18 + 46 + 30 + 13 + 独立实例 60） |
+| `v6/c01/tests/isolated/` | 独立 PostgreSQL 实例：`server.mjs` + `verify.mjs` |
+| `v6/c01/fixtures/` | 生产形状 schema、**生产 ACL 基线**、只读基线、赛车资源 pin 清单 |
 | `v6/c01/evidence/` | 最近一次运行的 JSON 证据 |
 
 `v6/c01/candidate/**` 与部署路径上的 8 个文件 **blob SHA 完全相同**——被测字节就是发布字节。
@@ -119,7 +135,7 @@ SELECT public.r5_initialize_authoritative_day(
 
 ## 回滚
 
-`v6/sql/c01/900_rollback.sql`：删触发器 → 逐字节恢复 `r5_gate_status_core` / `r5_publish_today` → DROP 新增函数（含两个 `r5_initialize_authoritative_day` 重载）与表 → 恢复两函数的 PUBLIC 默认授权。不触碰任何 child 表。
+`v6/sql/c01/900_rollback.sql`：删触发器 → 逐字节恢复 `r5_gate_status_core` / `r5_publish_today` → **按 010 捕获的基线逐函数、逐签名恢复 EXECUTE 授权**（读回比对，不一致即 `R5_ROLLBACK_ACL_MISMATCH` 整体回滚，绝不无条件 `GRANT ... TO PUBLIC`）→ DROP 新增函数（含两个 `r5_initialize_authoritative_day` 重载）与表（含 `r5_acl_baseline`）。不触碰任何 child 表。
 代码侧：`git checkout main -- v6/r5-bridge.js v6/sw.js v6-selftest/sw.js`。
 
 `.gitattributes` 对本分支文件强制 `text eol=lf`，否则 Windows 检出会把 CRLF 带进 `prosrc`，使 md5 断言失效。

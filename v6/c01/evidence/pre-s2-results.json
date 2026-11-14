@@ -1,7 +1,7 @@
 {
   "suite": "pre-s2",
-  "total": 26,
-  "passed": 26,
+  "total": 27,
+  "passed": 27,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -110,7 +110,7 @@
     },
     {
       "id": "P18",
-      "title": "no candidate statement grants anything to PUBLIC except the rollback restore",
+      "title": "nothing grants to PUBLIC unconditionally — not even the rollback",
       "pass": true,
       "detail": ""
     },
@@ -140,7 +140,13 @@
     },
     {
       "id": "P23",
-      "title": "rollback drops every new function and table, and restores the PUBLIC default",
+      "title": "rollback drops every new function/table and restores the captured ACL",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "P23b",
+      "title": "010 captures the pre-migration ACL into a locked-down table",
       "pass": true,
       "detail": ""
     },

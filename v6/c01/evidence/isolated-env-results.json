@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-14T01:01:35.643Z",
-  "commit": "242e2a8cdea81399e66b2198f479a53357cc03e8",
+  "generated_at": "2026-11-14T01:26:54.428Z",
+  "commit": "b70fe2f",
   "environment": {
     "kind": "separate PostgreSQL server, own data dir, own TCP port, separate process",
     "engine": "PostgreSQL 18.6 (WASM build, PGlite 0.5.16) behind a wire-protocol TCP endpoint",
@@ -12,22 +12,249 @@
       "all connections share one backend session, so per-connection SET ROLE does not isolate; role switching is done per statement batch instead"
     ]
   },
+  "acl": {
+    "source": "read-only pg_proc.proacl on CloudBase normal-goose-d5g4qyzr8bb389a4a, 2026-11-14",
+    "functions": [
+      {
+        "signature": "r5_assert_member(text, boolean)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_child_entry(text)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_claim_answers(text, jsonb)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_gate_status(text, boolean)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_gate_status_core(text, boolean, boolean)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_override_active(text, text, boolean)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_parent_waive(text, text, text, boolean)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_publish_today(text, integer, boolean)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      },
+      {
+        "signature": "r5_status(text)",
+        "production_readonly": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "pre_migration": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_deploy": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "after_rollback": [
+          "OWNER:EXECUTE",
+          "authenticated:EXECUTE",
+          "service_role:EXECUTE"
+        ],
+        "rollback_restored_exactly": true
+      }
+    ]
+  },
   "sql_sha256_16": {
-    "900": "210a6bf9ad107809",
-    "010": "75d7427b5cdd1e47",
+    "900": "bc1eb460db61deeb",
+    "010": "740d03c1b268270c",
     "020": "d59ea684f9135172"
   },
   "totals": {
-    "pass": 46,
+    "pass": 60,
     "fail": 0,
-    "ms": 330
+    "ms": 460
   },
   "results": [
+    {
+      "id": "D0",
+      "name": "the pre-migration ACL of the two gate functions equals the production read-only baseline",
+      "status": "PASS",
+      "detail": "got {\"r5_publish_today(text, integer, boolean)\":[\"OWNER:EXECUTE\",\"authenticated:EXECUTE\",\"service_role:EXECUTE\"],\"r5_gate_status_core(text, boolean, boolean)\":[\"OWNER:EXECUTE\",\"service_role:EXECUTE\"]}"
+    },
+    {
+      "id": "D0b",
+      "name": "every fixture function starts from its production grant set",
+      "status": "PASS",
+      "detail": ""
+    },
     {
       "id": "D1",
       "name": "010 + legacy + 020 apply cleanly to the production-shaped schema",
       "status": "PASS",
-      "detail": "sql sha256 d096f34a9b03ee65"
+      "detail": "sql sha256 9166aa111fe8200f"
+    },
+    {
+      "id": "D7b",
+      "name": "the migration grants no pre-existing function anything new",
+      "status": "PASS",
+      "detail": ""
     },
     {
       "id": "D2",
@@ -73,9 +300,9 @@
     },
     {
       "id": "D8",
-      "name": "all four new tables have RLS enabled and zero policies",
+      "name": "every new table has RLS enabled and zero policies",
       "status": "PASS",
-      "detail": "[{\"tablename\":\"r5_credential_snapshot\",\"rowsecurity\":true},{\"tablename\":\"r5_day_confirmation\",\"rowsecurity\":true},{\"tablename\":\"r5_family_progress\",\"rowsecurity\":true},{\"tablename\":\"r5_plan_audit\",\"rowsecurity\":true}] []"
+      "detail": "[{\"tablename\":\"r5_plan_audit\",\"rowsecurity\":true},{\"tablename\":\"r5_credential_snapshot\",\"rowsecurity\":true},{\"tablename\":\"r5_day_confirmation\",\"rowsecurity\":true},{\"tablename\":\"r5_acl_baseline\",\"rowsecurity\":true},{\"tablename\":\"r5_family_progress\",\"rowsecurity\":true}] []"
     },
     {
       "id": "D9",
@@ -253,7 +480,7 @@
     },
     {
       "id": "R2",
-      "name": "the four new tables are gone",
+      "name": "every table 010 created is gone, including the ACL capture",
       "status": "PASS",
       "detail": "0"
     },
@@ -271,9 +498,21 @@
     },
     {
       "id": "R5",
-      "name": "the rollback restores the PUBLIC EXECUTE default on both functions",
+      "name": "the rollback restores the pre-migration ACL of both replaced functions exactly",
       "status": "PASS",
-      "detail": "postgres=X/postgres | service_role=X/postgres | =X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres | =X/postgres"
+      "detail": "want {\"r5_publish_today(text, integer, boolean)\":[\"OWNER:EXECUTE\",\"authenticated:EXECUTE\",\"service_role:EXECUTE\"],\"r5_gate_status_core(text, boolean, boolean)\":[\"OWNER:EXECUTE\",\"service_role:EXECUTE\"]} got {\"r5_gate_status_core(text, boolean, boolean)\":[\"OWNER:EXECUTE\",\"service_role:EXECUTE\"],\"r5_publish_today(text, integer, boolean)\":[\"OWNER:EXECUTE\",\"authenticated:EXECUTE\",\"service_role:EXECUTE\"]}"
+    },
+    {
+      "id": "R5b",
+      "name": "the restored gate keeps no PUBLIC, anon or authenticated grant",
+      "status": "PASS",
+      "detail": "OWNER:EXECUTE,service_role:EXECUTE"
+    },
+    {
+      "id": "R5c",
+      "name": "the restored publish function keeps authenticated + service_role and no PUBLIC/anon",
+      "status": "PASS",
+      "detail": "OWNER:EXECUTE,authenticated:EXECUTE,service_role:EXECUTE"
     },
     {
       "id": "R6",
@@ -294,10 +533,64 @@
       "detail": null
     },
     {
+      "id": "R10",
+      "name": "every pre-existing function — replaced or untouched — carries the same grants after the rollback",
+      "status": "PASS",
+      "detail": "9 signatures identical"
+    },
+    {
+      "id": "R10b",
+      "name": "the rollback leaves no function behind that production does not have",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
       "id": "R9",
       "name": "after the rollback the legacy gate still answers for the real family",
       "status": "PASS",
       "detail": "{\"api\":\"r5_status\",\"date\":\"2026-11-14\",\"active\":false,\"reason\":\"PLAN_UNPUBLISHED\",\"allowed\":false,\"modules\":[],\"study_da"
+    },
+    {
+      "id": "N1",
+      "name": "after the rollback `authenticated` still cannot call the gate with p_ignore_override = true",
+      "status": "PASS",
+      "detail": "42501 permission denied for function r5_gate_status_core"
+    },
+    {
+      "id": "N2",
+      "name": "after the rollback `anon` cannot call the gate either",
+      "status": "PASS",
+      "detail": "42501 permission denied for function r5_gate_status_core"
+    },
+    {
+      "id": "N3",
+      "name": "service_role still reaches the gate body — the refusal above is the ACL, not a broken function",
+      "status": "PASS",
+      "detail": "28000 R5_AUTH_REQUIRED"
+    },
+    {
+      "id": "N4",
+      "name": "the rollback does not narrow the client path: `authenticated` still reaches r5_publish_today",
+      "status": "PASS",
+      "detail": "28000 R5_AUTH_REQUIRED"
+    },
+    {
+      "id": "N5",
+      "name": "`anon` still cannot call r5_publish_today (it never could)",
+      "status": "PASS",
+      "detail": "42501 permission denied for function r5_publish_today"
+    },
+    {
+      "id": "N6",
+      "name": "a logged-in client can still read r5_status after the rollback",
+      "status": "PASS",
+      "detail": "{\"api\":\"r5_status\",\"date\":\"2026-11-14\",\"active\":false,\"reason\":\"PLAN_UNPUBLISHED\",\"allowed\":false,\"modules\":[],\"study_da"
+    },
+    {
+      "id": "N7",
+      "name": "`authenticated` is denied the gate on the exact signature the app would use (false,false) too",
+      "status": "PASS",
+      "detail": "42501 permission denied for function r5_gate_status_core"
     }
   ]
 }

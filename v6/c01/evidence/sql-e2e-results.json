@@ -1,7 +1,7 @@
 {
   "suite": "sql-e2e",
-  "total": 90,
-  "passed": 90,
+  "total": 92,
+  "passed": 92,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -542,7 +542,19 @@
     },
     {
       "id": "H10",
-      "title": "rollback restores the production PUBLIC EXECUTE default on both functions",
+      "title": "rollback restores the pre-migration ACL of every function, grant for grant",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H11",
+      "title": "after rollback no function is reachable by PUBLIC — least of all the gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "H12",
+      "title": "the restored gate is service_role + owner only",
       "pass": true,
       "detail": ""
     }
