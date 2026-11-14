@@ -14,7 +14,7 @@ const checks=[
  ['member assembly accepts only car ID',member.includes("{ p_vehicle_id: v.vehicle_id }")],
  ['device token still checked by gateway',client.includes("'x-r5-device': device")],
  ['rate confirmation does not claim rewards are active',html.includes('奖励尚未启用') && !html.includes('待家长确认</b>')],
- ['rare award source accurately shown as unimplemented',html.includes('专属碎片发放来源尚未接入')],
+ ['weekly guaranteed rare rule stated in garage',html.includes('每周完成至少 5 天学习') && html.includes('达标必得 1 片学习徽章碎片')],
  ['birthday and non-fragment vehicle separation preserved',html.includes('BIRTHDAY_VEHICLE_FORBIDDEN') && html.includes('COIN_VEHICLE_FORBIDDEN')],
 ];
 checks.forEach(([name,yes])=>{assert.ok(yes,name);console.log('PASS',name)});

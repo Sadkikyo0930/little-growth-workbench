@@ -1,7 +1,7 @@
 name: V6 Weekly Rare Fragment (isolated)
 on:
   push:
-    branches: [feat/v6-weekly-rare-guarantee-20261114]
+    branches: [main, feat/v6-weekly-rare-guarantee-20261114]
   pull_request:
     branches: [main]
   workflow_dispatch:
