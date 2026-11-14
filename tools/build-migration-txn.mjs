@@ -33,6 +33,7 @@ const STEPS = [
   'db/20261114_fragment_server_authority.sql',
   'db/20261114_fragment_scope_guard.sql',
   'db/20261114_fragment_member_scope.sql',
+  'db/20261114_fragment_save_ensure.sql',
 ];
 
 const OUT = process.argv[2] || 'db/apply/production-20261114-single-txn.sql';
