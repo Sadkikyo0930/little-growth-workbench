@@ -3,6 +3,8 @@
 var KEY="growth-workbench-v6-adaptive-2",BASELINE="v6-family-sync-baseline-20261105",ENABLED="v6-family-auto-sync-enabled",STATUS="v6-family-auto-sync-status",FAMILY="little-growth-family-001";
 var SDK=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
 var running=false,app=null,auth=null,db=null,lastFingerprint="",lastAttempt=0;
+var RESTORE_OPT_IN="v6-family-auto-restore-enabled",RESTORE_STATUS="v6-family-auto-restore-status",restoreRunning=false,lastRestoreAttempt=0;
+function restoreStatus(message,state,added){try{localStorage.setItem(RESTORE_STATUS,JSON.stringify({message:message,state:state,added:added||0,at:new Date().toISOString()}))}catch(e){}}
 function saveStatus(message,meta){try{localStorage.setItem(STATUS,JSON.stringify(Object.assign({at:new Date().toISOString(),message:message},meta||{})));}catch(e){}}
 function readState(){try{var s=JSON.parse(localStorage.getItem(KEY)||"null");return s&&Array.isArray(s.records)?s:null}catch(e){return null}}
 function baseline(){try{var x=JSON.parse(localStorage.getItem(BASELINE)||"null");return x&&Number.isInteger(x.answerCount)&&x.answerCount>=0&&Number.isFinite(Date.parse(x.start))?x:null}catch(e){return null}}
@@ -94,7 +96,56 @@ async function run(){
   saveStatus("上传失败，本机成绩已保留："+error(e),{state:"error",pending:rows.length});
  }finally{running=false}
 }
-function schedule(){try{if(localStorage.getItem(ENABLED)==="yes")Promise.resolve(run()).catch(function(e){saveStatus("自动同步执行异常："+error(e),{state:"error"})})}catch(e){saveStatus("自动同步初始化异常："+error(e),{state:"error"})}}
+async function restoreMissing(){
+ if(restoreRunning||localStorage.getItem(RESTORE_OPT_IN)!=="yes"||!navigator.onLine)return;
+ if(Date.now()-lastRestoreAttempt<60000)return;
+ restoreRunning=true;lastRestoreAttempt=Date.now();
+ try{
+  var original=localStorage.getItem(KEY);
+  if(!original){restoreStatus("本机尚无学习档案，没有创建空档案","idle");return}
+  var local=readState();
+  if(!local){restoreStatus("本机学习档案格式异常，拒绝恢复","blocked");return}
+  await connect();
+  var sr=await auth.getSession();
+  if(sr&&sr.error)throw sr.error;
+  var user=sr&&sr.data&&sr.data.session&&sr.data.session.user;
+  if(!user||!user.id){restoreStatus("本机家长登录已失效，需重新授权","auth_required");return}
+  var membership=await db.from("growth_family_members").select("family_id,user_id,member_role")
+   .eq("family_id",FAMILY).eq("user_id",user.id);
+  if(membership&&membership.error)throw membership.error;
+  var members=membership&&membership.data;
+  if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||
+   String(members[0].user_id)!==String(user.id)||
+   !["owner","parent","grandparent"].includes(members[0].member_role)){
+   restoreStatus("家庭成员未通过验证，禁止补全","forbidden");return
+  }
+  var response=await db.from("growth_learning_records")
+   .select("record_id,family_id,record_type,subject,learning_day,record_data")
+   .eq("family_id",FAMILY).eq("record_type","course-complete");
+  if(response&&response.error)throw response.error;
+  var rows=response&&response.data;
+  if(!Array.isArray(rows))throw Error("云端课程记录格式异常");
+  var mod=await import("./family-progress-merge.mjs");
+  var plan=mod.planMerge(local,rows,FAMILY);
+  if(!plan.additions.length){restoreStatus("已与当前读取到的云端课程完成标记对齐","synced");return}
+  // Never write on session changes, revocation of opt-in, or concurrent learning.
+  if(localStorage.getItem(RESTORE_OPT_IN)!=="yes")return;
+  if(localStorage.getItem(KEY)!==original){restoreStatus("本机数据刚变化，下次检查再补全","retry");return}
+  var merged=mod.applyMerge(local,plan);
+  var backupKey="v6-family-restore-backup-"+new Date().toISOString();
+  localStorage.setItem(backupKey,original);
+  if(localStorage.getItem(backupKey)!==original)throw Error("本机备份失败，拒绝修改原档");
+  localStorage.setItem(KEY,JSON.stringify(merged.state));
+  restoreStatus("已补全 "+merged.added+" 个缺失的课程完成标记，并保留原始备份","synced",merged.added);
+ }catch(e){restoreStatus("补全失败，本机原始记录保留："+error(e),"error")}
+ finally{restoreRunning=false}
+}
+function schedule(){
+ try{
+  if(localStorage.getItem(ENABLED)==="yes")Promise.resolve(run()).catch(function(e){saveStatus("自动上传执行异常："+error(e),{state:"error"})});
+  if(localStorage.getItem(RESTORE_OPT_IN)==="yes")Promise.resolve(restoreMissing()).catch(function(e){restoreStatus("自动补全异常："+error(e),"error")});
+ }catch(e){saveStatus("同步初始化异常："+error(e),{state:"error"})}
+}
 window.addEventListener("online",schedule);document.addEventListener("visibilitychange",function(){if(!document.hidden)schedule()});
 window.addEventListener("pageshow",schedule);window.setInterval(schedule,20000);
 try{if(localStorage.getItem(ENABLED)==="yes")saveStatus(navigator.onLine?"同步脚本已启动，正在检查记录与会话":"同步脚本已启动；当前离线，记录留在本机",{state:"started",version:"20261106-sync-live-2"})}catch(e){}
