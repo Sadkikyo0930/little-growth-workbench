@@ -13,10 +13,11 @@
  *   3. 这份目录必须与 `r5_frag/code/r5-racing-save/index.js` 的 FRAGMENT_PROGRAM 一致
  *      （测试 tools/catalog-check 会逐字段比对）。
  *
- * 外观与命名取自既有设计（11-12 交付），本文件不新增车辆、不改成本。
+ * 外观与命名取自家长验收过的既有设计（11-12 雷霆破晓交付 / 11-13 AE86 抛光版），
+ * 本文件不新增车辆、不改成本。模型本体留在《小小赛车 V2》站点，不重复打包。
  */
 
-export const CATALOG_SOURCE = 'r5-racing-save/FRAGMENT_PROGRAM (v2, 2026-11-12 交付)';
+export const CATALOG_SOURCE = 'r5-racing-save/FRAGMENT_PROGRAM (v2, 2026-11-14 恢复验收模型)';
 
 export const FRAGMENT_PROGRAM = Object.freeze({
   version: 'v2',
@@ -46,7 +47,10 @@ export const FRAGMENT_PROGRAM = Object.freeze({
       note: '紫金火箭赛车，开放式单人驾驶舱，尾部大型推进器 + 青蓝光辅助喷口',
       art: Object.freeze({
         thumb: './assets/cars/frag_common_01-thumb.png',
-        model: './assets/karts/frag-car-common-01.glb',
+        /* 模型本体在《小小赛车 V2》站点上，不重复打包进工作台。
+         * 文件：little-racing-v2/assets/frag-car-common-01-D7R-vU1J.glb
+         * 大小：5 564 088 B  sha256 44f93521…b43f0（与验收版逐字节一致） */
+        model: 'https://sadkikyo0930.github.io/little-racing-v2/assets/frag-car-common-01-D7R-vU1J.glb',
       }),
     }),
     Object.freeze({
@@ -61,7 +65,9 @@ export const FRAGMENT_PROGRAM = Object.freeze({
       note: '黑白 AE86 双门掀背，封闭车厢，专属碎片 8 片',
       art: Object.freeze({
         thumb: './assets/cars/frag_rare_01-thumb.png',
-        model: './assets/karts/frag-car-rare-01.glb',
+        /* 文件：little-racing-v2/assets/frag-car-rare-01-D0r3sz47.glb
+         * 大小：1 227 472 B  sha256 96c60f04…cd390（AE86 抛光验收版） */
+        model: 'https://sadkikyo0930.github.io/little-racing-v2/assets/frag-car-rare-01-D0r3sz47.glb',
       }),
     }),
   ]),
