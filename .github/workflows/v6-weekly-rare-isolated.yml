@@ -1,0 +1,28 @@
+name: V6 Weekly Rare Fragment (isolated)
+on:
+  push:
+    branches: [feat/v6-weekly-rare-guarantee-20261114]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: db/isolated/package-lock.json
+      - run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Verify weekly guaranteed rare reward (synthetic DB only)
+        run: node db/isolated/run-weekly-guarantee.mjs
+      - name: Syntax check browser modules
+        run: |
+          node --check v6/r5/member-fragments.mjs
+          node --check v6/r5/weekly-goal.mjs
+          node --check v6/family-auto-sync.js
