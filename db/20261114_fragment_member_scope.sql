@@ -1,13 +1,15 @@
 -- ============================================================================
--- 20261114_fragment_member_scope.sql  (v2)
--- 「按登录身份读/组装碎片」的服务端封装 —— **未执行**，等家长批准后再 apply
+-- 20261114_fragment_member_scope.sql  (v3, step 3 of 3, **未执行**)
+-- 「按登录身份读/组装碎片」的服务端封装
 --
--- 为什么需要它
---   线上三个碎片函数（r5_fragment_snapshot / claim / assemble）都是
---   SECURITY DEFINER 且对 anon 可执行，参数里带 p_family。也就是说：
---   **谁能直接调这些函数，谁就能指定任何一个 family_id。**
---   这个文件把「家庭从哪来」搬到服务端函数内部：从 JWT 反查成员表，
---   客户端连一个 family 参数都递不进来。
+-- v3 改动（对应 PR #3 审查阻断项 3）
+--   · r5_fragment_member_assemble 不再自带成本白名单：成本与车辆白名单只认
+--     public.r5_vehicle_recipe（由 step 1 建立、step 2 的 assemble 读取）；
+--     本函数只负责「把身份换成家庭」，然后把 p_cost 传空对象下去。
+--   · r5_fragment_member_snapshot 额外返回 program（服务端目录），
+--     前端不再依赖自己那份 catalog.mjs 作为事实来源。
+--
+-- 执行顺序：先 step 1 authority，再 step 2 scope_guard，最后本文件。
 --
 -- 成员模型（重要，别搞反）
 --   public.growth_family_members 主键 = (family_id, user_id)
@@ -16,20 +18,7 @@
 --     落到 2 个家庭时本函数拒绝（AMBIGUOUS_MEMBER），不替家长二选一。
 --   本文件**不 INSERT / UPDATE / DELETE 任何成员行**，三名家长的成员资格原样保留。
 --
--- 这个文件做的事
---   1. r5_fragment_member_snapshot()       只读，不接受任何 family 参数，返回 member_role
---   2. r5_fragment_member_assemble(v)      组装，成本由函数内白名单决定，不接受客户端传成本
---   3. 两者都只授权给 authenticated，anon 无执行权，PUBLIC 先全部收回
---
--- 应用前提（家长批准后）
---   · 在正式环境 normal-goose-d5g4qyzr8bb389a4a 执行；
---   · 先跑文末「预检」两条 SQL，确认三名家长都在、且每个账号只挂一个家庭；
---   · 前端 member-fragments.mjs 已切换到这两个函数（本轮已完成），不需要改页面。
---   · 回滚：DROP FUNCTION 两个新函数即可；既有函数、既有数据、成员表都不受影响。
---
--- 注意：本文件**不能**单独堵住旧函数的 p_family 口子 ——
---   旧函数仍然接受调用方传 family。那一层由同目录的
---   20261114_fragment_scope_guard.sql 负责。两件事要分开批准。
+-- 回滚：DROP FUNCTION 两个新函数即可；既有数据、成员表都不受影响。
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -87,13 +76,15 @@ BEGIN
          'family_source', 'growth_family_members',
          'member_role', v_role,
          'member_uid', v_uid,
-         'zero_write', true
+         'zero_write', true,
+         -- 服务端目录：车辆白名单 / 成本 / 掉落参数都来自 r5_vehicle_recipe 与 r5_reward_config
+         'program', public.r5_fragment_program_json()
        );
 END;
 $function$;
 
 -- ---------------------------------------------------------------------------
--- 2. 组装：成本由服务端白名单决定，客户端不能自带价格
+-- 2. 组装：只负责「身份 → 家庭」，成本与白名单交给服务端配方表
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_fragment_member_assemble(p_vehicle_id text)
 RETURNS jsonb
@@ -105,7 +96,6 @@ DECLARE
   v_uid    text;
   v_fams   text[];
   v_family text;
-  v_cost   jsonb;
   v_device text;
 BEGIN
   v_uid := NULLIF(auth.jwt() ->> 'sub', '');
@@ -129,24 +119,17 @@ BEGIN
     RETURN jsonb_build_object('status', 'BAD_FAMILY', 'zero_write', true);
   END IF;
 
-  -- 车辆 ID 形态先过一遍（与旧函数同一套正则），避免把奇怪字符串带进事件 ID
+  -- 车辆 ID 形态先过一遍（与旧函数同一套正则），避免把奇怪字符串带进事件 ID。
+  -- 不在白名单 / 不是碎片车 / 成本多少，全部由 r5_fragment_assemble 查
+  -- public.r5_vehicle_recipe 决定；本函数不揣任何成本，也不允许调用方自带价格。
   IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN
     RETURN jsonb_build_object('status', 'BAD_VEHICLE_ID', 'zero_write', true);
   END IF;
 
-  -- 目录白名单：只有这两辆碎片车，成本写死在服务端
-  CASE p_vehicle_id
-    WHEN 'frag_car_common_01' THEN v_cost := '{"frag_common": 12}'::jsonb;
-    WHEN 'frag_car_rare_01'   THEN v_cost := '{"frag_scholar": 8}'::jsonb;
-    ELSE
-      RETURN jsonb_build_object('status', 'NOT_ASSEMBLABLE', 'zero_write', true);
-  END CASE;
-
   -- 设备列只做审计，不参与授权（身份已经是家长本人）
   v_device := 'v6:' || v_uid;
 
-  -- 余额、已拥有、生日车、金币车、遗留槽位等判断全部沿用既有函数
-  RETURN public.r5_fragment_assemble(v_family, v_device, p_vehicle_id, v_cost);
+  RETURN public.r5_fragment_assemble(v_family, v_device, p_vehicle_id, '{}'::jsonb);
 END;
 $function$;
 

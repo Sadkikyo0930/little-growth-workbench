@@ -112,6 +112,10 @@ function normalize(snap, who, program) {
 /**
  * 以家长身份读取家庭碎片（只读）。
  * 抛 MemberError：NO_SESSION（未登录/会话过期）/ NO_MEMBER（不是家庭成员）/ NO_SDK（函数未上线）/ NETWORK / SERVER
+ *
+ * 目录来源：服务端 `r5_fragment_member_snapshot()` 现在会带回 `program`
+ * （来自 public.r5_vehicle_recipe + public.r5_reward_config）。
+ * 有就用服务端的，没有才退回本地 catalog.mjs —— 本地那份只是离线兜底，不再是事实来源。
  */
 export async function memberState() {
   try {
@@ -121,7 +125,8 @@ export async function memberState() {
     const st = String((snap && snap.status) || '');
     if (STATUS_ERROR[st]) throw new MemberError(STATUS_ERROR[st], st);
     if (st && st !== 'OK') throw new MemberError('SERVER', st);
-    return normalize(snap, who, JSON.parse(JSON.stringify(FRAGMENT_PROGRAM)));
+    const program = (snap && snap.program) || JSON.parse(JSON.stringify(FRAGMENT_PROGRAM));
+    return normalize(snap, who, program);
   } catch (e) {
     throw wrap(e);
   }

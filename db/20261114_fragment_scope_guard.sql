@@ -1,49 +1,58 @@
 -- ============================================================================
--- 20261114_fragment_scope_guard.sql
--- 给**旧三个碎片函数**加「调用者范围校验」—— **未执行**，需单独批准
+-- 20261114_fragment_scope_guard.sql  (v3, step 2 of 3, **未执行**)
 --
--- 为什么必须有这一层
---   20261114_fragment_member_scope.sql 只是新增了两个安全封装，它**不会**
---   让旧函数变安全：旧函数依旧对 anon 可执行、参数里依旧有 p_family。
---   只要有人拿着站点里的 anon key 直接 POST /rest/v1/rpc/r5_fragment_snapshot
---   并传 {"p_family":"别人家"},依然能读到别人家。本文件就是把这条路关掉。
+-- 前置：先执行 20261114_fragment_server_authority.sql（建了 r5_backend_role /
+--       r5_reward_config / r5_vehicle_recipe 三张表并写入种子）。
 --
--- 封堵方式：不改信任模型，只在函数入口加一次「你凭什么碰这个 family」的判断
---   public.r5_fragment_scope_ok(p_family, p_device) 为真才继续：
---     ① 特权角色（云函数 / 迁移 / 平台角色）→ 放行
---        理由：r5-racing-save 与 r5-gateway 都是用服务端身份连库，
---        family 由它们自己从设备绑定表反查，本来就不采信客户端字段。
---     ② 有 JWT 的登录用户 → 必须是 p_family 的 owner / parent / grandparent
---        理由：成员表是唯一事实来源，一个账号只归属一个家庭。
---     ③ 匿名调用 → 必须持有**已绑定到该 family 且未撤销**的设备令牌（p_device）
---        理由：这正是赛车游戏现有的信任模型（r5_device.device_uid），
---        所以赛车那条路一行代码都不用改、也不需要换密钥。
+-- 这一版针对 PR #3 四条发布阻断项的改动，逐条对应：
 --
--- 与赛车网关的兼容性
---   · 网关 /racing/fragment/claim|assemble 把 r5_identity.device 原样递给云函数，
---     云函数再作为 p_device 传给本函数 —— 与 r5_device.device_uid 同一套值
---     （线上事件表 device 列里就是 r5dev_… / r5-demo-device-0001 这类 UID）。
---   · 云函数是特权连接，走①；即使哪天改成低权限连接，只要 p_device 照传，走③也仍然通。
---   · 因此**不需要**改网关、不需要改云函数、不需要重新绑定任何设备。
+--   阻断 1「空 JWT claims 直接放行」
+--     旧写法：claims 为空 → RETURN true（把「没带身份」当成「可信服务端」）。
+--     新写法：**先判定数据库连接角色**，再看 claims。
+--       · 特权角色（r5_backend_role 白名单 / superuser / BYPASSRLS）→ 放行；
+--         r5-racing-save 走云 API ExecutePGSql，就是这一类。
+--       · anon / authenticated / 未知角色 → claims 为空一律拒绝；
+--         有 claims 也只有「是该家庭的 owner/parent/grandparent」才放行。
+--       · claims 里的 role=service_role **不再具备任何效力**（伪造无效，
+--         证据是它只能来自 GUC role，而 GUC role 改不了）。
+--     为什么不用 current_user：SECURITY DEFINER 内 current_user 会变成函数属主，
+--     这就是旧实现不敢用它、转而看 claims 的原因。改用 GUC `role`——
+--     它在 SECURITY DEFINER 内不被改写（隔离库实测，见 docs）。
 --
--- 为什么没有直接 REVOKE anon
---   REVOKE anon 是最省事的写法，但它同时会掐死「设备令牌直连」这条老路，
---   而我没有拿到「云函数一定用 service_role 连库」的运行时证据，
---   贸然收回可能让孩子的赛车在线上直接 403。所以本轮选择「保留 EXECUTE + 入口校验」：
---   行为等价于收紧，但不会因为身份没对上而误伤。等拿到云函数连接身份的确认
---   （见文末第 5 节的自检 SQL）后，再决定是否补一刀 REVOKE。
+--   阻断 2「设备 UID 不等于已验证认证」
+--     旧写法：anon + 认识某个 device_uid → 放行。
+--     新写法：**非特权连接完全不能走设备路径**，设备领取只走已鉴权的赛车网关
+--     （网关在服务端用 r5_device 反查家庭、签 HMAC 再调云函数）。
+--     特权连接如果声称了设备，设备必须确实绑定在该家庭且未撤销——
+--     这是纵深防御：网关有 bug 也跨不了家庭。
 --
--- 实现细节
---   旧函数内部互相调用 r5_fragment_snapshot(p_family) 的地方，改成调用
---   r5_fragment_snapshot_internal(p_family)（无守卫、只对特权角色开放），
---   否则「组装成功后返回快照」会被自己的守卫再拦一次。
+--   阻断 3「领取/组装相信调用方参数」
+--     r5_fragment_claim 的 p_cfg 与 r5_fragment_assemble 的 p_cost **全部不再采信**：
+--       · 记录是否存在 / 属于哪个家庭 / 哪一天 / 什么类型 —— 查 growth_learning_records；
+--       · 掉落概率 / 每日上限 / 保底 / 碎片 id —— 查 r5_reward_config；
+--       · 车辆白名单 / 获取方式 / 成本 —— 查 r5_vehicle_recipe。
+--     两个参数保留在签名里只为兼容既有调用方（云函数不用改），函数体一个字都不读它。
 --
--- 回滚：把三个函数按 pg_get_functiondef 的原始定义重建即可（本文件第 6 节附原文备份方式）。
+--   阻断 4「底层表可绕过 RPC 直接读写」
+--     第 6 节：r5_fragment_state / r5_fragment_drops / r5_racing_events / r5_racing_saves
+--     全部开 RLS + 收回 anon/authenticated 的所有权限，只留 service_role 与属主。
+--     不再写成「可选注释」。
+--
+-- 赛车兼容性（先核实过才敢这么写）
+--   链路：浏览器 x-r5-device → r5-gateway（服务端查 r5_device 反查家庭、签 r5_identity）
+--         → 云函数 r5-racing-save（服务端调云 API ExecutePGSql）
+--   两个云函数都不用 PostgREST 的 anon key，ExecutePGSql 是账号级凭据、库属主身份。
+--   所以「anon 不能再用设备 UID 直接打 RPC」不影响赛车；赛车从来不走那条路。
+--   落地前请先跑 authority 文件第 6 节的角色探针，确认返回值是 postgres/true。
+--
+-- 回滚
+--   三个函数用 pg_get_functiondef 原文重建（原文存 db/isolated/functions-before.sql），
+--   表权限按第 7 节的反向语句恢复。数据一行都不会动。
 -- ============================================================================
 
 
 -- ---------------------------------------------------------------------------
--- 1. 范围判断（唯一的判定入口，三个函数共用）
+-- 1. 范围判断（唯一入口，三个旧函数 + 两个新函数共用）
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_fragment_scope_ok(p_family text, p_device text DEFAULT NULL)
 RETURNS boolean
@@ -53,31 +62,33 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $function$
 DECLARE
-  v_claims jsonb;
-  v_role   text;
-  v_uid    text;
-  v_dev    text;
+  v_privileged boolean;
+  v_claims     jsonb;
+  v_uid        text;
+  v_dev        text;
 BEGIN
   IF p_family IS NULL OR p_family = '' THEN
     RETURN false;
   END IF;
+  IF p_family !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN
+    RETURN false;
+  END IF;
 
+  v_privileged := public.r5_fragment_is_privileged();
   v_claims := NULLIF(current_setting('request.jwt.claims', true), '')::jsonb;
 
-  -- ① 没有 JWT claims：不是从 PostgREST 进来的（云函数直连 / 迁移 / psql）→ 特权，放行。
-  --    这也是 r5-racing-save 的实际情况：它用服务端凭据连库，family 由自己反查。
-  IF v_claims IS NULL OR v_claims = '{}'::jsonb THEN
-    RETURN true;
-  END IF;
-
-  v_role := v_claims ->> 'role';
-  IF v_role = 'service_role' THEN
-    RETURN true;                                   -- 服务端密钥，等价于特权
-  END IF;
-
-  -- ② 登录用户：必须是这个家庭的家长成员
-  v_uid := NULLIF(v_claims ->> 'sub', '');
-  IF v_uid IS NOT NULL THEN
+  -- ===== ① 非特权连接：只认 JWT 里的成员身份 =====
+  IF NOT v_privileged THEN
+    -- 没有 claims 就是没有身份。**绝不因为「没带 claims」而放行**（阻断项 1 的核心）。
+    IF v_claims IS NULL OR v_claims = '{}'::jsonb THEN
+      RETURN false;
+    END IF;
+    -- 说明：claims->>'role' 在这里完全没有用。伪造 role=service_role 也进不来，
+    -- 因为数据库角色仍然是 anon/authenticated。
+    v_uid := NULLIF(v_claims ->> 'sub', '');
+    IF v_uid IS NULL THEN
+      RETURN false;
+    END IF;
     RETURN EXISTS (
       SELECT 1 FROM public.growth_family_members m
        WHERE m.user_id = v_uid
@@ -86,26 +97,48 @@ BEGIN
     );
   END IF;
 
-  -- ③ 匿名（含「authenticated 但没有 sub」这种畸形令牌）：只能靠设备令牌
+  -- ===== ② 特权连接（云函数 / 迁移 / service_role）=====
   v_dev := NULLIF(p_device, '');
-  IF v_dev IS NULL OR v_dev !~ '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$' THEN
+  IF v_dev IS NULL THEN
+    RETURN true;                       -- 服务端直连且不声称任何设备
+  END IF;
+
+  -- 家长身份路径的审计标记 v6:<uid>：uid 必须是该家庭的家长成员
+  IF left(v_dev, 3) = 'v6:' THEN
+    v_uid := NULLIF(substr(v_dev, 4), '');
+    IF v_uid IS NULL THEN
+      RETURN false;
+    END IF;
+    RETURN EXISTS (
+      SELECT 1 FROM public.growth_family_members m
+       WHERE m.user_id = v_uid
+         AND m.family_id = p_family
+         AND m.member_role IN ('owner', 'parent', 'grandparent')
+    );
+  END IF;
+
+  -- 声称了设备：设备必须真的绑定在这个家庭且未撤销（纵深防御，不是认证）
+  IF v_dev !~ '^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$' THEN
     RETURN false;
   END IF;
   RETURN EXISTS (
     SELECT 1 FROM public.r5_device d
      WHERE d.device_uid = v_dev
-       AND d.family_id  = p_family
+       AND d.family_id = p_family
        AND d.revoked_at IS NULL
   );
 END;
 $function$;
+
+COMMENT ON FUNCTION public.r5_fragment_scope_ok(text, text) IS
+  '碎片函数的唯一范围判定：特权角色放行；非特权角色必须持家庭成员 JWT；设备 UID 不再单独作为凭证。';
 
 REVOKE ALL ON FUNCTION public.r5_fragment_scope_ok(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.r5_fragment_scope_ok(text, text) TO anon, authenticated, service_role;
 
 
 -- ---------------------------------------------------------------------------
--- 2. 无守卫的内部快照（只给特权角色与上面两个函数用）
+-- 2. 无守卫的内部快照（只给属主与上面这些 SECURITY DEFINER 函数用）
 --    函数体与线上 r5_fragment_snapshot 完全一致，只改了名字。
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot_internal(p_family text)
@@ -135,13 +168,12 @@ AS $function$
   );
 $function$;
 
--- 内部版不直接对外开放：只有特权角色（以及 SECURITY DEFINER 的调用方）能用
 REVOKE ALL ON FUNCTION public.r5_fragment_snapshot_internal(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.r5_fragment_snapshot_internal(text) FROM anon, authenticated;
 
 
 -- ---------------------------------------------------------------------------
--- 3. 带守卫的对外快照（签名不变，老调用方无需改）
+-- 3. 对外快照（签名不变，老调用方无需改）
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_fragment_snapshot(p_family text)
 RETURNS jsonb
@@ -158,11 +190,10 @@ BEGIN
 END;
 $function$;
 
--- 权限保持原样（anon 仍可执行，但都会被 r5_fragment_scope_ok 拦掉）
-
 
 -- ---------------------------------------------------------------------------
--- 4. 带守卫的领取（函数体除「入口守卫 + 内部快照改名」外与线上一致）
+-- 4. 领取（服务端权威：记录 / 概率 / 上限 / 保底 / 碎片 id 全部查表）
+--    p_cfg 保留只为签名兼容，函数体不再读它任何一个字段。
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_fragment_claim(p_family text, p_device text, p_record_id text, p_cfg jsonb)
 RETURNS jsonb
@@ -171,88 +202,171 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
-  v_day date := COALESCE((p_cfg->>'record_day')::date, (now() AT TIME ZONE 'Asia/Shanghai')::date);
-  v_cap int := GREATEST(1, COALESCE((p_cfg->>'daily_cap')::int, 2));
-  v_pity_target int := GREATEST(2, COALESCE((p_cfg->>'pity_target')::int, 5));
-  v_frag text := NULLIF(p_cfg->>'fragment_id', '');
-  v_rare_frag text := NULLIF(p_cfg->>'rare_fragment_id', '');
-  v_want_rare boolean := COALESCE((p_cfg->>'rare')::boolean, false);
-  v_pity_exempt boolean := COALESCE((p_cfg->>'pity_exempt')::boolean, false);
-  v_want text := CASE WHEN p_cfg->>'want' = 'drop' THEN 'drop' ELSE 'none' END;
-  v_kind text := COALESCE(p_cfg->>'record_kind', '');
-  v_subject text := COALESCE(p_cfg->>'subject', '');
-  v_prev public.r5_fragment_drops;
-  v_state public.r5_fragment_state;
-  v_pity int; v_daily int; v_daily_rare int; v_capped boolean;
-  v_outcome text; v_count int := 0; v_rare_count int := 0; v_pity_after int;
-  v_daily_index int := 0; v_rev bigint;
+  v_cfg         public.r5_reward_config;
+  v_kind        text;
+  v_subject     text;
+  v_day         date;
+  v_today       date := (now() AT TIME ZONE 'Asia/Shanghai')::date;
+  v_prev        public.r5_fragment_drops;
+  v_state       public.r5_fragment_state;
+  v_cap         int;
+  v_pity_target int;
+  v_frag        text;
+  v_rare_frag   text;
+  v_pity        int;
+  v_daily       int;
+  v_daily_rare  int;
+  v_pity_exempt boolean := false;
+  v_outcome     text;
+  v_count       int := 0;
+  v_rare_count  int := 0;
+  v_pity_after  int := 0;
+  v_daily_index int := 0;
+  v_rev         bigint;
 BEGIN
-  -- ▼ 新增：调用者范围校验（在任何读写之前）
+  -- ▼ 入口守卫（读写之前）：非特权连接必须持家庭成员 JWT
   IF NOT public.r5_fragment_scope_ok(p_family, p_device) THEN
-    RETURN jsonb_build_object('status','FORBIDDEN_SCOPE','zero_write',true);
+    RETURN jsonb_build_object('status', 'FORBIDDEN_SCOPE', 'zero_write', true);
   END IF;
-  -- ▲ 新增结束
+  -- ▲
 
-  IF p_family IS NULL OR p_family = '' THEN RETURN jsonb_build_object('status','BAD_FAMILY'); END IF;
-  IF p_record_id IS NULL OR p_record_id = '' OR length(p_record_id) > 160 THEN RETURN jsonb_build_object('status','BAD_RECORD_ID'); END IF;
+  IF p_family IS NULL OR p_family = '' THEN
+    RETURN jsonb_build_object('status', 'BAD_FAMILY', 'zero_write', true);
+  END IF;
+  IF p_record_id IS NULL OR p_record_id = '' OR length(p_record_id) > 160 THEN
+    RETURN jsonb_build_object('status', 'BAD_RECORD_ID', 'zero_write', true);
+  END IF;
 
-  SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;
+  -- 幂等：同一条记录只结算一次
+  SELECT * INTO v_prev FROM public.r5_fragment_drops d
+   WHERE d.family_id = p_family AND d.source_record_id = p_record_id;
   IF FOUND THEN
-    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'fragment_id',v_prev.fragment_id,'rare_fragment_id',v_prev.rare_fragment_id,'pity_points',COALESCE((SELECT pity_points FROM public.r5_fragment_state WHERE family_id = p_family),0),'claimed_at',v_prev.created_at,'zero_write',true);
+    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(
+      'status', 'ALREADY_CLAIMED', 'outcome', v_prev.outcome,
+      'granted_normal', v_prev.fragment_count, 'granted_rare', v_prev.rare_count,
+      'fragment_id', v_prev.fragment_id, 'rare_fragment_id', v_prev.rare_fragment_id,
+      'pity_points', COALESCE((SELECT pity_points FROM public.r5_fragment_state WHERE family_id = p_family), 0),
+      'claimed_at', v_prev.created_at, 'zero_write', true);
   END IF;
 
-  SELECT s.revision INTO v_rev FROM public.r5_racing_saves s WHERE s.family_id = p_family FOR UPDATE;
-  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;
+  -- ▼ 服务端验证真实学习记录（阻断项 3 的核心）
+  SELECT r.record_type,
+         COALESCE(r.subject, ''),
+         (r.created_at AT TIME ZONE 'Asia/Shanghai')::date
+    INTO v_kind, v_subject, v_day
+    FROM public.growth_learning_records r
+   WHERE r.record_id = p_record_id
+     AND r.family_id = p_family;
+  IF NOT FOUND THEN
+    RETURN public.r5_fragment_snapshot_internal(p_family)
+      || jsonb_build_object('status', 'RECORD_NOT_FOUND', 'zero_write', true);
+  END IF;
+  IF v_day <> v_today THEN
+    RETURN public.r5_fragment_snapshot_internal(p_family)
+      || jsonb_build_object('status', 'NOT_TODAY', 'record_day', v_day::text, 'zero_write', true);
+  END IF;
+  -- ▲
 
-  INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family) ON CONFLICT (family_id) DO NOTHING;
-  SELECT * INTO v_state FROM public.r5_fragment_state st WHERE st.family_id = p_family FOR UPDATE;
+  -- ▼ 服务端配置（掉落概率 / 上限 / 保底 / 碎片 id）
+  SELECT * INTO v_cfg FROM public.r5_reward_config c WHERE c.family_id = p_family;
+  IF NOT FOUND THEN
+    SELECT * INTO v_cfg FROM public.r5_reward_config c WHERE c.family_id = '*';
+  END IF;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'CONFIG_MISSING', 'zero_write', true);
+  END IF;
+  v_cap := GREATEST(0, v_cfg.daily_cap);
+  v_pity_target := GREATEST(2, v_cfg.pity_target);
+  v_frag := NULLIF(v_cfg.common_fragment_id, '');
+  v_rare_frag := NULLIF(v_cfg.rare_fragment_id, '');
+  -- ▲
 
-  IF v_state.daily_day = v_day THEN
-    v_pity := v_state.pity_points; v_daily := v_state.daily_normal_count; v_daily_rare := v_state.daily_rare_count;
+  SELECT s.revision INTO v_rev FROM public.r5_racing_saves s
+   WHERE s.family_id = p_family FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'SAVE_NOT_INITIALIZED', 'zero_write', true);
+  END IF;
+
+  INSERT INTO public.r5_fragment_state (family_id) VALUES (p_family)
+  ON CONFLICT (family_id) DO NOTHING;
+  SELECT * INTO v_state FROM public.r5_fragment_state st
+   WHERE st.family_id = p_family FOR UPDATE;
+
+  IF v_state.daily_day = v_today THEN
+    v_pity := v_state.pity_points;
+    v_daily := v_state.daily_normal_count;
+    v_daily_rare := v_state.daily_rare_count;
   ELSE
-    v_pity := v_state.pity_points; v_daily := 0; v_daily_rare := 0;
+    v_pity := v_state.pity_points;
+    v_daily := 0;
+    v_daily_rare := 0;
   END IF;
 
-  v_capped := v_daily >= v_cap;
-  IF v_capped THEN v_outcome := 'capped';
-  ELSIF v_want = 'none' THEN v_outcome := 'none';
-  ELSE v_outcome := 'drop'; END IF;
+  -- 记录类型不在白名单 → 不产出、也不消耗保底
+  IF NOT (v_kind = ANY (v_cfg.eligible_record_types)) THEN
+    v_outcome := 'none';
+    v_pity_exempt := true;
+  ELSIF v_daily >= v_cap THEN
+    v_outcome := 'capped';
+    v_pity_exempt := true;
+  ELSIF (random() * 100) < v_cfg.drop_percent THEN
+    v_outcome := 'drop';
+  ELSE
+    v_outcome := 'none';
+  END IF;
 
   IF v_outcome = 'drop' THEN
-    v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;
+    v_count := 1;
+    v_daily_index := v_daily + 1;
+    v_pity_after := 0;
   ELSIF v_outcome = 'none' THEN
     IF v_pity_exempt THEN
       v_pity_after := v_pity;
     ELSE
       v_pity_after := v_pity + 1;
       IF v_pity_after >= v_pity_target THEN
-        v_outcome := 'pity'; v_count := 1; v_daily_index := v_daily + 1; v_pity_after := 0;
+        v_outcome := 'pity';
+        v_count := 1;
+        v_daily_index := v_daily + 1;
+        v_pity_after := 0;
       END IF;
     END IF;
   ELSE
     v_pity_after := v_pity;
   END IF;
 
-  IF v_want_rare AND v_rare_frag IS NOT NULL AND v_daily_rare < 1 THEN
+  IF v_kind = ANY (v_cfg.rare_record_types)
+     AND v_rare_frag IS NOT NULL
+     AND v_daily_rare < v_cfg.rare_daily_cap THEN
     v_rare_count := 1;
   END IF;
 
-  INSERT INTO public.r5_fragment_drops (family_id, source_record_id, record_day, record_kind, subject, outcome, fragment_id, fragment_count, rare_fragment_id, rare_count, pity_before, pity_after, daily_index, device)
-  VALUES (p_family, p_record_id, v_day, v_kind, v_subject, v_outcome,
+  INSERT INTO public.r5_fragment_drops (
+    family_id, source_record_id, record_day, record_kind, subject, outcome,
+    fragment_id, fragment_count, rare_fragment_id, rare_count,
+    pity_before, pity_after, daily_index, device)
+  VALUES (
+    p_family, p_record_id, v_day, v_kind, v_subject, v_outcome,
     CASE WHEN v_count > 0 THEN v_frag ELSE NULL END, v_count,
     CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END, v_rare_count,
     v_pity, v_pity_after, v_daily_index, COALESCE(p_device, ''))
   ON CONFLICT (family_id, source_record_id) DO NOTHING;
 
   IF NOT FOUND THEN
-    SELECT * INTO v_prev FROM public.r5_fragment_drops d WHERE d.family_id = p_family AND d.source_record_id = p_record_id;
-    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','ALREADY_CLAIMED','outcome',v_prev.outcome,'granted_normal',v_prev.fragment_count,'granted_rare',v_prev.rare_count,'zero_write',true);
+    SELECT * INTO v_prev FROM public.r5_fragment_drops d
+     WHERE d.family_id = p_family AND d.source_record_id = p_record_id;
+    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(
+      'status', 'ALREADY_CLAIMED', 'outcome', v_prev.outcome,
+      'granted_normal', v_prev.fragment_count, 'granted_rare', v_prev.rare_count,
+      'zero_write', true);
   END IF;
 
   IF v_count > 0 AND v_frag IS NOT NULL THEN
     INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)
     VALUES (p_family, 'frag:' || p_record_id, 'fragment_change', 0,
-      jsonb_build_object('item_id', v_frag, 'quantity_delta', v_count, 'source', 'study', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text, 'outcome', v_outcome, 'pity_after', v_pity_after),
+      jsonb_build_object('item_id', v_frag, 'quantity_delta', v_count, 'source', 'study',
+                         'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject,
+                         'record_day', v_day::text, 'outcome', v_outcome, 'pity_after', v_pity_after),
       COALESCE(p_device, ''), now(), NULL)
     ON CONFLICT (family_id, event_id) DO NOTHING;
   END IF;
@@ -260,7 +374,9 @@ BEGIN
   IF v_rare_count > 0 AND v_rare_frag IS NOT NULL THEN
     INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)
     VALUES (p_family, 'frag:' || p_record_id || ':rare', 'fragment_change', 0,
-      jsonb_build_object('item_id', v_rare_frag, 'quantity_delta', v_rare_count, 'source', 'study-rare', 'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject, 'record_day', v_day::text),
+      jsonb_build_object('item_id', v_rare_frag, 'quantity_delta', v_rare_count, 'source', 'study-rare',
+                         'record_id', p_record_id, 'record_kind', v_kind, 'subject', v_subject,
+                         'record_day', v_day::text),
       COALESCE(p_device, ''), now(), NULL)
     ON CONFLICT (family_id, event_id) DO NOTHING;
   END IF;
@@ -268,7 +384,7 @@ BEGIN
   UPDATE public.r5_fragment_state st
      SET pity_points = v_pity_after,
          pity_total = st.pity_total + CASE WHEN v_outcome = 'pity' THEN 1 ELSE 0 END,
-         daily_day = v_day,
+         daily_day = v_today,
          daily_normal_count = v_daily + v_count,
          daily_rare_count = v_daily_rare + v_rare_count,
          updated_at = now()
@@ -278,13 +394,22 @@ BEGIN
      SET revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')
    WHERE s.family_id = p_family;
 
-  RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','CLAIMED','outcome',v_outcome,'granted_normal',v_count,'granted_rare',v_rare_count,'fragment_id',CASE WHEN v_count > 0 THEN v_frag ELSE NULL END,'rare_fragment_id',CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END,'pity_points',v_pity_after,'pity_before',v_pity,'daily_normal_count',v_daily + v_count,'daily_rare_count',v_daily_rare + v_rare_count,'daily_index',v_daily_index,'record_day',v_day::text,'zero_write',false);
+  RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(
+    'status', 'CLAIMED', 'outcome', v_outcome,
+    'granted_normal', v_count, 'granted_rare', v_rare_count,
+    'fragment_id', CASE WHEN v_count > 0 THEN v_frag ELSE NULL END,
+    'rare_fragment_id', CASE WHEN v_rare_count > 0 THEN v_rare_frag ELSE NULL END,
+    'pity_points', v_pity_after, 'pity_before', v_pity,
+    'daily_normal_count', v_daily + v_count, 'daily_rare_count', v_daily_rare + v_rare_count,
+    'daily_index', v_daily_index, 'record_day', v_day::text, 'record_kind', v_kind,
+    'zero_write', false);
 END;
 $function$;
 
 
 -- ---------------------------------------------------------------------------
--- 5. 带守卫的组装
+-- 5. 组装（服务端权威：车辆白名单 / 获取方式 / 成本全部查表）
+--    p_cost 保留只为签名兼容，函数体不再读它。
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.r5_fragment_assemble(p_family text, p_device text, p_vehicle_id text, p_cost jsonb)
 RETURNS jsonb
@@ -293,60 +418,75 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
-  v_owned jsonb; v_rev bigint; v_bal jsonb; v_deficit jsonb := '{}'::jsonb;
-  v_k text; v_q int; v_have bigint; v_n int := 0; v_cost_ok boolean;
+  v_recipe public.r5_vehicle_recipe;
+  v_cost   jsonb;
+  v_owned  jsonb;
+  v_rev    bigint;
+  v_bal    jsonb;
+  v_deficit jsonb := '{}'::jsonb;
+  v_k      text;
+  v_q      int;
+  v_have   bigint;
 BEGIN
-  -- ▼ 新增：调用者范围校验（在任何读写之前）
+  -- ▼ 入口守卫（读写之前）
   IF NOT public.r5_fragment_scope_ok(p_family, p_device) THEN
-    RETURN jsonb_build_object('status','FORBIDDEN_SCOPE','zero_write',true);
+    RETURN jsonb_build_object('status', 'FORBIDDEN_SCOPE', 'zero_write', true);
   END IF;
-  -- ▲ 新增结束
+  -- ▲
 
-  -- 车辆 ID：小写字母开头，允许数字 / 短横线 / 下划线（占位车带下划线）
   IF p_vehicle_id IS NULL OR p_vehicle_id !~ '^[a-z0-9][a-z0-9_-]{1,40}$' THEN
-    RETURN jsonb_build_object('status','BAD_VEHICLE_ID','zero_write',true);
+    RETURN jsonb_build_object('status', 'BAD_VEHICLE_ID', 'zero_write', true);
   END IF;
 
-  -- 生日 / 限定车：永久隔离
-  IF p_vehicle_id IN ('birthday-star-6','six-star-supercar-2026')
-     OR p_vehicle_id LIKE 'pink-newyear%' OR p_vehicle_id LIKE 'pink-new-year%' THEN
-    RETURN jsonb_build_object('status','BIRTHDAY_VEHICLE_FORBIDDEN','zero_write',true);
+  -- 前缀类限定车无法枚举，只能按前缀拒绝
+  IF p_vehicle_id LIKE 'pink-newyear%' OR p_vehicle_id LIKE 'pink-new-year%' THEN
+    RETURN jsonb_build_object('status', 'BIRTHDAY_VEHICLE_FORBIDDEN', 'zero_write', true);
   END IF;
 
-  -- 既有取得方式的车辆：金币购买 / 剧情解锁。碎片系统不得提供第二条路径
-  IF p_vehicle_id IN ('moto','turtle') THEN
-    RETURN jsonb_build_object('status','COIN_VEHICLE_FORBIDDEN','zero_write',true);
+  -- ▼ 车辆白名单 / 获取方式（服务端表）
+  SELECT * INTO v_recipe FROM public.r5_vehicle_recipe r WHERE r.vehicle_id = p_vehicle_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'UNKNOWN_VEHICLE', 'zero_write', true);
+  END IF;
+  -- 先判获取方式（更具体的拒绝原因），再看开关
+  CASE v_recipe.obtainable_via
+    WHEN 'fragment' THEN
+      NULL;
+    WHEN 'birthday' THEN
+      RETURN jsonb_build_object('status', 'BIRTHDAY_VEHICLE_FORBIDDEN', 'zero_write', true);
+    WHEN 'coin' THEN
+      RETURN jsonb_build_object('status', 'COIN_VEHICLE_FORBIDDEN', 'zero_write', true);
+    WHEN 'retired' THEN
+      RETURN jsonb_build_object('status', 'LEGACY_SLOT_RETIRED', 'zero_write', true);
+    ELSE
+      RETURN jsonb_build_object('status', 'VEHICLE_NOT_ASSEMBLABLE', 'zero_write', true);
+  END CASE;
+  IF NOT v_recipe.enabled THEN
+    RETURN jsonb_build_object('status', 'VEHICLE_DISABLED', 'zero_write', true);
   END IF;
 
-  -- v1 遗留槽位已冻结
-  IF p_vehicle_id = 'scholar' THEN
-    RETURN jsonb_build_object('status','LEGACY_SLOT_RETIRED','zero_write',true);
+  -- 成本只认表里的，客户端传什么都不看
+  v_cost := v_recipe.cost;
+  IF v_cost IS NULL OR jsonb_typeof(v_cost) <> 'object' OR v_cost = '{}'::jsonb THEN
+    RETURN jsonb_build_object('status', 'RECIPE_INVALID', 'zero_write', true);
   END IF;
-
-  -- 成本：非空对象，键必须是 frag_*，值必须是 1..200 的整数，条目数 1..4。
-  IF p_cost IS NULL OR jsonb_typeof(p_cost) <> 'object' OR p_cost = '{}'::jsonb THEN
-    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);
-  END IF;
-  SELECT bool_and(c.k ~ '^frag_[a-z0-9_]{1,40}$' AND c.v ~ '^[0-9]{1,3}$'), count(*)
-    INTO v_cost_ok, v_n
-    FROM jsonb_each_text(p_cost) AS c(k, v);
-  IF NOT COALESCE(v_cost_ok, false) OR v_n < 1 OR v_n > 4 THEN
-    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);
-  END IF;
-  IF EXISTS (SELECT 1 FROM jsonb_each_text(p_cost) AS c(k, v) WHERE c.v::int < 1 OR c.v::int > 200) THEN
-    RETURN jsonb_build_object('status','BAD_COST','zero_write',true);
-  END IF;
+  -- ▲
 
   SELECT s.owned, s.revision INTO v_owned, v_rev FROM public.r5_racing_saves s
    WHERE s.family_id = p_family FOR UPDATE;
-  IF NOT FOUND THEN RETURN jsonb_build_object('status','SAVE_NOT_INITIALIZED','zero_write',true); END IF;
-
-  IF v_owned ? p_vehicle_id THEN
-    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','ALREADY_OWNED','vehicle_id',p_vehicle_id,'zero_write',true);
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'SAVE_NOT_INITIALIZED', 'zero_write', true);
   END IF;
 
-  IF EXISTS (SELECT 1 FROM public.r5_racing_events e WHERE e.family_id = p_family AND e.event_id = 'asm:' || p_vehicle_id) THEN
-    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','ALREADY_ASSEMBLED','vehicle_id',p_vehicle_id,'zero_write',true);
+  IF v_owned ? p_vehicle_id THEN
+    RETURN public.r5_fragment_snapshot_internal(p_family)
+      || jsonb_build_object('status', 'ALREADY_OWNED', 'vehicle_id', p_vehicle_id, 'zero_write', true);
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.r5_racing_events e
+              WHERE e.family_id = p_family AND e.event_id = 'asm:' || p_vehicle_id) THEN
+    RETURN public.r5_fragment_snapshot_internal(p_family)
+      || jsonb_build_object('status', 'ALREADY_ASSEMBLED', 'vehicle_id', p_vehicle_id, 'zero_write', true);
   END IF;
 
   SELECT COALESCE(jsonb_object_agg(t.k, t.q), '{}'::jsonb) INTO v_bal FROM (
@@ -357,7 +497,7 @@ BEGIN
     GROUP BY 1
   ) t;
 
-  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP
+  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(v_cost) LOOP
     v_have := COALESCE((v_bal->>v_k)::bigint, 0);
     IF v_have < v_q THEN
       v_deficit := v_deficit || jsonb_build_object(v_k, v_q - v_have);
@@ -365,10 +505,12 @@ BEGIN
   END LOOP;
 
   IF v_deficit <> '{}'::jsonb THEN
-    RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','INSUFFICIENT_FRAGMENTS','vehicle_id',p_vehicle_id,'required',p_cost,'deficit',v_deficit,'zero_write',true);
+    RETURN public.r5_fragment_snapshot_internal(p_family)
+      || jsonb_build_object('status', 'INSUFFICIENT_FRAGMENTS', 'vehicle_id', p_vehicle_id,
+                            'required', v_cost, 'deficit', v_deficit, 'zero_write', true);
   END IF;
 
-  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(p_cost) LOOP
+  FOR v_k, v_q IN SELECT key, (value)::int FROM jsonb_each_text(v_cost) LOOP
     INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)
     VALUES (p_family, 'asm:' || p_vehicle_id || ':' || v_k, 'fragment_change', 0,
       jsonb_build_object('item_id', v_k, 'quantity_delta', -v_q, 'source', 'assemble', 'vehicle_id', p_vehicle_id),
@@ -378,50 +520,86 @@ BEGIN
 
   INSERT INTO public.r5_racing_events (family_id, event_id, kind, coin_delta, payload, device, applied_at, result_balance)
   VALUES (p_family, 'asm:' || p_vehicle_id, 'grant', 0,
-    jsonb_build_object('vehicle_id', p_vehicle_id, 'source', 'fragment-assembly', 'cost', p_cost),
+    jsonb_build_object('vehicle_id', p_vehicle_id, 'source', 'fragment-assembly', 'cost', v_cost),
     COALESCE(p_device, ''), now(), NULL)
   ON CONFLICT (family_id, event_id) DO NOTHING;
 
   UPDATE public.r5_racing_saves s
-     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id, jsonb_build_object('at', (extract(epoch from now())*1000)::bigint, 'source', 'fragment-assembly', 'note', '碎片组装')),
+     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id,
+           jsonb_build_object('at', (extract(epoch from now())*1000)::bigint,
+                              'source', 'fragment-assembly', 'note', '碎片组装')),
          revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')
    WHERE s.family_id = p_family;
 
-  RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object('status','ASSEMBLED','vehicle_id',p_vehicle_id,'cost',p_cost,'zero_write',false);
+  RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(
+    'status', 'ASSEMBLED', 'vehicle_id', p_vehicle_id, 'cost', v_cost, 'zero_write', false);
 END;
 $function$;
 
 
 -- ---------------------------------------------------------------------------
--- 6. 可选（需**再次**单独批准）：把两张「无 RLS、且 authenticated 可写」的表收紧
---    现状：public.r5_fragment_state / public.r5_fragment_drops
---          · RLS 未开启
---          · anon 有 SELECT，authenticated 有 arwdDxtm（含 INSERT/UPDATE/DELETE）
---    风险：登录家长可以直接 POST /rest/v1/r5_fragment_drops 删除自己家的一行，
---          再用同一条学习记录重新领取 —— 事件表里就会出现第二条发放记录。
---    为什么不在本轮直接执行：涉及正式库表权限，且要确认网关/云函数不是以
---    authenticated 身份读写这两张表（当前证据显示它们是服务端身份）。
+-- 6. 表权限收紧（阻断项 4，不再是「可选注释」）
+--    思路：奖励相关的表只有「属主（迁移/云函数通道）」和 service_role 能碰，
+--    anon / authenticated 一律没有任何权限；RLS 同时开启，双保险。
+--    不改任何一行的数据，也不删表。
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.r5_fragment_state  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.r5_fragment_drops  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.r5_racing_events  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.r5_racing_saves   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.r5_device          ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.r5_fragment_state  FROM PUBLIC;
+REVOKE ALL ON public.r5_fragment_drops  FROM PUBLIC;
+REVOKE ALL ON public.r5_racing_events   FROM PUBLIC;
+REVOKE ALL ON public.r5_racing_saves    FROM PUBLIC;
+REVOKE ALL ON public.r5_device          FROM PUBLIC;
+
+REVOKE ALL ON public.r5_fragment_state  FROM anon, authenticated;
+REVOKE ALL ON public.r5_fragment_drops  FROM anon, authenticated;
+REVOKE ALL ON public.r5_racing_events   FROM anon, authenticated;
+REVOKE ALL ON public.r5_racing_saves    FROM anon, authenticated;
+REVOKE ALL ON public.r5_device          FROM anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_fragment_state TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_fragment_drops TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_racing_events  TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_racing_saves   TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_device         TO service_role;
+
+-- 学习记录表**不动**：V6 页面本来就用登录会话读自己的记录，收权会直接打断学习进度。
+
+
+-- ---------------------------------------------------------------------------
+-- 7. apply 后自检（三条都要符合期望值）
+-- ---------------------------------------------------------------------------
+-- 7.1 角色与特权
+-- SELECT public.r5_fragment_caller_role(), public.r5_fragment_is_privileged();   -- 期望 postgres / true
 --
---  ALTER TABLE public.r5_fragment_state ENABLE ROW LEVEL SECURITY;
---  ALTER TABLE public.r5_fragment_drops ENABLE ROW LEVEL SECURITY;
---  REVOKE ALL ON public.r5_fragment_state FROM anon;
---  REVOKE ALL ON public.r5_fragment_drops FROM anon;
---  REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.r5_fragment_state FROM authenticated;
---  REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.r5_fragment_drops FROM authenticated;
---  -- 回滚：
---  -- ALTER TABLE public.r5_fragment_state DISABLE ROW LEVEL SECURITY;
---  -- ALTER TABLE public.r5_fragment_drops DISABLE ROW LEVEL SECURITY;
---  -- GRANT SELECT ON public.r5_fragment_state, public.r5_fragment_drops TO anon;
---  -- GRANT SELECT, INSERT, UPDATE, DELETE ON public.r5_fragment_state, public.r5_fragment_drops TO authenticated;
+-- 7.2 非特权连接必须拿不到东西（在 PostgREST 侧用 anon key 打这两个接口）
+--   POST /rest/v1/rpc/r5_fragment_snapshot  {"p_family":"little-growth-family-001"}
+--     → {"status":"FORBIDDEN_SCOPE","zero_write":true}
+--   POST /rest/v1/rpc/r5_fragment_claim     {"p_family":"...","p_device":"r5dev_...","p_record_id":"..."}
+--     → {"status":"FORBIDDEN_SCOPE","zero_write":true}
+--   GET  /rest/v1/r5_fragment_drops?select=*     → 空数组或 401（不再是明文数据）
 --
--- 7. 自检（应用后跑，三条都应为 false / 0）
---  SELECT has_function_privilege('anon','public.r5_fragment_snapshot_internal(text)','EXECUTE');  -- 期望 false
---  SET ROLE anon;
---    SELECT public.r5_fragment_snapshot('little-growth-family-001')->>'status';                  -- 期望 FORBIDDEN_SCOPE
---  RESET ROLE;
+-- 7.3 表权限
+-- SELECT c.relname,
+--        has_table_privilege('anon', c.oid, 'SELECT') AS anon_select,
+--        has_table_privilege('authenticated', c.oid, 'INSERT') AS auth_insert
+--   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+--  WHERE n.nspname='public'
+--    AND c.relname IN ('r5_fragment_state','r5_fragment_drops','r5_racing_events','r5_racing_saves','r5_device');
+--   期望：anon_select 全 false，auth_insert 全 false
 --
--- 8. 回滚方式
---    三个函数用 pg_get_functiondef 的原文重建（本轮已把原文存档在
---    evidence/db/functions-before.json），删掉 r5_fragment_snapshot_internal 与
---    r5_fragment_scope_ok 即可回到旧行为。数据一行都不会动。
+-- 7.4 函数权限（anon 仍然可以 EXECUTE，但都会在入口被挡；内部快照 anon 必须 false）
+-- SELECT has_function_privilege('anon','public.r5_fragment_snapshot_internal(text)','EXECUTE');  -- 期望 false
+--
+-- 8. 回滚
+--   三个函数按 db/isolated/functions-before.sql 里的原文重建；
+--   表权限反向执行：
+--     GRANT SELECT ON public.r5_fragment_state, public.r5_fragment_drops TO anon;
+--     GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON public.r5_fragment_state, public.r5_fragment_drops TO authenticated;
+--     ALTER TABLE public.r5_fragment_state DISABLE ROW LEVEL SECURITY;
+--     ALTER TABLE public.r5_fragment_drops DISABLE ROW LEVEL SECURITY;
 -- ============================================================================
