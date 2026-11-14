@@ -105,8 +105,8 @@ async function seedRealHistory(db, id, { disagree = false, ahead = false } = {})
     Array.isArray(s.rollback_plan_rows) && s.rollback_plan_rows.length === 1
     && s.rollback_plan_rows[0].date === D3 && s.rollback_plan_rows[0].day === 1,
     JSON.stringify(s.rollback_plan_rows));
-  suite.check('R8', 'the confirmation window stays [2,3] — day 2 can never be reopened, day 4 never skipped',
-    s.allowed_min_day === 2 && s.allowed_max_day === 3,
+  suite.check('R8', 'the correction window collapses to [3,3] — day 2 can never be reopened, day 4 never skipped',
+    s.allowed_min_day === 3 && s.allowed_max_day === 3,
     `${s.allowed_min_day}..${s.allowed_max_day}`);
   suite.check('R9', 'the full plan history is in the fingerprinted evidence',
     Array.isArray(s.plan_history) && s.plan_history.length === 3
@@ -271,6 +271,12 @@ async function seedRealHistory(db, id, { disagree = false, ahead = false } = {})
   const back = await confirm(db, id, 1, 'u-parent', s.snapshot_fingerprint, correction);
   suite.check('D2', 'confirming day 1 is still rejected — no writeback of a played day',
     !back.ok && /R5_INIT_REGRESSION_REJECTED/.test(back.message), back.message);
+
+  /* The high-water day itself is equally forbidden: the child already lived
+   * through day 2, so re-publishing it would silently replay a day. */
+  const highWater = await confirm(db, id, 2, 'u-parent', s.snapshot_fingerprint, correction);
+  suite.check('D2b', 'confirming the high-water day 2 is rejected for the same reason',
+    !highWater.ok && /R5_INIT_REGRESSION_REJECTED/.test(highWater.message), highWater.message);
 
   const noBy = await confirm(db, id, 3, '  ', s.snapshot_fingerprint, correction);
   suite.check('D3', 'a correction without a named confirmer is rejected',

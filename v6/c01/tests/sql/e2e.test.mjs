@@ -402,10 +402,11 @@ async function derive(db, id) {
   suite.check('G1', 're-running the migration initialises nobody (no MAX(day_index) value)',
     prog === undefined, JSON.stringify(prog));
   const snap = (await db.query('SELECT public.r5_initialization_snapshot($1) AS s', [id])).rows[0].s;
-  suite.check('G2', 'the snapshot demands a verified confirmation instead of guessing (history max 2, window [2,3])',
-    snap.plan_max_day === 2 && snap.allowed_min_day === 2 && snap.allowed_max_day === 3
+  suite.check('G2', 'the snapshot demands a verified confirmation instead of guessing (history max 2, correction window [3,3])',
+    snap.plan_max_day === 2 && snap.allowed_min_day === 3 && snap.allowed_max_day === 3
     && snap.confirmation_required === true,
-    JSON.stringify({ max: snap.plan_max_day, win: [snap.allowed_min_day, snap.allowed_max_day] }));
+    JSON.stringify({ max: snap.plan_max_day, win: [snap.allowed_min_day, snap.allowed_max_day],
+      corr: snap.corrections_required }));
 
   const creds = await derive(db, id);
   suite.check('G3', '73 records produce exactly 4 credential groups', creds.length === 4, creds.length);

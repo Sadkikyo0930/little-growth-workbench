@@ -404,7 +404,7 @@
     },
     {
       "id": "G2",
-      "title": "the snapshot demands a verified confirmation instead of guessing (history max 2, window [2,3])",
+      "title": "the snapshot demands a verified confirmation instead of guessing (history max 2, correction window [3,3])",
       "pass": true,
       "detail": ""
     },

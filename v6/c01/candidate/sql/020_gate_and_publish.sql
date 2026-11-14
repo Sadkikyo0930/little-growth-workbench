@@ -573,12 +573,19 @@ COMMENT ON FUNCTION public.r5_refresh_credential_snapshot(text) IS
 DO $priv$
 DECLARE
   fn text;
+  -- Client-facing API. Only these two can be reached from a PostgREST session.
   api_fns text[] := ARRAY[
     'public.r5_publish_today(text,integer,boolean)',
-    'public.r5_gate_status_core(text,boolean,boolean)',
     'public.r5_advance_day(text,integer)'
   ];
+  -- ``r5_gate_status_core`` belongs here, not above. The production ACL for it
+  -- is service_role + owner and deliberately excludes `authenticated`: it takes
+  -- p_ignore_override straight from the caller, so exposing it to a browser
+  -- session would let a client bypass the parent override. Clients reach the
+  -- gate through r5_status() -> r5_gate_status() -> r5_gate_status_core(),
+  -- which are all SECURITY DEFINER and therefore run as the owner.
   internal_fns text[] := ARRAY[
+    'public.r5_gate_status_core(text,boolean,boolean)',
     'public.r5_gate_status_core_legacy(text,boolean,boolean)',
     'public.r5_publish_today_legacy(text,integer,boolean)',
     'public.r5_day_passed(text,date)',
@@ -586,6 +593,13 @@ DECLARE
     'public.r5_progress_maybe_advance(text)',
     'public.r5_refresh_credential_snapshot(text)',
     'public.r5_guard_plan_day()'
+  ];
+  -- Functions the racing site calls with the service key. Production already
+  -- grants these to service_role; a fresh install must reproduce that or the
+  -- server-to-server path breaks.
+  svc_fns text[] := ARRAY[
+    'public.r5_gate_status_core(text,boolean,boolean)',
+    'public.r5_publish_today(text,integer,boolean)'
   ];
 BEGIN
   FOREACH fn IN ARRAY internal_fns LOOP
@@ -605,6 +619,12 @@ BEGIN
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', fn);
+    END IF;
+  END LOOP;
+
+  FOREACH fn IN ARRAY svc_fns LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', fn);
     END IF;
   END LOOP;
 END;

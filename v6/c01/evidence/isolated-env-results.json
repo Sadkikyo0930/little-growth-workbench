@@ -1,0 +1,303 @@
+{
+  "generated_at": "2026-11-14T01:01:35.643Z",
+  "commit": "242e2a8cdea81399e66b2198f479a53357cc03e8",
+  "environment": {
+    "kind": "separate PostgreSQL server, own data dir, own TCP port, separate process",
+    "engine": "PostgreSQL 18.6 (WASM build, PGlite 0.5.16) behind a wire-protocol TCP endpoint",
+    "host": "127.0.0.1",
+    "port": 55433,
+    "cloudbase_untouched": true,
+    "limitations": [
+      "no CloudBase gateway/PostgREST layer: the HTTP RPC surface is not exercised here",
+      "all connections share one backend session, so per-connection SET ROLE does not isolate; role switching is done per statement batch instead"
+    ]
+  },
+  "sql_sha256_16": {
+    "900": "210a6bf9ad107809",
+    "010": "75d7427b5cdd1e47",
+    "020": "d59ea684f9135172"
+  },
+  "totals": {
+    "pass": 46,
+    "fail": 0,
+    "ms": 330
+  },
+  "results": [
+    {
+      "id": "D1",
+      "name": "010 + legacy + 020 apply cleanly to the production-shaped schema",
+      "status": "PASS",
+      "detail": "sql sha256 d096f34a9b03ee65"
+    },
+    {
+      "id": "D2",
+      "name": "r5_gate_status_core_legacy / r5_publish_today_legacy carry the production bodies verbatim",
+      "status": "PASS",
+      "detail": "gate f78aceeba9c934fa8f4b5c754daba101 publish b0d8d2deb58ab5240c9207e6b5081ea3"
+    },
+    {
+      "id": "D2b",
+      "name": "the live gate wrapper delegates to the verbatim production body",
+      "status": "PASS",
+      "detail": " DECLARE base jsonb; auth_day integer; prog_day integer; prog record; "
+    },
+    {
+      "id": "D3",
+      "name": "the untouched production function r5_claim_answers is byte-identical",
+      "status": "PASS",
+      "detail": "45ef62312ed179f299700946c9c7863d"
+    },
+    {
+      "id": "D4",
+      "name": "r5_gate_status_core is NOT executable by authenticated (production ACL parity)",
+      "status": "PASS",
+      "detail": "postgres=X/postgres | service_role=X/postgres"
+    },
+    {
+      "id": "D5",
+      "name": "r5_gate_status_core stays executable by service_role",
+      "status": "PASS",
+      "detail": "postgres=X/postgres | service_role=X/postgres"
+    },
+    {
+      "id": "D6",
+      "name": "r5_publish_today is executable by authenticated and service_role",
+      "status": "PASS",
+      "detail": "postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres"
+    },
+    {
+      "id": "D7",
+      "name": "no candidate function carries a PUBLIC EXECUTE grant",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "D8",
+      "name": "all four new tables have RLS enabled and zero policies",
+      "status": "PASS",
+      "detail": "[{\"tablename\":\"r5_credential_snapshot\",\"rowsecurity\":true},{\"tablename\":\"r5_day_confirmation\",\"rowsecurity\":true},{\"tablename\":\"r5_family_progress\",\"rowsecurity\":true},{\"tablename\":\"r5_plan_audit\",\"rowsecurity\":true}] []"
+    },
+    {
+      "id": "D9",
+      "name": "the migration does not guess a day: r5_family_progress stays empty",
+      "status": "PASS",
+      "detail": "0"
+    },
+    {
+      "id": "D10",
+      "name": "the 73 historical records are untouched by the migration",
+      "status": "PASS",
+      "detail": "73/2300e7514312ec5007750f48771cf9a6"
+    },
+    {
+      "id": "F1",
+      "name": "history [2,2,1] classifies as an explainable rollback, not a hard block",
+      "status": "PASS",
+      "detail": "blocking=[] corrections=[\"PLAN_HISTORY_ROLLBACK\"]"
+    },
+    {
+      "id": "F2",
+      "name": "the rollback row set is exactly the tail row 2026-11-13 / day1",
+      "status": "PASS",
+      "detail": "[{\"day\":1,\"date\":\"2026-11-13\"}]"
+    },
+    {
+      "id": "F3",
+      "name": "the correction window collapses to a single value: day 3 only",
+      "status": "PASS",
+      "detail": "3..3"
+    },
+    {
+      "id": "F4",
+      "name": "confirming day 3 without the correction is refused (CORRECTION_REQUIRED)",
+      "status": "PASS",
+      "detail": "R5_INIT_CORRECTION_REQUIRED"
+    },
+    {
+      "id": "F5",
+      "name": "confirming day 2 is refused — a published day is never written back",
+      "status": "PASS",
+      "detail": "R5_INIT_REGRESSION_REJECTED"
+    },
+    {
+      "id": "F6",
+      "name": "confirming day 4 is refused — no skipping ahead",
+      "status": "PASS",
+      "detail": "R5_INIT_JUMP_REJECTED"
+    },
+    {
+      "id": "F7",
+      "name": "a token reason is refused (CORRECTION_REASON_REQUIRED)",
+      "status": "PASS",
+      "detail": "R5_INIT_CORRECTION_REASON_REQUIRED"
+    },
+    {
+      "id": "F8",
+      "name": "a stale snapshot fingerprint is refused",
+      "status": "PASS",
+      "detail": "R5_INIT_SNAPSHOT_STALE"
+    },
+    {
+      "id": "F9",
+      "name": "the parent-confirmed correction initialises the family at day 3",
+      "status": "PASS",
+      "detail": "initialized/3"
+    },
+    {
+      "id": "F10",
+      "name": "the correction did not rewrite a single plan row",
+      "status": "PASS",
+      "detail": "3/6665673886983d97ea8e5bf45658eedc"
+    },
+    {
+      "id": "F11",
+      "name": "the audit records the corrected initialisation with its reason",
+      "status": "PASS",
+      "detail": "{\"event\":\"initialize_authoritative_day_corrected\",\"authoritative_day\":3,\"actor\":\"u-parent\",\"detail\":{\"plan_max_day\":\"2\",\"confirmed_day\":3,\"correction_reason\":\"家"
+    },
+    {
+      "id": "F12",
+      "name": "r5_day_confirmation stores day, confirmer, codes and reason",
+      "status": "PASS",
+      "detail": "[{\"confirmed_day\":3,\"confirmed_by\":\"u-parent\",\"corrections_applied\":[\"PLAN_HISTORY_ROLLBACK\"],\"correction_reason\":\"家长确认：11-13 当天误发 day1 计划，实际已进入第 3 天\"}]"
+    },
+    {
+      "id": "F13",
+      "name": "re-running the initialisation is a no-op (already_initialized)",
+      "status": "PASS",
+      "detail": "already_initialized"
+    },
+    {
+      "id": "F14",
+      "name": "the real 6-row history is also classified as one explainable rollback",
+      "status": "PASS",
+      "detail": "hw=2026-11-11 rows=[{\"day\":1,\"date\":\"2026-11-13\"}]"
+    },
+    {
+      "id": "F15",
+      "name": "the real-shape family initialises at the confirmed day 3",
+      "status": "PASS",
+      "detail": "initialized"
+    },
+    {
+      "id": "F16",
+      "name": "a monotonic family needs no correction and is not blocked",
+      "status": "PASS",
+      "detail": "blocking=[] corrections=[]"
+    },
+    {
+      "id": "F17",
+      "name": "the real family is still uninitialised — nothing was decided for it",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "G1",
+      "name": "a stale client cannot publish day 1 once the authoritative day is 3",
+      "status": "PASS",
+      "detail": "{\"d\":3,\"stale\":true}"
+    },
+    {
+      "id": "G2",
+      "name": "day 3 publishes with its two subjects",
+      "status": "PASS",
+      "detail": "{\"date\":\"2026-11-14\",\"subjects\":[\"数学\",\"英语\"],\"published\":true,\"study_day\":3,\"client_day\":3,\"idempotent\":true,\"stale_client\":false,\"authoritat"
+    },
+    {
+      "id": "G3",
+      "name": "course finished but no answers yet -> the gate stays closed (score unverified)",
+      "status": "PASS",
+      "detail": "false/STUDY_INCOMPLETE_OR_SCORE_UNVERIFIED"
+    },
+    {
+      "id": "G4",
+      "name": "both subjects completed and scored -> the gate opens (racing unlock)",
+      "status": "PASS",
+      "detail": "true/true/STUDY_PASSED"
+    },
+    {
+      "id": "G5",
+      "name": "a passing day advances the authoritative day exactly once",
+      "status": "PASS",
+      "detail": "{\"to\":4,\"from\":3,\"result\":\"advance_day\",\"authoritative_day\":4}"
+    },
+    {
+      "id": "G6",
+      "name": "a second advance on the same day is idempotent",
+      "status": "PASS",
+      "detail": "{\"result\":\"already_advanced\",\"authoritative_day\":4}"
+    },
+    {
+      "id": "G7",
+      "name": "the parent waiver entry still works (1800s / waiver path untouched)",
+      "status": "PASS",
+      "detail": "[{\"r\":{\"api\":\"r5_status\",\"date\":\"2026-11-14\",\"active\":false,\"reason\":\"STUDY_PASSED_WITH_WAIVER\",\"allowed\":true,\"modules\""
+    },
+    {
+      "id": "G8",
+      "name": "a granted waiver counts as completion and opens the gate",
+      "status": "PASS",
+      "detail": "true/STUDY_PASSED_WITH_WAIVER"
+    },
+    {
+      "id": "G9",
+      "name": "the waiver itself wrote no learning record",
+      "status": "PASS",
+      "detail": "7 -> 7"
+    },
+    {
+      "id": "R1",
+      "name": "900_rollback.sql applies without error",
+      "status": "PASS",
+      "detail": "ok"
+    },
+    {
+      "id": "R2",
+      "name": "the four new tables are gone",
+      "status": "PASS",
+      "detail": "0"
+    },
+    {
+      "id": "R3",
+      "name": "the production gate body is restored byte-for-byte",
+      "status": "PASS",
+      "detail": "f78aceeba9c934fa8f4b5c754daba101"
+    },
+    {
+      "id": "R4",
+      "name": "the production publish body is restored byte-for-byte",
+      "status": "PASS",
+      "detail": "b0d8d2deb58ab5240c9207e6b5081ea3"
+    },
+    {
+      "id": "R5",
+      "name": "the rollback restores the PUBLIC EXECUTE default on both functions",
+      "status": "PASS",
+      "detail": "postgres=X/postgres | service_role=X/postgres | =X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres | =X/postgres"
+    },
+    {
+      "id": "R6",
+      "name": "every C0.1 helper function is gone",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "R7",
+      "name": "rollback loses no learning record and rewrites no plan (all four families)",
+      "status": "PASS",
+      "detail": "byte-identical"
+    },
+    {
+      "id": "R8",
+      "name": "the 73 historical records are still exactly 73, byte-identical",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "R9",
+      "name": "after the rollback the legacy gate still answers for the real family",
+      "status": "PASS",
+      "detail": "{\"api\":\"r5_status\",\"date\":\"2026-11-14\",\"active\":false,\"reason\":\"PLAN_UNPUBLISHED\",\"allowed\":false,\"modules\":[],\"study_da"
+    }
+  ]
+}

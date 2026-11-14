@@ -21,9 +21,10 @@ export const LEGACY_PUB = read('candidate/sql/legacy/r5_publish_today.production
 export const M020 = read('candidate/sql/020_gate_and_publish.sql');
 export const ROLLBACK_SQL = read('candidate/sql/900_rollback.sql');
 
-/* PostgREST connects as `authenticated` (logged in) or `anon` (not logged in).
- * Creating them here is what makes the GRANT/REVOKE assertions real: without the
- * roles the privilege checks would silently pass against a superuser only. */
+/* PostgREST connects as `authenticated` (logged in) or `anon` (not logged in),
+ * and server-to-server callers use `service_role`. Creating all three is what
+ * makes the GRANT/REVOKE assertions real: without the roles the privilege
+ * checks would silently pass against a superuser only. */
 export const ROLES = `
   DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
@@ -31,6 +32,9 @@ export const ROLES = `
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
       CREATE ROLE anon NOLOGIN;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      CREATE ROLE service_role NOLOGIN;
     END IF;
   END $$;
 `;

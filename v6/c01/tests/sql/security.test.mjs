@@ -80,10 +80,14 @@ await asParent(db);
 
   await asParent(db);
   const crossStatus = await grab(() => call('SELECT public.r5_status($1) AS s', ['fam-b'])());
+  /* r5_gate_status_core is NOT grantable to `authenticated` (production ACL is
+   * service_role + owner), so a logged-in session is stopped by the ACL before
+   * the membership check even runs. Both outcomes are acceptable; what matters
+   * is that the call cannot succeed. */
   const crossGate = await grab(() => call('SELECT public.r5_gate_status_core($1,false,false) AS s', ['fam-b'])());
-  suite.check('S6', 'r5_status / r5_gate_status_core refuse a foreign family',
+  suite.check('S6', 'r5_status / r5_gate_status_core cannot be used against a foreign family',
     !crossStatus.ok && /R5_MEMBER_DENIED/.test(crossStatus.message)
-    && !crossGate.ok && /R5_MEMBER_DENIED/.test(crossGate.message),
+    && !crossGate.ok && /R5_MEMBER_DENIED|permission denied/.test(crossGate.message),
     `${crossStatus.message} | ${crossGate.message}`);
 
   const crossAdvance = await grab(() => call('SELECT public.r5_advance_day($1,$2) AS r', ['fam-b', 2])());
@@ -197,9 +201,29 @@ await asRole('anon');
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname='public' AND p.proname = ANY($1)`, [['r5_publish_today', 'r5_gate_status_core',
     'r5_advance_day', 'r5_credential_derive', 'r5_initialization_snapshot']])).rows;
-  suite.check('S17', 'the five client-facing functions are granted to `authenticated`',
-    authAcl.length === 5 && authAcl.every((r) => /authenticated=[A-Za-z]/.test(r.acl || '')),
-    JSON.stringify(authAcl));
+  const granted = authAcl.filter((r) => /authenticated=[A-Za-z]/.test(r.acl || '')).map((r) => r.proname).sort();
+  suite.check('S17', 'only the four client-facing functions are granted to `authenticated`',
+    JSON.stringify(granted) === JSON.stringify(['r5_advance_day', 'r5_credential_derive',
+      'r5_initialization_snapshot', 'r5_publish_today']), JSON.stringify(granted));
+
+  /* Production parity: this one is service_role-only, because its third
+   * argument is p_ignore_override handed straight to the gate. */
+  const coreAcl = authAcl.find((r) => r.proname === 'r5_gate_status_core');
+  suite.check('S17b', 'r5_gate_status_core is NOT executable by `authenticated` (production ACL)',
+    !/authenticated=[A-Za-z]/.test(coreAcl.acl || ''), coreAcl.acl);
+  await asRole('authenticated');
+  const coreAsClient = await grab(() => call('SELECT public.r5_gate_status_core($1,false,true) AS s', ['fam-a'])());
+  suite.check('S17c', 'a client cannot smuggle p_ignore_override=true past the gate',
+    !coreAsClient.ok && /permission denied/i.test(coreAsClient.message || ''),
+    (coreAsClient.message || 'CALL SUCCEEDED').split('\n')[0]);
+  /* ...but the server-to-server path must keep working, as it does in production. */
+  await asRole('service_role');
+  const coreAsService = await call('SELECT public.r5_gate_status_core($1,false,true) AS s', ['fam-a'])()
+    .then((r) => r[0].s).catch((e) => ({ error: e.message }));
+  await resetRole();
+  suite.check('S17d', 'service_role can still call the gate (production parity)',
+    !coreAsService.error && typeof coreAsService.allowed === 'boolean',
+    JSON.stringify(coreAsService).slice(0, 120));
 
   const sig = async (name) => (await db.query(
     `SELECT pg_get_function_identity_arguments(p.oid) AS a FROM pg_proc p

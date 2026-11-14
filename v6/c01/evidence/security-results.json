@@ -1,7 +1,7 @@
 {
   "suite": "security",
-  "total": 27,
-  "passed": 27,
+  "total": 30,
+  "passed": 30,
   "failed": 0,
   "skipped": 0,
   "failures": [],
@@ -38,7 +38,7 @@
     },
     {
       "id": "S6",
-      "title": "r5_status / r5_gate_status_core refuse a foreign family",
+      "title": "r5_status / r5_gate_status_core cannot be used against a foreign family",
       "pass": true,
       "detail": ""
     },
@@ -104,7 +104,25 @@
     },
     {
       "id": "S17",
-      "title": "the five client-facing functions are granted to `authenticated`",
+      "title": "only the four client-facing functions are granted to `authenticated`",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S17b",
+      "title": "r5_gate_status_core is NOT executable by `authenticated` (production ACL)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S17c",
+      "title": "a client cannot smuggle p_ignore_override=true past the gate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "id": "S17d",
+      "title": "service_role can still call the gate (production parity)",
       "pass": true,
       "detail": ""
     },

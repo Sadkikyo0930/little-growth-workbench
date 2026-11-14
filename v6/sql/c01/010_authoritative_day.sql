@@ -575,8 +575,18 @@ BEGIN
   -- must sit inside it. It forbids writing back an already published day
   -- (confirmed < plan_max) and forbids skipping an unplayed day
   -- (confirmed > plan_max + 1).
+  --
+  -- A historical rollback tightens it to a single value. Acknowledging
+  -- "the tail plan regressed after we had already reached day H" can only mean
+  -- the family is past H, so re-publishing H (or anything below it) would
+  -- reopen a day the child already lived through. The operator still has to
+  -- name that value: nothing here decides it on its own.
   v_min := COALESCE(v_plan_max, 1);
   v_max := CASE WHEN v_plan_max IS NULL THEN 1 ELSE least(v_plan_max + 1, 30) END;
+  IF v_corrections @> ARRAY['PLAN_HISTORY_ROLLBACK']::text[] THEN
+    v_min := least(COALESCE(v_plan_max, 0) + 1, 30);
+    v_max := v_min;
+  END IF;
 
   v_evidence := jsonb_build_object(
     'family_id', p_family_id,
@@ -828,7 +838,8 @@ DECLARE
   internal_fns text[] := ARRAY[
     'public.r5_credential_derive_impl(text,jsonb)',
     'public.r5_initialization_snapshot_impl(text)',
-    'public.r5_initialize_authoritative_day(text,integer,text,text,jsonb)'
+    'public.r5_initialize_authoritative_day(text,integer,text,text,jsonb)',
+    'public.r5_subject_canonical(text)'
   ];
 BEGIN
   FOREACH fn IN ARRAY internal_fns LOOP
