@@ -50,6 +50,11 @@ jobs:
           set -o pipefail
           node tests/v6-reward-event.test.mjs | tee reward-event.log
           grep -q "ALL 12 REWARD EVENT CONTRACT CHECKS PASSED" reward-event.log
+      - name: Test actual parent JWT fragment client without racing token
+        run: |
+          set -o pipefail
+          node tests/family-fragment-client-flow.test.mjs | tee member-claim-browser.log
+          grep -q "ALL 10 FAMILY FRAGMENT CLIENT FLOW CHECKS PASSED" member-claim-browser.log
       - name: Verify native SQL and gateway fragment response contracts
         run: |
           set -o pipefail
@@ -123,6 +128,7 @@ jobs:
             family-auto-restore.log
             garage-device.log
             fragment-rpc.log
+            member-claim-browser.log
             reward-event.log
             garage-thumbnail-priority.log
             v2-contract.log
