@@ -9,6 +9,10 @@ for(const id of ids){
  assert.ok(html.includes(id+': '),id+' must be whitelisted in page');
  console.log('PASS curated thumbnail exists for',id);
 }
+assert.ok(html.includes("const approvedCars = APPROVED_CARS"));
+assert.ok(html.includes("(APPROVED_CARS[x.vehicle_id] || {}).name || x.name"));
+assert.ok(html.includes("(APPROVED_CARS[p.vehicle_id] || {}).name || p.name"));
+assert.ok(!html.includes('外观做好之后就能在赛车游戏里开上赛道。'));
 assert.ok(html.includes('thumbById[p.vehicle_id] || !p.placeholder'),'whitelisted models must override stale placeholder flag');
 console.log('PASS outdated server placeholder cannot hide validated car artwork');
 assert.ok(html.includes('if (art.thumb && (thumbById[p.vehicle_id] || !p.placeholder))'));
