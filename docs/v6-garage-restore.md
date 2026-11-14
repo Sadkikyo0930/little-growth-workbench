@@ -1,6 +1,6 @@
 # V6 「我的车库」恢复 + 语文听音挑战修复（隔离分支，未合并）
 
-分支：`feat/v6-garage-restore-20261114` ｜ 基线：`main@ea097458` ｜ 日期：2026-11-14 ｜ 状态：**未合并、未部署**
+分支：`feat/v6-garage-restore-20261114` ｜ 基线：`main@ea097458`（本分支 `9b60534`）｜ 日期：2026-11-14 ｜ 状态：**未合并、未部署**
 
 本分支只做两件事，都不新造系统：
 
@@ -43,7 +43,7 @@
 ## 3. 恢复了什么
 
 ```
-v6/assemble-center.html          我的车库 / 赛车组装中心（25 160 B）
+v6/assemble-center.html          我的车库 / 赛车组装中心（25 190 B，原件 25 160 B，差一行文案）
 v6/fragment-reward.html          学习奖励结算页（掉落动画、保底、去组装）
 v6/r5/config.mjs                 接口地址与家庭 ID
 v6/r5/fragment-client.mjs        浏览器端 SDK（三条接口，零本地余额）
@@ -53,6 +53,7 @@ v6/index.html                    入口接线（只改点击处理）
 v6/chinese-classroom.js          听音挑战泄露修复
 v6/chinese-day2-day3-preview.html 同型状态栏文案（见 §5）
 tools/patch-*.mjs                三处改动的可复现脚本（带计数与后置校验）
+tools/edits.mjs                  三处改动的 old/new 文本，脚本与校验共用一份
 ```
 
 ### 页面能力（全部来自既有实现，未重写）
@@ -137,3 +138,19 @@ tools/patch-*.mjs                三处改动的可复现脚本（带计数与�
 2. 定稿碎片掉落比例（现为 `60%`，`drop_percent_status=pending-parent-confirmation`）；
 3. 真机走一遍：iPhone Safari / 外婆手机 / iPad；
 4. 若要「V6 首页直接可用」，补一条按成员身份读碎片的接口（见 `docs/v6-garage-next.md`）。
+
+---
+
+## 9. 本分支的提交
+
+| 提交 | 内容 |
+|---|---|
+| `9b60534` | base：只含本改动触及的四个路径，blob 与 `main@ea097458` 一致（`v6/index.html`、`v6/chinese-classroom.js`、`v6/chinese-day2-day3-preview.html`、`v6/assets`） |
+| `16d8eac` | 恢复组装中心 / 奖励页 / 碎片客户端 + 两张缩略图 + 入口接线 + 听音修复 + `tools/` + `docs/`（16 个文件，含删除 1 字节占位文件 `v6/assets`） |
+| `d3e2d6b` | `tools/edits.mjs`：三个补丁脚本与校验脚本共用同一份 old/new 文本，改一处不会再各写一套 |
+
+外部交接物：`delivery/branch/0001-*.patch`、`0002-*.patch`（`git am` 已实测干净套用，树与分支一致）、
+`v6-garage-restore.bundle`（`git bundle verify` = okay，含完整历史）。
+
+> GitHub 写权限：本轮 `create_branch` 仍返回 `403 Resource not accessible by integration`，
+> 所以分支停在本机，PR 未创建。
