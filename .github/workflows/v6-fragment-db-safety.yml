@@ -33,11 +33,16 @@ jobs:
           set -o pipefail
           node tests/garage-device-fallback.test.mjs | tee garage-device.log
           grep -q "ALL 12 GARAGE CROSS-DEVICE THUMBNAIL CHECKS PASSED" garage-device.log
+      - name: Verify opt-in family auto-restore and duplicate upload suppression
+        run: |
+          set -o pipefail
+          node tests/family-auto-restore-integration.test.mjs | tee family-auto-restore.log
+          grep -q "ALL 3 FAMILY AUTO-RESTORE INTEGRATION CHECKS PASSED" family-auto-restore.log
       - name: Test cross-device additive progress recovery
         run: |
           set -o pipefail
           node tests/family-progress-merge.test.mjs | tee family-progress.log
-          grep -q "ALL 12 FAMILY PROGRESS RESTORE CHECKS PASSED" family-progress.log
+          grep -q "ALL 15 FAMILY PROGRESS RESTORE CHECKS PASSED" family-progress.log
       - name: Rehearse production read-only preflight against synthetic schema drift
         run: |
           set -o pipefail
@@ -88,6 +93,7 @@ jobs:
             approval-boundary.log
             preflight-validation.log
             family-progress.log
+            family-auto-restore.log
             garage-device.log
             v6-smoke.log
             authz.log
