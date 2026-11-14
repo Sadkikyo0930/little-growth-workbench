@@ -35,6 +35,11 @@ jobs:
           ref: main
           path: v2-source
           persist-credentials: false
+      - name: Exercise V2 cloud-to-device restore of both fragment cars
+        run: |
+          set -o pipefail
+          node tests/v6-v2-owned-restore.test.mjs | tee v2-owned-restore.log
+          grep -q "ALL 8 V2 FRAGMENT RESTORE TESTS PASSED" v2-owned-restore.log
       - name: Verify V6 assembly unlock IDs match deployed V2 car models
         run: |
           set -o pipefail
@@ -132,6 +137,7 @@ jobs:
             reward-event.log
             garage-thumbnail-priority.log
             v2-contract.log
+            v2-owned-restore.log
             v6-smoke.log
             authz.log
             atomicity.log
