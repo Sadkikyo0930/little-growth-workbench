@@ -20,5 +20,8 @@ check('rejects invalid or missing completed_at',()=>a.equal(planMerge(local,[row
 check('rejects spoofed record provenance',()=>a.equal(planMerge(local,[row('x',1,'语文',{record_data:{source:'external',day:1,completed_at:today}})],family).additions.length,0));
 check('does not change original object',()=>a.equal(local.v6Course.subjects[2],undefined));
 check('does not create new learning days',()=>a.deepEqual(Object.keys(merged.state.v6Course.completedDays),['1']));
+check('records source of imported course to prevent duplicate reward uploads',()=>a.equal(merged.state.v6Course.remoteRestored[1]['语文'],'remote01'));
+check('does not mark an existing local completion as imported',()=>a.equal(merged.state.v6Course.remoteRestored[1]['数学'],undefined));
+check('rejects cloud rows without stable IDs',()=>a.equal(planMerge(local,[row('',1,'语文')],family).additions.length,0));
 check('rejects missing local records array',()=>a.throws(()=>planMerge({},remote,family),/格式异常/));
 console.log(`ALL ${tests} FAMILY PROGRESS RESTORE CHECKS PASSED`);
