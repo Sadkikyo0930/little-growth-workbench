@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Rehearse production read-only preflight against synthetic schema drift
+        run: |
+          set -o pipefail
+          node db/isolated/run-preflight-validation.mjs | tee preflight-validation.log
+          grep -q "ALL 4 PREFLIGHT SCHEMA VALIDATION CHECKS PASSED" preflight-validation.log
       - name: Verify approved drop rate does not activate production rewards
         run: |
           set -o pipefail
@@ -71,6 +76,7 @@ jobs:
             authority.log
             reward-ui.log
             approval-boundary.log
+            preflight-validation.log
             v6-smoke.log
             authz.log
             atomicity.log
