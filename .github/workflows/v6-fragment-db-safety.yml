@@ -1,0 +1,55 @@
+name: V6 Fragment DB Safety (isolated)
+on:
+  push:
+    branches:
+      - feat/v6-garage-restore-20261114
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'db/**'
+      - '.github/workflows/v6-fragment-db-safety.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    if: github.head_ref == 'feat/v6-garage-restore-20261114' || github.ref == 'refs/heads/feat/v6-garage-restore-20261114'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: db/isolated/package-lock.json
+      - name: Install pinned PGlite; no CloudBase credentials
+        run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Assert reward gate and negative cases
+        run: |
+          set -o pipefail
+          node db/isolated/run-authority.mjs | tee authority.log
+          grep -q "K7 " authority.log
+          grep -q "VERDICT PASS" authority.log
+      - name: Verify existing DB authorization cases
+        run: node db/isolated/run.mjs | tee authz.log
+      - name: Verify SQL transaction rollback and COMMIT
+        run: |
+          set -o pipefail
+          node db/isolated/run-migration-atomicity.mjs | tee atomicity.log
+          grep -q "ALL 4 ISOLATED TRANSACTION REHEARSALS PASSED" atomicity.log
+      - name: Preserve execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fragment-db-safety-logs
+          retention-days: 7
+          path: |
+            authority.log
+            authz.log
+            atomicity.log
+            evidence/transaction-rehearsal/atomicity-results.json
+          if-no-files-found: ignore
