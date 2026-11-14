@@ -130,6 +130,11 @@ async function restoreMissing(){
   if(!plan.additions.length){restoreStatus("已与当前读取到的云端课程完成标记对齐","synced");return}
   // Never write on session changes, revocation of opt-in, or concurrent learning.
   if(localStorage.getItem(RESTORE_OPT_IN)!=="yes")return;
+  var verifiedAgain=await auth.getSession();
+  var activeUser=verifiedAgain&&verifiedAgain.data&&verifiedAgain.data.session&&verifiedAgain.data.session.user;
+  if(!activeUser||String(activeUser.id)!==String(user.id)){
+   restoreStatus("家庭登录会话已变化，本次未恢复","auth_required");return
+  }
   if(localStorage.getItem(KEY)!==original){restoreStatus("本机数据刚变化，下次检查再补全","retry");return}
   var merged=mod.applyMerge(local,plan);
   var backupKey="v6-family-restore-backup-"+new Date().toISOString();
