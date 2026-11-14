@@ -23,6 +23,8 @@ a{color:#1264ad}#data{display:none}
 <div id="status" role="status">正在加载 CloudBase 连接组件……</div></section>
 <section class="card" id="data"><h2 id="greeting">家庭学习记录</h2>
 <div class="summary"><div class="metric"><b id="total">0</b><small>云端记录</small></div><div class="metric"><b id="days">0</b><small>学习日期</small></div><div class="metric"><b id="subjects">0</b><small>涉及学科</small></div></div>
+<h3>各设备共用的云端课程进度</h3><p class="muted">以下统计来自家庭账号能读取的云端记录，不是当前手机独有的本机成绩。未上传的本地进度不计入。</p>
+<div id="cloudProgress" aria-live="polite"></div>
 <div id="records"></div>
 <section class="card" style="border:1px solid #b8dcf5" id="restorePanel" hidden>
 <h3>同步到这台设备（安全补全）</h3>
@@ -56,6 +58,26 @@ function render(rows,member){
  rows.sort((a,b)=>String(b.learning_day||b.created_at||"").localeCompare(String(a.learning_day||a.created_at||"")));
  var days=new Set(rows.map(r=>r.learning_day).filter(Boolean)),subjects=new Set(rows.map(r=>r.subject).filter(Boolean));
  $("total").textContent=rows.length;$("days").textContent=days.size;$("subjects").textContent=subjects.size;
+ var progress=$("cloudProgress");progress.replaceChildren();
+ var daily=new Map();
+ rows.forEach(function(r){
+  var d=Number(r.learning_day);
+  if(!Number.isInteger(d)||d<1||d>30)return;
+  var sub=String(r.subject||"");
+  if(!["语文","数学","英语","科学"].includes(sub))return;
+  var entry=daily.get(d)||{day:d,answers:0,done:new Set()};
+  if(r.record_type==="answer")entry.answers++;
+  if(r.record_type==="course-complete")entry.done.add(sub);
+  daily.set(d,entry);
+ });
+ Array.from(daily.values()).sort(function(a,b){return a.day-b.day}).forEach(function(item){
+  var line=document.createElement("div");line.className="item";
+  var strong=document.createElement("strong");strong.textContent="第 "+item.day+" 天";
+  var detail=document.createElement("div");detail.className="muted";
+  detail.textContent="云端已完成："+(item.done.size?Array.from(item.done).join("、"):"暂无")+" · 已同步答题 "+item.answers+" 条";
+  line.append(strong,detail);progress.appendChild(line);
+ });
+ if(!daily.size)progress.textContent="云端尚无可用于展示的课程日进度；本机记录不会被清除。";
  var list=$("records");list.replaceChildren();
  if(!rows.length){var empty=document.createElement("div");empty.className="empty";empty.textContent="还没有上传到云端的学习记录。现有 V6 本地学习成绩不会因此消失。";list.appendChild(empty);return}
  rows.slice(0,100).forEach(function(r){
