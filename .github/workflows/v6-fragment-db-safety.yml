@@ -28,6 +28,18 @@ jobs:
           cache-dependency-path: db/isolated/package-lock.json
       - name: Install pinned PGlite; no CloudBase credentials
         run: npm ci --prefix db/isolated --no-audit --no-fund
+      - name: Inspect V2 production runtime and GLB assets read-only
+        uses: actions/checkout@v4
+        with:
+          repository: Sadkikyo0930/little-racing-v2
+          ref: main
+          path: v2-source
+          persist-credentials: false
+      - name: Verify V6 assembly unlock IDs match deployed V2 car models
+        run: |
+          set -o pipefail
+          node tests/v6-v2-fragment-contract.test.mjs | tee v2-contract.log
+          grep -q "ALL 12 V2 FRAGMENT VEHICLE CONTRACT CHECKS PASSED" v2-contract.log
       - name: Verify native SQL and gateway fragment response contracts
         run: |
           set -o pipefail
@@ -101,6 +113,7 @@ jobs:
             family-auto-restore.log
             garage-device.log
             fragment-rpc.log
+            v2-contract.log
             v6-smoke.log
             authz.log
             atomicity.log
