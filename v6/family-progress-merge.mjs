@@ -29,7 +29,7 @@ export function planMerge(localState, remoteRows, familyId) {
     let payload=row.record_data;
     if(typeof payload==='string'){try{payload=JSON.parse(payload)}catch{payload=null}}
     const at=plain(payload) && payload.completed_at;
-    if(!d || !SUBJECTS.has(subject) || !VALID_TIME(at) ||
+    if(!row.record_id || String(row.record_id).length>160 || !d || !SUBJECTS.has(subject) || !VALID_TIME(at) ||
       !plain(payload) || payload.source!=='v6' || Number(payload.day)!==d){
       skipped.push(row.record_id);continue;
     }
@@ -49,13 +49,17 @@ export function applyMerge(localState, plan) {
   if(!plain(next.v6Course))next.v6Course={};
   if(!plain(next.v6Course.subjects))next.v6Course.subjects={};
   if(!plain(next.v6Course.completedDays))next.v6Course.completedDays={};
+  if(!plain(next.v6Course.remoteRestored))next.v6Course.remoteRestored={};
   let count=0;
   for(const item of plan.additions){
     const d=DAY(item.day);
     if(!d||!SUBJECTS.has(item.subject)||!VALID_TIME(item.completed_at))continue;
     if(!plain(next.v6Course.subjects[d]))next.v6Course.subjects[d]={};
     if(!next.v6Course.subjects[d][item.subject]){
-      next.v6Course.subjects[d][item.subject]=item.completed_at;count++;
+      next.v6Course.subjects[d][item.subject]=item.completed_at;
+      if(!plain(next.v6Course.remoteRestored[d]))next.v6Course.remoteRestored[d]={};
+      next.v6Course.remoteRestored[d][item.subject]=String(item.record_id);
+      count++;
     }
   }
   // Do not import answer rows or completedDays. Those require authoritative
