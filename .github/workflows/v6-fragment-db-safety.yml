@@ -41,6 +41,11 @@ jobs:
           set -o pipefail
           node db/isolated/run-migration-atomicity.mjs | tee atomicity.log
           grep -q "ALL 4 ISOLATED TRANSACTION REHEARSALS PASSED" atomicity.log
+      - name: Verify committed synthetic reverse migration
+        run: |
+          set -o pipefail
+          node db/isolated/run-postcommit-reversal.mjs | tee reversal.log
+          grep -q "SUCCESS: 2/2 isolated" reversal.log
       - name: Preserve execution evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -51,5 +56,6 @@ jobs:
             authority.log
             authz.log
             atomicity.log
+            reversal.log
             evidence/transaction-rehearsal/atomicity-results.json
           if-no-files-found: ignore
