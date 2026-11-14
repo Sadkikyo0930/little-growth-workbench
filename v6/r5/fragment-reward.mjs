@@ -135,7 +135,7 @@ export async function showFragmentReward(opts = {}) {
 
   let result;
   try {
-    result = await claimFragment(recordId);
+    result = await (opts.claimImpl || claimFragment)(recordId);
   } catch (e) {
     const code = (e && e.code) || (e instanceof FragmentError ? e.code : 'SERVER');
     overlay.querySelector('.card').innerHTML = `${STAR}
@@ -165,7 +165,7 @@ export async function showFragmentReward(opts = {}) {
 
   let state = null;
   try {
-    state = deviceToken() ? await loadState().catch(async e => {
+    state = opts.loadStateImpl ? await opts.loadStateImpl() : deviceToken() ? await loadState().catch(async e => {
       if(e && e.code === 'DEVICE') return memberState();
       throw e;
     }) : await memberState();
