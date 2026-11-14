@@ -431,6 +431,7 @@ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_recipe public.r5_vehicle_recipe;
+  v_game_vehicle_id text;
   v_cost   jsonb;
   v_owned  jsonb;
   v_rev    bigint;
@@ -477,6 +478,12 @@ BEGIN
     RETURN jsonb_build_object('status', 'VEHICLE_DISABLED', 'zero_write', true);
   END IF;
 
+  -- One canonical V6 recipe maps to one V2 drivable vehicle (no extra debit).
+  v_game_vehicle_id := CASE p_vehicle_id
+    WHEN 'frag_car_common_01' THEN 'frag_common'
+    WHEN 'frag_car_rare_01' THEN 'frag_rare'
+    ELSE p_vehicle_id
+  END;
   -- 成本只认表里的，客户端传什么都不看
   v_cost := v_recipe.cost;
   IF v_cost IS NULL OR jsonb_typeof(v_cost) <> 'object' OR v_cost = '{}'::jsonb THEN
@@ -490,7 +497,7 @@ BEGIN
     RETURN jsonb_build_object('status', 'SAVE_NOT_INITIALIZED', 'zero_write', true);
   END IF;
 
-  IF v_owned ? p_vehicle_id THEN
+  IF v_owned ? p_vehicle_id OR v_owned ? v_game_vehicle_id THEN
     RETURN public.r5_fragment_snapshot_internal(p_family)
       || jsonb_build_object('status', 'ALREADY_OWNED', 'vehicle_id', p_vehicle_id, 'zero_write', true);
   END IF;
@@ -537,14 +544,19 @@ BEGIN
   ON CONFLICT (family_id, event_id) DO NOTHING;
 
   UPDATE public.r5_racing_saves s
-     SET owned = COALESCE(s.owned, '{}'::jsonb) || jsonb_build_object(p_vehicle_id,
-           jsonb_build_object('at', (extract(epoch from now())*1000)::bigint,
-                              'source', 'fragment-assembly', 'note', '碎片组装')),
+     SET owned = COALESCE(s.owned, '{}'::jsonb)
+              || jsonb_build_object(p_vehicle_id,
+                 jsonb_build_object('at', (extract(epoch from now())*1000)::bigint,
+                                    'source', 'fragment-assembly', 'note', '碎片组装'))
+              || jsonb_build_object(v_game_vehicle_id,
+                 jsonb_build_object('at', (extract(epoch from now())*1000)::bigint,
+                                    'source', 'fragment-assembly', 'note', '碎片组装')),
          revision = s.revision + 1, updated_at = now(), updated_by_device = COALESCE(p_device, '')
    WHERE s.family_id = p_family;
 
   RETURN public.r5_fragment_snapshot_internal(p_family) || jsonb_build_object(
-    'status', 'ASSEMBLED', 'vehicle_id', p_vehicle_id, 'cost', v_cost, 'zero_write', false);
+    'status', 'ASSEMBLED', 'vehicle_id', p_vehicle_id, 'game_vehicle_id', v_game_vehicle_id,
+    'cost', v_cost, 'zero_write', false);
 END;
 $function$;
 

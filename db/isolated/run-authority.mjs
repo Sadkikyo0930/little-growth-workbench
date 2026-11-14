@@ -501,6 +501,44 @@ console.log('\n=== L 稀有碎片端到端契约（仅合成库测试，正式�
   await db.close();
 }
 
+
+/* ============================================================ M: V6→V2 cross-game vehicle bridge */
+console.log('\n=== M V6 组装同步到 V2 可驾驶车辆 ID ===');
+{
+  const db=await newStack();
+  await seedFragments(db,OTHER,12,'frag_common');
+  await seedFragments(db,OTHER,8,'frag_scholar');
+  await asServer(db);
+  const b=await one(db,`SELECT coins_balance::int coins,revision::int rev FROM public.r5_racing_saves WHERE family_id='${OTHER}'`);
+  const c=await rpc(db,`SELECT public.r5_fragment_assemble('${OTHER}','${DEV_OTHER}','frag_car_common_01','{}'::jsonb) AS r`);
+  ok('M1','普通车真实兑换 12 片，映射 V2 雷霆车辆',
+    c.status==='ASSEMBLED'&&c.game_vehicle_id==='frag_common'&&Number(c.fragments?.frag_common||0)===0,c);
+  const d=await rpc(db,`SELECT public.r5_fragment_assemble('${OTHER}','${DEV_OTHER}','frag_car_common_01','{}'::jsonb) AS r`);
+  ok('M2','雷霆重复组装不二次扣片',d.status==='ALREADY_OWNED'&&d.zero_write===true,d);
+  const rare=await rpc(db,`SELECT public.r5_fragment_assemble('${OTHER}','${DEV_OTHER}','frag_car_rare_01','{}'::jsonb) AS r`);
+  ok('M3','稀有车真实兑换 8 片，映射 V2 秋名车辆',
+    rare.status==='ASSEMBLED'&&rare.game_vehicle_id==='frag_rare'&&Number(rare.fragments?.frag_scholar||0)===0,rare);
+  const s=await one(db,`SELECT owned,coins_balance::int coins,revision::int rev FROM public.r5_racing_saves WHERE family_id='${OTHER}'`);
+  ok('M4','存档中两组 V6 配方 ID 和 V2 车辆 ID 同时存在',
+    ['frag_car_common_01','frag_common','frag_car_rare_01','frag_rare'].every(x=>!!s.owned?.[x]),s.owned);
+  ok('M5','兑换不消耗金币，只增加两次 revision',s.coins===b.coins&&s.rev===b.rev+2,s);
+  const events=await one(db,`SELECT count(*)::int n FROM public.r5_racing_events WHERE family_id='${OTHER}' AND kind='grant' AND event_id LIKE 'asm:%'`);
+  ok('M6','两车只记两条 grant，无重复领奖',Number(events.n)===2,events);
+  const birthday=await rpc(db,`SELECT public.r5_fragment_assemble('${OTHER}','${DEV_OTHER}','birthday-star-6','{}'::jsonb) AS r`);
+  ok('M7','生日车被隔离，不走碎片兑换',birthday.status==='BIRTHDAY_VEHICLE_FORBIDDEN'&&birthday.zero_write===true,birthday);
+  await db.close();
+}
+{
+  const db=await newStack();
+  await seedFragments(db,OTHER,12,'frag_common');
+  await asServer(db);
+  await db.exec(`UPDATE public.r5_racing_saves SET owned='{"frag_common":{"source":"legacy"}}'::jsonb WHERE family_id='${OTHER}'`);
+  const already=await rpc(db,`SELECT public.r5_fragment_assemble('${OTHER}','${DEV_OTHER}','frag_car_common_01','{}'::jsonb) AS r`);
+  ok('M8','曾解锁 V2 雷霆的家庭不能再花碎片兑换同一辆车',
+    already.status==='ALREADY_OWNED'&&already.zero_write===true,already);
+  await db.close();
+}
+
 /* ================================================================ 汇总 */
 console.log('\n' + '='.repeat(60));
 console.log(`TOTAL  ${passed}/${passed + failed} passed, ${failed} failed`);
