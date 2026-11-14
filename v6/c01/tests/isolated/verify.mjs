@@ -20,7 +20,9 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 
 const SRC = process.env.ISO_SRC || 'C:/Users/Administrator/WorkBuddy/2026-11-13-16-11-22/r5-v6-c01/delivery';
-const OUT = path.resolve('C:/Users/Administrator/WorkBuddy/2026-11-13-16-11-22/r5-v6-c01/delivery/evidence');
+/* Evidence lands next to whichever layout was tested (delivery bundle or repo
+ * checkout), unless ISO_OUT says otherwise. */
+const OUT = process.env.ISO_OUT || path.join(SRC, 'evidence');
 const PORT = Number(process.env.ISO_PORT || 55433);
 
 const read = (p) => fs.readFileSync(path.join(SRC, p), 'utf8');
