@@ -662,7 +662,7 @@ $('englishBack').onclick=()=>{$('englishLessonFrame').src='about:blank';if(engli
  if(current&&status.allowed===true){alert('上次同步时已达标。'+instruction);return;}
  if(current&&status.state==='ok'&&status.allowed===false){alert('上次同步时还未解锁。'+instruction+' 可查看最新解锁状态。');return;}
  alert('V6 暂时无法确认赛车解锁状态。'+instruction+' 可查看学习通行证。');
-};$('goGarage').onclick=()=>{const q=new URLSearchParams(location.search);const p=new URLSearchParams();const d=q.get('d'),fam=q.get('family');if(d)p.set('d',d);if(fam)p.set('family',fam);try{const dev=localStorage.getItem('r5_device');if(!p.get('d')&&dev&&/^r5dev_[0-9a-f]{32}$/.test(dev))p.set('d',dev)}catch(e){}const s=p.toString();location.href='./assemble-center.html'+(s?'?'+s:'')};$('goAssessment').onclick=openScheduledAssessment;$('rewardBtn').onclick=()=>alert(count()>=2?'🎉 已解锁演示通行证！正式赛车游戏尚未接入。':'先完成两科探索哦！');$('exportAssessment').onclick=()=>{
+};$('goGarage').onclick=()=>{const p=new URLSearchParams();const d=new URLSearchParams(location.search).get('d');if(d)p.set('d',d);try{const dev=localStorage.getItem('r5_device');if(!p.get('d')&&dev&&/^r5dev_[0-9a-f]{32}$/.test(dev))p.set('d',dev)}catch(e){}const s=p.toString();location.href='./assemble-center.html'+(s?'?'+s:'')};$('goAssessment').onclick=openScheduledAssessment;$('rewardBtn').onclick=()=>alert(count()>=2?'🎉 已解锁演示通行证！正式赛车游戏尚未接入。':'先完成两科探索哦！');$('exportAssessment').onclick=()=>{
  const payload={exportedAt:new Date().toISOString(),version:'V6',records:state.records,finished:state.finished,sessions:state.sessions,started:state.started,dailyChinese:state.dailyChinese||{}};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');

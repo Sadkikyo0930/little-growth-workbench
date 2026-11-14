@@ -153,6 +153,14 @@
   .footnote{
     margin:18px 3px 0;font-size:11.5px;line-height:1.7;font-weight:800;color:#12518f;opacity:.78;
   }
+  .mode{margin:6px 0 0;font-size:12px;font-weight:800;color:#2b7fff}
+  .auth{margin:14px 0 4px;padding:16px 16px 14px;border-radius:16px;background:#fff;
+    border:2px dashed #bcd6f5;box-shadow:0 6px 18px rgba(28,80,140,.06)}
+  .auth h3{margin:0 0 6px;font-size:16px;color:#123}
+  .auth p{margin:0 0 10px;font-size:13px;line-height:1.6;color:#456}
+  .auth .authrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .auth .authhint{margin:10px 0 0;font-size:12px;color:#7b8ea3}
+  .auth a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
   .debug{
     margin-top:12px;background:#0b2440;color:#bfe0ff;border-radius:14px;padding:11px 13px;
     font:11px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;
@@ -224,6 +232,7 @@
     <div class="ttl">
       <h1>🏎️ 赛车组装中心</h1>
       <p class="sub">用学习碎片，把新赛车拼出来</p>
+      <p class="mode" id="modeBadge">正在确认身份…</p>
     </div>
   </header>
 
@@ -253,6 +262,16 @@
     <span class="ic">ⓘ</span>
     <span id="noticeText">正在读取云端数据…</span>
   </div>
+
+  <section class="auth" id="authCard" hidden>
+    <h3 id="authTitle">还没有登录家长账号</h3>
+    <p id="authText">「我的车库」读的是这个家庭在云端的真实碎片。</p>
+    <div class="authrow">
+      <a class="btn" id="authLogin" href="./family-sync.html">去登录家长账号</a>
+      <button class="btn ghost" id="authRetry" type="button">我登录好了，重新读取</button>
+    </div>
+    <p class="authhint" id="authHint"></p>
+  </section>
 
   <div class="sect"><h2>待组装赛车</h2><em id="pendingCount"></em></div>
   <div id="pending"></div>
@@ -295,7 +314,9 @@
 <div class="confetti" id="confetti"></div>
 
 <script type="module">
-import { loadState, assembleVehicle, buildProgress, assembledList, messageOf, FragmentError } from './r5/fragment-client.mjs';
+import { loadState, assembleVehicle, deviceToken, buildProgress, assembledList, messageOf, FragmentError } from './r5/fragment-client.mjs';
+import { memberState, memberAssemble } from './r5/member-fragments.mjs';
+import { loginUrl } from './r5/identity.mjs';
 import { isDebug } from './r5/config.mjs';
 
 const $ = id => document.getElementById(id);
@@ -304,6 +325,9 @@ const DEBUG = isDebug();
 let state = null;
 let progress = [];
 let pendingVehicle = null;
+/* device  = 赛车游戏发的设备凭证（老路，仍然支持）
+ * member  = 家长登录身份（新路，V6 首页直接进来就是这条） */
+let mode = deviceToken() ? 'device' : 'member';
 
 function toast(msg, ms = 2600) {
   const t = $('toast');
@@ -433,15 +457,59 @@ function render() {
   }
 }
 
+/** 未登录 / 不是家庭成员 / SDK 加载失败 —— 给正确的授权入口，绝不显示别人的数据 */
+function showAuthCard(code) {
+  const copy = {
+    NO_SESSION: {
+      title: '还没有登录家长账号',
+      text: '「我的车库」显示的是这个家庭在云端的真实碎片。请用家里的家长账号登录一次（和「家庭同步」用的是同一个账号），这台设备会记住，不用再配任何设备令牌。',
+      hint: '登录页：家庭成员登录 → 输入 growth_mom / growth_dad / growth_grandma 账号',
+    },
+    NO_MEMBER: {
+      title: '这个账号还不是家庭成员',
+      text: '当前登录的账号在 growth_family_members 里找不到，或者角色不是家长。换一个家里的账号，或请主账号把成员加进来。',
+      hint: '不会显示任何碎片数据，也不会显示其他家庭的数据。',
+    },
+    NO_SDK: {
+      title: '这台设备没能加载云端组件',
+      text: '多半是网络被拦截了。连上 WiFi 后刷新页面，或者换一个网络再试。',
+      hint: '',
+    },
+  }[code] || { title: '还没连上家庭', text: '请稍后再试。', hint: '' };
+
+  $('authCard').hidden = false;
+  $('authTitle').textContent = copy.title;
+  $('authText').textContent = copy.text;
+  $('authHint').textContent = copy.hint;
+  $('authLogin').href = loginUrl(location.pathname.split('/').pop() || 'assemble-center.html');
+  $('modeBadge').textContent = code === 'NO_MEMBER' ? '账号无家庭成员资格' : '未登录家长账号';
+  $('noticeText').innerHTML = `<b>${copy.title}</b><br>没有读取任何碎片数据。`;
+  $('pending').innerHTML = `<div class="empty">登录后这里会显示待组装的赛车</div>`;
+  $('done').innerHTML = `<div class="empty">—</div>`;
+  $('wCommon').textContent = '—';
+  $('wRare').textContent = '—';
+  $('pendingCount').textContent = '';
+  $('doneCount').textContent = '';
+}
+
 async function refresh() {
   try {
-    state = await loadState();
+    mode = deviceToken() ? 'device' : 'member';
+    state = mode === 'member' ? await memberState() : await loadState();
     progress = buildProgress(state);
+    $('authCard').hidden = true;
     render();
+    $('modeBadge').textContent = mode === 'member'
+      ? `家长身份 · 家庭 ${state.family_id || ''} · 只读同步`
+      : '赛车设备凭证';
     $('wrap').classList.remove('loading');
   } catch (e) {
-    const code = e instanceof FragmentError ? e.code : 'SERVER';
+    const code = (e && e.code) || (e instanceof FragmentError ? e.code : 'SERVER');
     $('wrap').classList.remove('loading');
+    if (code === 'NO_SESSION' || code === 'NO_MEMBER' || code === 'NO_SDK') {
+      showAuthCard(code);
+      return;
+    }
     if (code === 'DEVICE') {
       $('noticeText').innerHTML =
         '<b>还没有连接家庭</b><br>请从赛车游戏车库点「去组装」进来，或使用家长发给你的那条带设备凭证的链接。';
@@ -480,7 +548,7 @@ async function doAssemble() {
   $('sheetOk').disabled = true;
   $('sheetOk').textContent = '组装中…';
   try {
-    const r = await assembleVehicle(vid);
+    const r = mode === 'member' ? await memberAssemble(vid) : await assembleVehicle(vid);
     const st = String((r && r.status) || '');
     if (st === 'ASSEMBLED') {
       closeSheet();
@@ -504,7 +572,13 @@ async function doAssemble() {
     }
   } catch (e) {
     // 网络失败绝不显示成功
-    toast(messageOf(e instanceof FragmentError ? e.code : 'SERVER'), 3400);
+    const code = (e && e.code) || (e instanceof FragmentError ? e.code : 'SERVER');
+    if (code === 'NO_SESSION' || code === 'NO_MEMBER' || code === 'NO_SDK') {
+      closeSheet();
+      showAuthCard(code);
+    } else {
+      toast(messageOf(code), 3400);
+    }
   } finally {
     $('sheetOk').disabled = false;
     $('sheetOk').textContent = '确定组装';
@@ -536,20 +610,22 @@ function burst() {
   }
 }
 
+$('authRetry').addEventListener('click', () => {
+  $('authCard').hidden = true;
+  $('modeBadge').textContent = '正在确认身份…';
+  $('wrap').classList.add('loading');
+  refresh();
+});
 $('sheetCancel').addEventListener('click', closeSheet);
 $('sheetOk').addEventListener('click', doAssemble);
 $('winClose').addEventListener('click', () => $('win').classList.remove('show'));
 $('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 
-// 把 ?d= 继续传给首页，保证返回后仍然是同一台设备
+// 只把 ?d= 继续传给首页（同一台赛车设备）；家庭永远由服务端成员表决定，
+// 所以这里**不再**透传 ?family=，页面也没有任何「换一个家庭」的入口。
 try {
   const d = new URLSearchParams(location.search).get('d');
-  const fam = new URLSearchParams(location.search).get('family');
-  const qs = new URLSearchParams();
-  if (d) qs.set('d', d);
-  if (fam) qs.set('family', fam);
-  const s = qs.toString();
-  if (s) $('backLink').href = './index.html?' + s;
+  if (d) $('backLink').href = './index.html?d=' + encodeURIComponent(d);
 } catch { /* 忽略 */ }
 
 $('wrap').classList.add('loading');
