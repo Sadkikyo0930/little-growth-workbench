@@ -7,20 +7,38 @@
 // R5 status read, NOT from this browser's completedDays. No learning records,
 // course completion flags, or quiz scores are changed here.
 const CLOUD_BRIDGE_STATUS = 'v6-r5-bridge-status';
+const VERIFIED_COURSE_DAY = 'v6-r5-confirmed-course-day';
+const FAMILY_ID = 'little-growth-family-001';
 const VALID_DAY_STATES = new Set([
   'stale_device_day', 'device_ahead', 'ok', 'partial',
   'unverified', 'no_local_records'
 ]);
+const validCourseDay = v => Number.isInteger(v) && v >= 1 && v <= 30;
 const todayShanghai = () => new Date(Date.now() + 8 * 3600000).toISOString().slice(0,10);
 function confirmedCloudDay() {
   try {
+    // This checkpoint is written ONLY after an authenticated r5_status returns
+    // a published plan. Unlike the transient bridge status, it survives a
+    // reload, an in-flight "running" state, expired login and failed RPC.
+    // It never edits completedDays, records, grades or server plans.
+    const cached = JSON.parse(localStorage.getItem(VERIFIED_COURSE_DAY) || 'null');
+    if (cached && cached.family_id === FAMILY_ID
+        && cached.source === 'authenticated_r5_status'
+        && validCourseDay(cached.day)
+        && Number.isFinite(Date.parse(cached.confirmed_at))) return cached.day;
+
+    // Upgrade a same-day legacy status only if its state itself is backed by
+    // cloud verification. Never trust a stale cloud_day field copied by
+    // Object.assign into error/running statuses.
     const v = JSON.parse(localStorage.getItem(CLOUD_BRIDGE_STATUS) || 'null');
-    if (!v || !VALID_DAY_STATES.has(v.state)) return null;
-    // Do not trust yesterday's cached plan, or an in-progress/error state that
-    // retained an old cloud_day through Object.assign in the bridge.
-    if (new Date(new Date(v.at).getTime()+8*3600000).toISOString().slice(0,10) !== todayShanghai()) return null;
+    if (!v || !VALID_DAY_STATES.has(v.state)
+        || !Number.isFinite(Date.parse(v.at))
+        || new Date(new Date(v.at).getTime()+8*3600000).toISOString().slice(0,10) !== todayShanghai()) return null;
     const day = Number(v.cloud_day);
-    if (!Number.isInteger(day) || day < 1 || day > 30) return null;
+    if (!validCourseDay(day)) return null;
+    if (v.state === 'stale_device_day'
+        && v.read_only_cloud_verified !== true
+        && !['STALE_DEVICE_DAY','DAY_MISMATCH'].includes(v.cloud_verified_reason)) return null;
     return day;
   } catch (_) { return null; }
 }
@@ -46,6 +64,9 @@ if (localCourseDay) {
   window.addEventListener('online', refreshDayView);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshDayView(); });
   // The R5 bridge refreshes asynchronously, typically 3s after page opening.
+  // Apply the last server-confirmed day on every fresh launch, without
+  // waiting for the asynchronous bridge to complete.
+  refreshDayView();
   setInterval(refreshDayView, 2000);
 }
 
