@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261115-rdb-identity-v1';
+const VERSION='20261115-pinyin-answer-safe-v1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
