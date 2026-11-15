@@ -52,8 +52,14 @@ function loadSdk(i){return new Promise(function(resolve,reject){
 async function connect(){
  if(app)return;
  await loadSdk(0);
- app=window.cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});auth=app.auth;db=app.rdb();
- if(!auth||typeof auth.getSession!=="function"||!db)throw Error("CloudBase SDK 接口不可用")
+ app=window.cloudbase.init({env:"normal-goose-d5g4qyzr8bb389a4a",region:"ap-shanghai"});auth=app.auth;
+ if(!auth||typeof auth.getSession!=="function")throw Error("CloudBase SDK 接口不可用");
+ // app.rdb() 把请求代理给本环境不存在的云函数 httpOverCallFunction，
+ // 而且那条链路不带家长身份，网关会按匿名角色执行并报
+ // "permission denied for table growth_family_members"。
+ // 这里改用显式带家长 JWT 的客户端，授权仍由服务端 RLS 判定。
+ var rdb=await import("./r5/rdb-client.mjs");db=rdb.makeRdb(auth);
+ if(!db||typeof db.from!=="function")throw Error("RDB 客户端初始化失败")
 }
 async function run(){
  if(running||localStorage.getItem(ENABLED)!=="yes"||!navigator.onLine)return;
@@ -99,6 +105,15 @@ async function run(){
   import("./r5/weekly-goal.mjs").then(function(m){return m.resumeWeeklyGoal()}).catch(function(){});
   saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",{state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()});
  }catch(e){
+  // 身份类失败必须和「网络失败」分开：它既不代表孩子没达标，也不代表本机数据坏了，
+  // 更不允许因此清空或重写本机档案。
+  var code=String(e&&(e.code||e.message)||"");
+  if(/NO_SESSION/.test(code)){
+   saveStatus("家长登录已失效，请在「家长登录云端」重新登录；本机成绩已保留",{state:"auth_required",pending:rows.length});return
+  }
+  if(/PERMISSION_DENIED/.test(code)){
+   saveStatus("云端没有识别到家长身份，这次读取被当作匿名访问拒绝；请重新登录家长账号。本机成绩已保留",{state:"auth_required",pending:rows.length,error:"PERMISSION_DENIED_NO_IDENTITY"});return
+  }
   // Never discard local records; next online/foreground trigger will retry.
   saveStatus("上传失败，本机成绩已保留："+error(e),{state:"error",pending:rows.length});
  }finally{running=false}
@@ -106,8 +121,14 @@ async function run(){
 async function restoreMissing(){
  // Family members who are already authenticated can safely pull *verified*
 // course completion marks; no local records are replaced or erased.
-if(restoreRunning||!navigator.onLine)return;
+ if(restoreRunning||!navigator.onLine)return;
  if(Date.now()-lastRestoreAttempt<60000)return;
+ // 自动补全会写本机学习档案，必须先拿到家长的显式同意
+ // （family-dashboard.html 的「开启本机课程自动补全」会写入这个键）。
+ // 没有同意时一个字都不改，只报告状态。
+ if(localStorage.getItem(RESTORE_OPT_IN)!=="yes"){
+  restoreStatus("本机未开启自动补全，学习档案未做任何改动","off");return
+ }
  restoreRunning=true;lastRestoreAttempt=Date.now();
  try{
   var original=localStorage.getItem(KEY);
@@ -160,7 +181,12 @@ if(restoreRunning||!navigator.onLine)return;
    }
   }catch(_){/* Persisted backup remains valid even if UI redraw fails. */}
   restoreStatus("已补全 "+merged.added+" 个缺失的课程完成标记，并保留原始备份","synced",merged.added);
- }catch(e){restoreStatus("补全失败，本机原始记录保留："+error(e),"error")}
+ }catch(e){
+  var rcode=String(e&&(e.code||e.message)||"");
+  if(/NO_SESSION/.test(rcode)){restoreStatus("家长登录已失效，本次未改动本机档案","auth_required");return}
+  if(/PERMISSION_DENIED/.test(rcode)){restoreStatus("云端没有识别到家长身份，本次未改动本机档案","forbidden");return}
+  restoreStatus("补全失败，本机原始记录保留："+error(e),"error")
+ }
  finally{restoreRunning=false}
 }
 function schedule(){
