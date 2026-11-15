@@ -1,0 +1,19 @@
+name: V6 Chinese expanded retry evidence
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preserve-scores:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test real 3-to-10 Chinese retry and history isolation
+        run: |
+          node --check v6/r5-bridge.js
+          node tools/test-v6-chinese-expanded-retry.cjs
