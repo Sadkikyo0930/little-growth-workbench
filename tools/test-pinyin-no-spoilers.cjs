@@ -15,6 +15,7 @@ for(const day of days){
  if(day===12)ck(html.includes('class="blendPart">?</div><span>＋</span><div class="blendPart">?</div>'),'no final answer in initial prompt');
  if(day===17){
   ck(!html.includes('$("hint").textContent="「寻」的韵母'),'no hard-coded answer hint');
+  ck(html.includes('body:has(#dialog.open) .wordParts'),'day 30 background card answers hidden during dialog');
   const dom=new JSDOM(html,{url:'https://isolated.test/v6/chinese-day17-preview.html',runScripts:'outside-only'});
   const w=dom.window;w.speechSynthesis={cancel(){},getVoices(){return []},speak(){}};
   w.SpeechSynthesisUtterance=function(t){this.text=t};
