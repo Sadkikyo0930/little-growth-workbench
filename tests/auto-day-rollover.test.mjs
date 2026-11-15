@@ -45,9 +45,27 @@ try {
   RETURN uid;
  END; $$;
  CREATE FUNCTION public.r5_day_passed(p_family_id text,p_date date)
- RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
+ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $
  SELECT COALESCE((SELECT passed FROM public.evidence_days
- WHERE family_id=p_family_id AND study_date=p_date),false) $$;
+ WHERE family_id=p_family_id AND study_date=p_date),false) $;
+ CREATE FUNCTION public.r5_day_evidence(p_family_id text,p_day integer)
+ RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER AS $evidence$
+ DECLARE v_date date; v_sub jsonb; v_pass boolean;
+ BEGIN
+ SELECT study_date,subjects INTO v_date,v_sub FROM public.r5_daily_plan
+ WHERE family_id=p_family_id AND day_index=p_day
+ ORDER BY study_date DESC LIMIT 1;
+ v_pass:=v_date IS NOT NULL AND public.r5_day_passed(p_family_id,v_date);
+ RETURN jsonb_build_object('plan_date',v_date,'subjects',v_sub,
+ 'passed',v_pass,'day',p_day);
+ END $evidence$;
+ CREATE FUNCTION public.r5_next_day_state_impl(text) RETURNS jsonb
+ LANGUAGE sql AS $impl$ SELECT '{}'::jsonb $impl$;
+ CREATE FUNCTION public.r5_guard_record_write() RETURNS trigger
+ LANGUAGE plpgsql AS $guard$ BEGIN RETURN NEW; END $guard$;
+ CREATE TRIGGER r5_record_write_guard BEFORE INSERT ON public.growth_learning_records
+ FOR EACH ROW EXECUTE FUNCTION public.r5_guard_record_write();
+
   CREATE FUNCTION public.r5_guard_plan_day() RETURNS trigger
  LANGUAGE plpgsql AS $$
  DECLARE x integer;
@@ -134,7 +152,8 @@ try {
  check('child answer records preserved',Number((await query("SELECT count(*) AS n FROM public.growth_learning_records"))[0].n)===1);
  check('racing save and quota preserved',(await query("SELECT save_data FROM public.r5_racing_saves WHERE family_id='family'"))[0].save_data==='preserved'
   &&(await query("SELECT daily_seconds FROM public.r5_parent_settings WHERE family_id='family'"))[0].daily_seconds===1800);
- check('server uses canonical C0.1 day-evidence function',sql.includes('public.r5_day_passed(p_family_id,latest_plan)')&&!sql.includes('public.r5_day_evidence('));
+ check('server uses canonical C0.1 r3 evidence function',sql.includes('evidence := public.r5_day_evidence(p_family_id,current_day)'));
+ check('migration demands active r3 record-write guard',sql.includes('R5_AUTO_DAY_RECORD_WRITE_GUARD_REQUIRED'));
  check('client calls auto RPC before status',bridge.indexOf("rpc('r5_auto_rollover_day'")<bridge.indexOf('var st = await cloudStatus(who);',bridge.indexOf('async function runOnce()')));
  check('client rejects absent backends instead of guessing',bridge.includes("state: 'auto_day_backend_not_ready'"));
  console.log('PASS '+n+'/'+n+' cross-day auto rollover checks');
