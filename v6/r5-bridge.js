@@ -527,11 +527,25 @@
         quizzes.push({ name: name, score: q.score, total: q.total });
       });
 
-      if (!quizzes.length && pack.cnPageQuiz) {
+      /* Older three-question poetry lessons were recorded as cnPageQuiz 3/3.
+       * The expanded ten-question lesson is a NEW evidence set. Do not silently
+       * replace the original cloud answer IDs or add fake correct answers.
+       * A distinct track makes the actually completed ten-question attempt
+       * uploadable alongside existing historical three-question records.
+       * Where a lesson already reports a genuine ten-question quiz, prefer
+       * that evidence instead of double-counting the DOM observer. */
+      if (pack.cnPageQuiz) {
         var c = pack.cnPageQuiz;
         if (Number.isInteger(c.score) && Number.isInteger(c.total) && c.total > 0
             && c.score >= 0 && c.score <= c.total && ymdOf(c.at) === todayStr) {
-          quizzes.push({ name: 'cnPageQuiz', score: c.score, total: c.total });
+          if (c.total >= 10) {
+            if (!quizzes.some(function(q) { return q.total >= c.total; })) {
+              quizzes = [{ name: 'cnPageQuiz-expanded-' + c.total,
+                score: c.score, total: c.total }];
+            }
+          } else if (!quizzes.length) {
+            quizzes.push({ name: 'cnPageQuiz', score: c.score, total: c.total });
+          }
         }
       }
 
@@ -1285,8 +1299,17 @@
     if (!current || typeof current !== 'object') return;
     if (!current.dailyChinese || typeof current.dailyChinese !== 'object') current.dailyChinese = {};
     var pack = current.dailyChinese[day] || {};
-    if (pack.cnPageQuiz) return;                       // 只留第一次
-    pack.cnPageQuiz = { score: score, total: total, at: new Date().toISOString(), source: 'dom-capture' };
+    var previous = pack.cnPageQuiz;
+    if (previous && Number.isInteger(previous.total) && previous.total >= total) return;
+    // The child has completed a longer, revised question set. Preserve the
+    // original 3-question attempt as history and independently store the
+    // genuine full-length result. Never fabricate ten results from 3/3.
+    if (previous) {
+      if (!Array.isArray(pack.cnPageQuizHistory)) pack.cnPageQuizHistory = [];
+      pack.cnPageQuizHistory.push(previous);
+    }
+    pack.cnPageQuiz = { score: score, total: total, at: new Date().toISOString(),
+      source: total >= 10 ? 'dom-capture-expanded' : 'dom-capture' };
     current.dailyChinese[day] = pack;
     if (typeof save === 'function') { try { save(); } catch (x) { /* ignore */ } }
     try { localStorage.setItem(CFG.stateKey, JSON.stringify(current)); } catch (x) { /* ignore */ }
