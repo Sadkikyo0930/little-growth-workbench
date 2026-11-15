@@ -41,6 +41,7 @@
 <p class="sub" id="tip"></p>
 <p><a href="./" target="_self">返回 V6 首页</a> · <span id="windowType"></span></p>
 <div class="card"><h2>云端实时学习日（只读）</h2><pre id="liveCloud">正在查询云端计划…</pre></div>
+<div class="card"><h2>第四日两科云端达标核验（只读）</h2><pre id="cloudVerdict">正在读取云端科目成绩…</pre><p class="sub">服务器达标与赛车时间额度独立判断。未取得云端成绩时不将本机正确率当作最终达标。</p></div>
 <details class="card"><summary>技术排查：查看原始错误和接口字段</summary><pre id="rawTechnical">暂无原始数据</pre></details>
 <script>const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];</script>
 <script src="./r5-bridge.js?v=20261115-auto-next-day-c01-7" data-parent-check></script>
@@ -171,8 +172,28 @@
         '今天计划已发布：' + (liveCloudValue.schedule_published?'是':'否'),
         '云端状态：' + chineseValue(liveCloudValue.reason || '正常')
       ].join('\n');
+      const verdict = document.getElementById('cloudVerdict');
+      const mods = Array.isArray(liveCloudValue.modules) ? liveCloudValue.modules : [];
+      const day = Number(liveCloudValue.today_day);
+      const expected = V6_SUBJECT_DAYS[day - 1] || [];
+      const output = expected.map(function (subject) {
+        const m = mods.find(function (entry) { return entry.subject === subject; });
+        if (!m) return subject + '：尚未收到云端科目成绩（待核实）';
+        const outcome = m.passed === true ? '云端判定通过'
+          : m.passed === false ? '云端判定未通过' : '尚无云端达标结论';
+        return subject+'：'+outcome+'；课程完成：'+(m.completed?'是':'否')
+          +'；正确/题数：'+(m.correct == null?'未知':m.correct)+'/'+(m.total == null?'未知':m.total)
+          +'；正确率：'+(m.accuracy_pct == null?'未知':m.accuracy_pct+'%')
+          +(m.evidence?'；成绩证据：'+m.evidence:'')
+          +(m.credential_status?'；凭据状态：'+m.credential_status:'');
+      });
+      output.push('学习日总判定：'+(liveCloudValue.study_passed===true?'云端通过':liveCloudValue.study_passed===false?'云端未通过':'尚未取得'));
+      output.push('赛车资格：'+(liveCloudValue.racing_allowed===true?'当前可用':liveCloudValue.racing_allowed===false?'当前不可用':'尚未取得')+'（单独判断）');
+      if(liveCloudValue.reason==='TIME_LIMIT_REACHED') output.push('时间额度已达上限，不代表课程未通过。');
+      verdict.textContent = output.join('\n');
     } catch (e) {
       liveCloudValue = {error:e.code || e.message || String(e)};
+      document.getElementById('cloudVerdict').textContent = '云端科目成绩查询失败：'+liveCloudValue.error+'。现有答题记录仍保留，请勿重复答题。';
       el.textContent = '云端实时查询失败：'+(STATUS_LABELS[liveCloudValue.error]||'需要检查登录状态及接口权限')+
         '\n注意：这一结果不能证明云端尚未进入第四日。';
     }
@@ -213,7 +234,7 @@
     }).join('\n\n');
     document.getElementById('cloud').textContent = c ? pretty(c) : '还没有同步过';
     var tip = document.getElementById('tip');
-    if(c && c.state==='ok') tip.innerHTML = '同步正常：'+(c.allowed?'<span class="ok">赛车已解锁</span>':'<span class="bad">尚未达标</span>');
+    if(c && c.state==='ok') tip.textContent = '上传同步正常；赛车资格：'+(c.allowed?'当前可用':'当前不可用或时间额度用尽')+'。两科成绩请以云端达标核验为准。';
     else if(c && c.state==='auto_day_backend_not_ready') tip.textContent =
       '跨日同步遇到接口异常。请先查看「云端实时学习日」，不要清除本机记录或手动推进。';
     else if(c && c.state==='error') tip.textContent = '同步失败：'+(c.message||explainError(c));
