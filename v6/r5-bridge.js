@@ -1,35 +1,18 @@
 /* ============================================================================
  * v6/r5-bridge.js — V6 学习平台 → 腾讯云 R5 赛车闸门 的桥接器（C0.1 候选）
  *
- * 本版是「权威学习日」修复的候选实现（分支 c01/authoritative-day-candidate，
- * 未合并 main、未部署）。相对线上 2026-11-09.multidevice-4：
+ * C0.1.6 自动跨日候选（当前仅在隔离 PR 开发）：
+ *   1. 不修改已有学习记录和按日归属；云端 authoritative_day 为唯一权威。
+ *   2. 学习日 D 的两科达标后，仍停在 D；跨到上海时间下一自然日，
+ *      首个已授权设备联网触发 r5_auto_rollover_day。
+ *   3. 云端在家庭行锁事务中用真实 r5_day_passed 证据决定只推进 D+1
+ *      一次，并同步发布当天两科计划；未达标则延续 D。
+ *   4. 老设备、本机超前、云端回退、学科表不一致时仍保留原上传守卫。
+ *   5. 若数据库尚未部署完整 C0.1 030 + 040，不猜日、不发布、
+ *      不上传或伪造任何成绩；旧 r5_advance_day 客户端路径仍禁用。
  *
- *   1. 学习日不再由本机决定。云端返回 study_day（今天已发布计划的课次）与
- *      authoritative_day（下一次允许发布的课次）时，一律以云端为准。
- *   2. 本机落后（STALE_DEVICE_DAY）：不上传、不发布、不推进，只在状态里说明，
- *      等本机课程表更新。绝不把本机旧课次的成绩写到云端新学习日。
- *   3. 本机超前（DEVICE_AHEAD）：不上传、不自动发布，避免用「还没验证的
- *      进度」推进权威学习日。
- *   3b. 唯一的放宽：本机恰好超前 1 天，且云端当天计划**已由家长发布**时，
- *      允许把「当天」（云端课次）的记录传上去——本机超前一天的真实含义是
- *      「今天两科已经学完、点了进入下一学习日」，当天成绩必须能落库。上传
- *      仍按每一项自己的 day 过滤，day>云端的一律不收；不发布、不推进。本机
- *      超前 1 天以上、或计划尚未发布，仍然一律拒绝。
- *   4. 上传时 learning_day 恒等于 item 自己的学习日（collectAnswers 过滤），
- *      绝不改写；day1 的英语不会因为云端到了 day3 就变成 day3 英语。
- *   5. 成绩待同步（COMPLETED_UNSCORED / PENDING_SCORE_SYNC）与历史归属待核实
- *      （PENDING_VERIFICATION）原样上报，不补题、不猜、不伪造完成。
- *   6. 云端今天是 D、上传后云端变成 D-1（回退）时立即停机并报
- *      CLOUD_DAY_REGRESSION，不再继续写。
- *   7. 两科都通过后只解锁赛车，**不**自动推进学习日。权威日的推进只发生在
- *      家长发布下一学习日的计划时（云端 r5_publish_today → maybe_advance，
- *      确认上一天达标后恰好 +1）。因此本构建的 RPC 面与线上版本完全相同。
- *
- * 兼容性（老接口签名一个都没改）：
- *   r5_status{p_family_id} / r5_publish_today{p_family_id,p_day_index,p_no_tasks}
- *   / r5_claim_answers{p_family_id,p_items} / growth_learning_records REST
- *   老云端不返回 authoritative_day 时，退回 study_day；仍然没有就按旧逻辑
- *   用本机 day 发布一次——但一旦云端给出课次，就以云端为准。
+ * 兼容性：保留 r5_status / r5_publish_today / r5_claim_answers 原参数签名；
+ * 仅新增 r5_auto_rollover_day{p_family_id}（需已授权家庭成员）。
  *
  * 判定仍然完全在云端：本文件不做阈值判断、不写历史成绩、不补题、不改课。
  * ==========================================================================*/
@@ -37,7 +20,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-14.authoritative-day-c01.3';
+  var BRIDGE_BUILD = '2026-11-15.auto-next-day-c01.6';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -341,17 +324,13 @@
     }, who);
   }
 
-  /* C0.1.5 刻意不提供「自动推进学习日」的客户端调用。
-   *
-   * 业务规则：第三学习日两科达标只解锁赛车，不自动进入第四学习日。旧候选版本
-   * 在这里调用 r5_advance_day，双科一达标就把云端权威学习日推到 4，导致同一台
-   * 设备上「云端已到第 4 天、本机还是第 3 天」，之后任何补传都会被
-   * stale_device_day 挡下，第二天家长没点「进入下一学习日」之前也发不了计划。
-   *
-   * 推进权威日的正确时机是「家长发布下一学习日的计划」：r5_publish_today 内部
-   * 会调用 r5_progress_maybe_advance，确认上一天（day_index = 权威日）真的达标
-   * 后恰好 +1。这既是家长动作触发的，也不会在当天提前跳日。
-   * r5_advance_day 仍然保留在云端供人工纠正，但本构建不调用它。 */
+  /* C0.1.6 次日自动结算：
+   * 由已经过授权的家庭成员触发 r5_auto_rollover_day。
+   * 云端根据上海日期、上一日真实题目/完成标记判断是否达标，
+   * 同一家庭事务锁防止多设备重复 +1，并原子发布新计划。
+   * 同一日双科刚达标时不能提前跳日；本机不能通过
+   * r5_advance_day 或 local completedDays 推进。
+   * 仅在完整 C0.1 030+040 数据库迁移完成后启用此桥接版本。 */
 
   /* 云端还没为这个家庭确定权威学习日（C0.1 起不再按历史计划自动猜）。
    * 这是「必须家长确认」的状态，不是网络错误：一次都不上传，也不落任何成绩。 */
@@ -871,10 +850,41 @@
     var rows;
     try {
       var who = await identity();
-      var localDay = courseDay();
       var todayStr = today();
+
+      // On the first authorized check after Shanghai midnight, ask the server
+      // to atomically verify yesterday's two-subject result, advance at most
+      // once, and publish the new plan. Never use the local completedDays to
+      // choose the next day, and never guess success on old servers.
+      var rollover = null;
+      try {
+        rollover = await rpc('r5_auto_rollover_day',
+          { p_family_id: CFG.familyId }, who);
+      } catch (rolloverError) {
+        return saveStatus({
+          state: 'auto_day_backend_not_ready',
+          message: '云端跨日服务尚未完成安全迁移；学习记录保留在本机，暂不发布或改写学习日。',
+          cloud_verified: false,
+          cloud_verified_reason: 'AUTO_DAY_BACKEND_NOT_READY',
+          error: String(rolloverError && (rolloverError.code || rolloverError.message) || 'UNKNOWN'),
+          build: BRIDGE_BUILD
+        });
+      }
+      if (!rollover || rollover.published !== true
+          || rollover.result === 'day_not_initialized'
+          || rollover.result === 'plan_progress_mismatch') {
+        return saveStatus({
+          state: 'auto_day_requires_review',
+          message: '云端学习日尚不能安全自动结算，请在家庭管理页核实，未改变任何本地学习成绩。',
+          cloud_verified: false,
+          cloud_verified_reason: 'AUTO_DAY_NOT_READY',
+          rollover: rollover && rollover.result || null,
+          build: BRIDGE_BUILD
+        });
+      }
       var st = await cloudStatus(who);
       var ds = readDayState(st);
+      var localDay = courseDay();
       /* 本机恰好超前一天（当天两科已学完并点了「进入下一学习日」）时，
        * 仍然要把「当天」的真实记录传上去，否则孩子做完的数学英语永远进不了
        * 云端。只放宽上传：不发布、不推进、不改写 learning_day。 */
