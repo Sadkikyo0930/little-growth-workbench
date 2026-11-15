@@ -13,12 +13,23 @@ BEGIN
     OR to_regclass('public.r5_daily_plan') IS NULL
     OR to_regclass('public.r5_subject_template') IS NULL
     OR to_regprocedure('public.r5_day_passed(text,date)') IS NULL
+    OR to_regprocedure('public.r5_day_evidence(text,integer)') IS NULL
+    OR to_regprocedure('public.r5_next_day_state_impl(text)') IS NULL
+    OR to_regprocedure('public.r5_guard_record_write()') IS NULL
     OR to_regprocedure('public.r5_guard_plan_day()') IS NULL
     OR to_regprocedure('public.r5_assert_member(text,boolean)') IS NULL THEN
     RAISE EXCEPTION 'R5_AUTO_DAY_C01_R3_REQUIRED' USING ERRCODE='P0001';
   END IF;
   -- The original 020 used an automatic progress function; real 030 must have
   -- disabled that path or it could advance twice with a stale client.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+     WHERE tgrelid='public.growth_learning_records'::regclass
+       AND NOT tgisinternal
+       AND tgfoid='public.r5_guard_record_write()'::regprocedure
+  ) THEN
+    RAISE EXCEPTION 'R5_AUTO_DAY_RECORD_WRITE_GUARD_REQUIRED' USING ERRCODE='P0001';
+  END IF;
   IF to_regprocedure('public.r5_progress_maybe_advance(text)') IS NULL
      OR position('disabled_requires_parent' IN
            pg_get_functiondef('public.r5_progress_maybe_advance(text)'::regprocedure))=0 THEN
@@ -37,7 +48,7 @@ AS $function$
 DECLARE
   today_date date := timezone('Asia/Shanghai', clock_timestamp())::date;
   actor_uid text; prog record; plan record; evidence jsonb;
-  latest_plan date; latest_day integer; passed boolean; result_state text;
+  latest_plan date; passed boolean; result_state text;
   current_day integer; from_day integer; to_day integer; desired jsonb;
 BEGIN
   -- A grandparent is a valid family member; authorization never depends on
@@ -77,21 +88,17 @@ BEGIN
   -- Check only real records of the current authoritative learning day.
   -- A yesterday plan is required, and it must pass the server's existing
   -- day evidence test. Never infer correctness from browser-only progress.
-  -- Use the REAL C0.1 server-side two-subject evidence function, never a
-  -- fixture-only r5_day_evidence or browser completedDays.
-  SELECT study_date, day_index INTO latest_plan, latest_day
-    FROM public.r5_daily_plan
-   WHERE family_id=p_family_id AND study_date<today_date
-   ORDER BY study_date DESC
-   LIMIT 1;
-  passed := latest_plan IS NOT NULL
-    AND latest_day=current_day
-    AND public.r5_day_passed(p_family_id,latest_plan);
+  -- 030 supplies the canonical evidence wrapper that uses the existing
+  -- r5_day_passed date/subjects/score logic. Reuse it rather than recreating
+  -- its semantics from browser data or guessed plan history.
+  evidence := public.r5_day_evidence(p_family_id,current_day);
+  latest_plan := NULLIF(evidence->>'plan_date','')::date;
+  passed := COALESCE((evidence->>'passed')::boolean,false);
   from_day := current_day;
   to_day := current_day;
   result_state := 'carry_over';
 
-  IF latest_plan IS NOT NULL AND latest_day=current_day AND passed
+  IF latest_plan IS NOT NULL AND latest_plan<today_date AND passed
      AND prog.last_advanced_on IS DISTINCT FROM today_date
      AND current_day < 30 THEN
     to_day := current_day + 1;
@@ -109,12 +116,11 @@ BEGIN
        jsonb_build_object('from',current_day,'to',to_day,
          'source','server_verified_next_calendar_day',
          'evidence_plan_date',latest_plan,
-         'evidence_passed',passed));
+         'evidence_passed',passed,
+         'evidence_subjects',evidence->'subjects'));
     result_state := 'advanced';
   ELSIF current_day >= 30 THEN
     result_state := 'max_day_reached';
-  ELSIF latest_plan IS NOT NULL AND latest_day<>current_day THEN
-    result_state := 'previous_plan_day_mismatch';
   ELSIF latest_plan IS NOT NULL AND NOT passed THEN
     result_state := 'previous_day_incomplete';
   ELSIF latest_plan IS NULL THEN
