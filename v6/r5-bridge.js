@@ -37,7 +37,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-14.authoritative-day-c01.3';
+  var BRIDGE_BUILD = '2026-11-15.auto-next-day-c01.6';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -871,10 +871,41 @@
     var rows;
     try {
       var who = await identity();
-      var localDay = courseDay();
       var todayStr = today();
+
+      // On the first authorized check after Shanghai midnight, ask the server
+      // to atomically verify yesterday's two-subject result, advance at most
+      // once, and publish the new plan. Never use the local completedDays to
+      // choose the next day, and never guess success on old servers.
+      var rollover = null;
+      try {
+        rollover = await rpc('r5_auto_rollover_day',
+          { p_family_id: CFG.familyId }, who);
+      } catch (rolloverError) {
+        return saveStatus({
+          state: 'auto_day_backend_not_ready',
+          message: '云端跨日服务尚未完成安全迁移；学习记录保留在本机，暂不发布或改写学习日。',
+          cloud_verified: false,
+          cloud_verified_reason: 'AUTO_DAY_BACKEND_NOT_READY',
+          error: String(rolloverError && (rolloverError.code || rolloverError.message) || 'UNKNOWN'),
+          build: BRIDGE_BUILD
+        });
+      }
+      if (!rollover || rollover.published !== true
+          || rollover.result === 'day_not_initialized'
+          || rollover.result === 'plan_progress_mismatch') {
+        return saveStatus({
+          state: 'auto_day_requires_review',
+          message: '云端学习日尚不能安全自动结算，请在家庭管理页核实，未改变任何本地学习成绩。',
+          cloud_verified: false,
+          cloud_verified_reason: 'AUTO_DAY_NOT_READY',
+          rollover: rollover && rollover.result || null,
+          build: BRIDGE_BUILD
+        });
+      }
       var st = await cloudStatus(who);
       var ds = readDayState(st);
+      var localDay = courseDay();
       /* 本机恰好超前一天（当天两科已学完并点了「进入下一学习日」）时，
        * 仍然要把「当天」的真实记录传上去，否则孩子做完的数学英语永远进不了
        * 云端。只放宽上传：不发布、不推进、不改写 learning_day。 */
