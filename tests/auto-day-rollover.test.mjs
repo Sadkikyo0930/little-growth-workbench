@@ -44,18 +44,11 @@ try {
   THEN RAISE EXCEPTION 'R5_MEMBER_DENIED' USING ERRCODE='42501'; END IF;
   RETURN uid;
  END; $$;
- CREATE FUNCTION public.r5_day_evidence(p_family_id text,p_day integer)
- RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
- DECLARE d date; passed boolean;
- BEGIN
- SELECT study_date INTO d FROM public.r5_daily_plan
- WHERE family_id=p_family_id AND day_index=p_day ORDER BY study_date DESC LIMIT 1;
- SELECT e.passed INTO passed FROM public.evidence_days e
- WHERE e.family_id=p_family_id AND e.day_index=p_day AND e.study_date=d LIMIT 1;
- RETURN jsonb_build_object('plan_date',d,'passed',coalesce(passed,false),
- 'subjects','["语文","英语"]'::jsonb);
- END; $$;
- CREATE FUNCTION public.r5_guard_plan_day() RETURNS trigger
+ CREATE FUNCTION public.r5_day_passed(p_family_id text,p_date date)
+ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
+ SELECT COALESCE((SELECT passed FROM public.evidence_days
+ WHERE family_id=p_family_id AND study_date=p_date),false) $$;
+  CREATE FUNCTION public.r5_guard_plan_day() RETURNS trigger
  LANGUAGE plpgsql AS $$
  DECLARE x integer;
  BEGIN
@@ -137,7 +130,7 @@ try {
  check('child answer records preserved',Number((await query("SELECT count(*) AS n FROM public.growth_learning_records"))[0].n)===1);
  check('racing save and quota preserved',(await query("SELECT save_data FROM public.r5_racing_saves WHERE family_id='family'"))[0].save_data==='preserved'
   &&(await query("SELECT daily_seconds FROM public.r5_parent_settings WHERE family_id='family'"))[0].daily_seconds===1800);
- check('server never depends on device local day',!sql.includes('completedDays')&&!sql.includes('p_expected_day'));
+ check('server uses canonical C0.1 day-evidence function',sql.includes('public.r5_day_passed(p_family_id,latest_plan)')&&!sql.includes('public.r5_day_evidence('));
  check('client calls auto RPC before status',bridge.indexOf("rpc('r5_auto_rollover_day'")<bridge.indexOf('var st = await cloudStatus(who);',bridge.indexOf('async function runOnce()')));
  check('client rejects absent backends instead of guessing',bridge.includes("state: 'auto_day_backend_not_ready'"));
  console.log('PASS '+n+'/'+n+' cross-day auto rollover checks');
