@@ -9,7 +9,7 @@ ok(s.includes('data-speak-option'),'each answer has audio control');
 ok(s.includes('e.stopPropagation();say(options[Number(b.dataset.speakOption)])'),'option speaker does not submit');
 ok(s.includes('window.V6ChineseDailyQuestions.extend(11,'),'day 11 uses 10-item bank');
 ok(s.includes('poem-audio.js?v=20261115a'),'existing poem assets retained');
-const inline=[...s.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)].map(x=>x[1]).filter(Boolean);
+const inline=[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).filter(Boolean);
 for(const js of inline)new Function(js);
 ok(inline.length===1,'inline lesson JavaScript parses');
 console.log('PASS '+n+'/'+n+' Min Nong static build checks');
