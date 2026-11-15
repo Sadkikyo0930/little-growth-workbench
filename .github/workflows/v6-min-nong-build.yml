@@ -1,0 +1,34 @@
+name: V6 Min Nong isolated build
+on:
+  push:
+    branches: [feat/v6-poem-chain-20261115]
+  workflow_dispatch:
+jobs:
+  min-nong-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Min Nong page and controls
+        run: |
+          node tools/test-min-nong-audio.cjs
+          node --check v6/poem-audio.js
+          node --check v6/poem-speech-check.js
+          node --check v6/chinese-daily-questions.js
+      - name: Stage isolated preview package
+        run: |
+          mkdir -p out/v6
+          cp v6/chinese-day6-preview.html v6/poem-audio.js v6/poem-speech-check.js v6/chinese-daily-questions.js out/v6/
+          cp 'v6/悯农诗意田园课堂.png' out/v6/ || true
+          cp 'v6/拼音复习_山蓝门本林金.png' out/v6/ || true
+          cp 'v6/识字描红_禾田午趣味课堂.png' out/v6/ || true
+          cp 'v6/一粒米的奇妙旅程.png' out/v6/ || true
+          mkdir -p out/v6/audio
+          cp -R v6/audio/poems out/v6/audio/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-min-nong-isolated-preview
+          path: out/
+          if-no-files-found: error
