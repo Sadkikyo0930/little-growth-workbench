@@ -1332,6 +1332,24 @@
         authoritative_day: ds.authoritative_day,
         today_day: ds.today,
         cloud_subjects: (st && st.modules || []).map(function (m) { return m.subject; }),
+        // Read-only, authenticated per-subject server verdict. Do not infer a
+        // learning result from the unrelated remaining racing time/quota.
+        modules: (st && Array.isArray(st.modules) ? st.modules : []).map(function(m) {
+          return {
+            subject: m.subject, completed: m.completed === true,
+            total: Number.isFinite(Number(m.total)) ? Number(m.total) : null,
+            correct: Number.isFinite(Number(m.correct)) ? Number(m.correct) : null,
+            accuracy_pct: Number.isFinite(Number(m.accuracy_pct)) ? Number(m.accuracy_pct) : null,
+            passed: m.passed === true ? true : m.passed === false ? false : null,
+            evidence: m.evidence || null,
+            credential_status: m.credential_status || null,
+            pending_score_sync: m.pending_score_sync === true,
+            pending_reasons: m.pending_reasons || null,
+            graded_day: m.graded_day == null ? null : m.graded_day
+          };
+        }),
+        study_passed: st && typeof st.study_passed === 'boolean' ? st.study_passed : null,
+        racing_allowed: st && typeof st.allowed === 'boolean' ? st.allowed : null,
         schedule_published: !!(st && st.schedule_published),
         pending_score_sync: pendingScoreSyncOf(st),
         pending_verification: pendingVerifyOf(st),
