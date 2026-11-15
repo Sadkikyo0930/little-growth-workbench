@@ -60,10 +60,10 @@ try {
  CREATE TRIGGER r5_guard_plan BEFORE INSERT OR UPDATE ON public.r5_daily_plan
  FOR EACH ROW EXECUTE FUNCTION public.r5_guard_plan_day();
  CREATE FUNCTION public.r5_next_day_state(text) RETURNS jsonb
- LANGUAGE sql AS $ SELECT '{}'::jsonb $;
+ LANGUAGE sql AS $next$ SELECT '{}'::jsonb $next$;
  CREATE FUNCTION public.r5_progress_maybe_advance(text) RETURNS jsonb
- LANGUAGE plpgsql AS $
- BEGIN RETURN jsonb_build_object('result','disabled_requires_parent'); END; $;
+ LANGUAGE plpgsql AS $advance$
+ BEGIN RETURN jsonb_build_object('result','disabled_requires_parent'); END; $advance$;
  
  INSERT INTO public.r5_subject_template VALUES
  (3,'["数学","英语"]'),(4,'["语文","英语"]'),
