@@ -20,7 +20,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-15.auto-next-day-c01.6';
+  var BRIDGE_BUILD = '2026-11-15.auto-next-day-c01.7';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -63,7 +63,7 @@
     try {
       var prev = {};
       try { prev = JSON.parse(localStorage.getItem(CFG.statusKey) || '{}') || {}; } catch (e) { prev = {}; }
-      var next = Object.assign({ at: new Date().toISOString() }, prev, patch || {});
+      var next = Object.assign({}, prev, patch || {}, { at: new Date().toISOString() });
       localStorage.setItem(CFG.statusKey, JSON.stringify(next));
       return next;
     } catch (e) { return null; }
@@ -861,12 +861,40 @@
         rollover = await rpc('r5_auto_rollover_day',
           { p_family_id: CFG.familyId }, who);
       } catch (rolloverError) {
+        // Do not infer that SQL is missing from a failed HTTP request.
+        // Keep uploads blocked, but independently ask for today's plan using
+        // the existing authenticated read-only r5_status RPC.
+        var readOnlyStatus = null, readOnlyError = null, readOnlyDay = null;
+        try {
+          readOnlyStatus = await cloudStatus(who);
+          readOnlyDay = readDayState(readOnlyStatus);
+        } catch (statusError) {
+          readOnlyError = String(statusError && (statusError.code || statusError.message) || 'UNKNOWN');
+        }
+        var verifiedToday = !!(readOnlyDay && readOnlyDay.published
+          && Number.isInteger(readOnlyDay.plan_day)
+          && readOnlyDay.plan_day >= 1 && readOnlyDay.plan_day <= CFG.maxDay
+          && readOnlyDay.authoritative_day === readOnlyDay.plan_day);
+        var localDayAtFailure = courseDay();
+        var serverDayAtFailure = verifiedToday ? readOnlyDay.plan_day : null;
+        var safeDayAlignment = verifiedToday && serverDayAtFailure > localDayAtFailure;
         return saveStatus({
-          state: 'auto_day_backend_not_ready',
-          message: '云端跨日服务尚未完成安全迁移；学习记录保留在本机，暂不发布或改写学习日。',
+          state: safeDayAlignment ? 'stale_device_day' : 'auto_day_backend_not_ready',
+          message: readOnlyError
+            ? '自动跨日及云端只读查询均失败。请在原桌面应用中检查家长登录及云端接口权限，本机学习记录未改动。'
+            : verifiedToday
+              ? '已只读核实云端今日第 ' + serverDayAtFailure + ' 日，但自动跨日接口仍调用失败。暂不上传成绩或改写云端，请核实登录及接口权限。'
+              : '自动跨日接口调用失败，云端今日计划未能核实。本机学习记录保持不变，不自动推进学习日。',
+          local_day: localDayAtFailure,
+          cloud_day: serverDayAtFailure,
+          authoritative_day: verifiedToday ? readOnlyDay.authoritative_day : null,
+          cloud_subjects: verifiedToday ? (readOnlyStatus.modules || []).map(function(m){ return m.subject; }) : null,
+          read_only_cloud_verified: verifiedToday,
           cloud_verified: false,
-          cloud_verified_reason: 'AUTO_DAY_BACKEND_NOT_READY',
+          cloud_verified_reason: 'AUTO_DAY_RPC_FAILED',
           error: String(rolloverError && (rolloverError.code || rolloverError.message) || 'UNKNOWN'),
+          read_only_error: readOnlyError,
+          pending: null, pending_known: false,
           build: BRIDGE_BUILD
         });
       }

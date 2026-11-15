@@ -43,7 +43,7 @@
 <div class="card"><h2>云端实时学习日（只读）</h2><pre id="liveCloud">正在查询云端计划…</pre></div>
 <details class="card"><summary>技术排查：查看原始错误和接口字段</summary><pre id="rawTechnical">暂无原始数据</pre></details>
 <script>const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];</script>
-<script src="./r5-bridge.js?v=20261115-auto-next-day" data-parent-check></script>
+<script src="./r5-bridge.js?v=20261115-auto-next-day-c01-7" data-parent-check></script>
 <script>
   document.getElementById('windowType').textContent =
     (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '当前窗口：桌面全屏应用' : '当前窗口：普通浏览器';
@@ -58,6 +58,7 @@
     stale_device_day:'本机学习日落后于云端，请刷新课程页面',
     device_ahead:'本机学习日超前于云端，已暂停上传',
     auto_day_backend_not_ready:'自动跨日接口调用失败',
+    AUTO_DAY_RPC_FAILED:'跨日接口调用失败（未执行云端更改）',
     auto_day_requires_review:'云端学习日需要核实',
     day_not_initialized:'云端权威学习日尚未初始化',
     plan_unpublished:'今日课程计划尚未发布',
@@ -90,7 +91,7 @@
     build:'桥接程序版本',uploaded:'本次新增数',already:'已存在数',
     skipped_duplicates:'已存在跳过数',synced_total:'云端已保存记录数',
     pending:'待云端确认数',pending_known:'已确定待同步数量',
-    cloud_verified:'云端已复核',cloud_verified_reason:'云端核实状态说明',
+    cloud_verified:'云端已复核',read_only_cloud_verified:'云端今日计划只读核实',read_only_error:'只读查询错误',cloud_verified_reason:'云端核实状态说明',
     cloud_day:'云端计划学习日',local_day:'本机学习日',
     authoritative_day:'云端权威学习日',study_day:'今日计划学习日',
     today_day:'今天云端学习日',plan_day:'计划学习日',

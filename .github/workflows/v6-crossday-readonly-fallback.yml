@@ -1,0 +1,19 @@
+name: V6 read-only day fallback safety
+on:
+  push:
+    branches: [fix/v6-crossday-auth-readonly-fallback-20261115]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node tests/v6-crossday-readonly-fallback.test.mjs
+      - run: node tests/v6-parent-check-chinese.test.mjs
+      - run: node --check v6/r5-bridge.js
