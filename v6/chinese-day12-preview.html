@@ -10,7 +10,7 @@ const questions=[["小宇想把什么送给爷爷？",["一幅画","一个蛋糕
 const vocab={"信":["xìn","写信、信封"],"寄":["jì","寄信、邮寄"],"收":["shōu","收到、收信"]};
 const $=id=>document.getElementById(id);
 let qi=0,score=0,locked=false,answered=[null,null,null],voice=null;
-function say(t){if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(t);utter.lang="zh-CN";utter.rate=.8;window.speechSynthesis.speak(utter)}
+function say(t){if(window.V6PoemAudio?.playKnown(t))return;window.V6PoemAudio?.stop();if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(t);utter.lang="zh-CN";utter.rate=.8;window.speechSynthesis.speak(utter)}
 function modal(h){$("body").innerHTML=h;$("back").classList.add("open")}
 function closeDialog(){if("speechSynthesis" in window)window.speechSynthesis.cancel();$("back").classList.remove("open")}
 $("back").addEventListener("click",e=>{if(e.target===$("back"))closeDialog()});
@@ -76,4 +76,4 @@ function choose(j){
 function nextQuestion(){qi++;showQuestion()}
 function finishQuiz(){const msg="本次阅读闯关完成，答对"+score+"题，共三题。";modal('<h2>🌟 阅读闯关完成</h2><p class="bodyText">'+msg+'</p><button class="big" onclick="closeDialog()">完成</button>');try{sessionStorage.setItem("letterDay12Quiz",JSON.stringify({score,total:3,at:new Date().toISOString()}))}catch(e){}if(new URLSearchParams(location.search).get("embed")==="1"&&window.parent!==window)window.parent.postMessage({type:"v6-letter-quiz-complete",lessonDay:21,score,total:3},location.origin);say(msg)}
 function trace(w){modal('<h2>✍️ '+w+' · 手指描红</h2><p>在田字格里跟着范字描写，完成后点击「完成描红」。</p><div class="traceArea"><span>'+w+'</span><canvas id="pad"></canvas></div><button class="big" onclick="trace(\''+w+'\')">清除重写</button><button class="big" onclick="say(\''+w+'\')">🔊 听读</button><button class="big" onclick="closeDialog()">完成描红</button>');const c=$("pad"),r=c.getBoundingClientRect(),d=devicePixelRatio||1;c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);const ctx=c.getContext("2d");ctx.scale(d,d);ctx.strokeStyle="#ed5147";ctx.lineWidth=8;ctx.lineCap="round";ctx.lineJoin="round";let down=false;c.onpointerdown=e=>{down=true;c.setPointerCapture(e.pointerId);const rr=c.getBoundingClientRect();ctx.beginPath();ctx.moveTo(e.clientX-rr.left,e.clientY-rr.top)};c.onpointermove=e=>{if(!down)return;const rr=c.getBoundingClientRect();ctx.lineTo(e.clientX-rr.left,e.clientY-rr.top);ctx.stroke()};c.onpointerup=()=>down=false;c.onpointercancel=()=>down=false}
-</script></body></html>
+</script><script src="./poem-audio.js?v=20261115a" defer></script></body></html>

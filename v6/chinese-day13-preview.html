@@ -16,7 +16,7 @@ const questions=[
 ];
 const blends={山:{initial:"sh",final:"an",tone:1,full:"shān",word:"高山"},花:{initial:"h",medial:"u",final:"a",tone:1,full:"huā",word:"花朵"},禾:{initial:"h",final:"e",tone:2,full:"hé",word:"禾苗"}};
 let qi=0,answers=[],score=0,word="",step=0;
-function speak(v){if(!("speechSynthesis" in window))return;speechSynthesis.cancel();const a=new SpeechSynthesisUtterance(v);a.lang="zh-CN";a.rate=.78;speechSynthesis.speak(a)}
+function speak(v){if(window.V6PoemAudio?.playKnown(v))return;window.V6PoemAudio?.stop();if(!("speechSynthesis" in window))return;speechSynthesis.cancel();const a=new SpeechSynthesisUtterance(v);a.lang="zh-CN";a.rate=.78;speechSynthesis.speak(a)}
 function show(title,description,controls){$("dialogTitle").textContent=title;$("dialogText").textContent=description;$("dialogControls").replaceChildren(...controls);$("modal").classList.add("open")}
 function close(){speechSynthesis?.cancel();$("modal").classList.remove("open")}
 function button(label,fn,cls="big"){const b=document.createElement("button");b.textContent=label;b.className=cls;b.type="button";b.onclick=fn;return b}
@@ -75,4 +75,4 @@ document.querySelectorAll("[data-connect]").forEach(x=>x.onclick=()=>connect(Num
 document.querySelector("[data-quiz]").onclick=startQuiz;
 document.querySelectorAll("[data-blend]").forEach(x=>x.onclick=()=>openBlend(x.dataset.blend));document.querySelectorAll("[data-trace]").forEach(x=>x.onclick=()=>trace(x.dataset.trace));document.querySelectorAll("[data-say]").forEach(x=>x.onclick=()=>speak(x.dataset.say+"。"+blends[x.dataset.say].word));
 $("close").onclick=close;$("modal").onclick=e=>{if(e.target===$("modal"))close()}
-})();</script><script src="./poem-speech-check.js?v=5" data-day="23" defer></script></body></html>
+})();</script><script src="./poem-audio.js?v=20261115a" defer></script><script src="./poem-speech-check.js?v=20261115a" data-day="23" defer></script></body></html>

@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id);
 const story=LESSON_DATA.story, questions=LESSON_DATA.questions;
 const chars=Object.fromEntries(LESSON_DATA.chars.map(x=>[x.c,x]));
 let qi=0,answers=[],score=0,current="",phase=0,poemStage=0;
-function speak(t){if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="zh-CN";u.rate=.78;window.speechSynthesis.speak(u)}
+function speak(t){if(window.V6PoemAudio?.playKnown(t))return;window.V6PoemAudio?.stop();if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="zh-CN";u.rate=.78;window.speechSynthesis.speak(u)}
 function mk(label,fn,cls="big"){const b=document.createElement("button");b.type="button";b.className=cls;b.textContent=label;b.onclick=fn;return b}
 function modal(title,text,buttons){$("dialogTitle").textContent=title;$("dialogText").textContent=text;$("dialogControls").replaceChildren(...buttons);$("dialogHint").textContent="";$("modal").classList.add("open")}
 function close(){window.speechSynthesis?.cancel();$("modal").classList.remove("open")}
@@ -48,4 +48,4 @@ document.querySelectorAll("[data-trace]").forEach(b=>b.onclick=()=>trace(b.datas
 document.querySelectorAll("[data-hear]").forEach(b=>b.onclick=()=>speak(b.dataset.hear+"。"+chars[b.dataset.hear].word));
 document.querySelector("[data-review]").onclick=reviewPoem;
 $("close").onclick=close;$("modal").onclick=e=>{if(e.target===$("modal"))close()}
-})();</script><script src="./poem-speech-check.js?v=5" data-day="27" defer></script></body></html>
+})();</script><script src="./poem-audio.js?v=20261115a" defer></script><script src="./poem-speech-check.js?v=20261115a" data-day="27" defer></script></body></html>

@@ -10,7 +10,7 @@ const qs=[
 ["故事最想告诉我们什么？",["博物馆晚上一定有恐龙","遇到奇怪的事，要观察并寻找证据","脚印越大，恐龙一定越高"],1]
 ];
 let qi=0,answers=[],score=0,active="",step=0,poemSeen={},traced={},blended={};
-function say(t){if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="zh-CN";u.rate=.8;window.speechSynthesis.speak(u)}
+function say(t){if(window.V6PoemAudio?.playKnown(t))return;window.V6PoemAudio?.stop();if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="zh-CN";u.rate=.8;window.speechSynthesis.speak(u)}
 function btn(label,fn,cls="action"){const e=document.createElement("button");e.type="button";e.className=cls;e.textContent=label;e.onclick=fn;return e}
 function modal(title,description,content){$("dialogTitle").textContent=title;$("dialogText").textContent=description;$("dialogBody").replaceChildren(...content);$("dialog").classList.add("open")}
 function close(){window.speechSynthesis?.cancel();$("dialog").classList.remove("open")}
@@ -38,4 +38,4 @@ document.querySelectorAll("[data-hear]").forEach(b=>b.onclick=()=>{const d=words
 document.querySelectorAll("[data-poem]").forEach(b=>b.onclick=()=>poem(Number(b.dataset.poem)));
 document.getElementById("summaryBtn").onclick=showSummary;
 $("close").onclick=close;$("dialog").onclick=e=>{if(e.target===$("dialog"))close()}
-})();</script><script src="./poem-speech-check.js?v=6" data-day="30" defer></script></body></html>
+})();</script><script src="./poem-audio.js?v=20261115a" defer></script><script src="./poem-speech-check.js?v=6" data-day="30" defer></script></body></html>
