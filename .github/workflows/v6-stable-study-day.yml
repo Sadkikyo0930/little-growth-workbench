@@ -1,0 +1,21 @@
+name: V6 stable family study day
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stable-day:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate V6 course day and PWA scripts
+        run: |
+          node --check v6/r5-bridge.js
+          node --check v6/pwa.js
+          node --check v6/sw.js
+          node tools/test-v6-stable-cloud-day.cjs
