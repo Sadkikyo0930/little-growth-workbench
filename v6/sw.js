@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261115-cloud-day-stable-v1';
+const VERSION='20261115-chinese-direct-result-v1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -69,8 +69,15 @@ self.addEventListener('fetch',event=>{
   event.respondWith(navigation(req));
   return;
  }
+ // Lessons and the question bank must refresh before the next quiz, not
+ // after serving an old cached script or iframe from the previous deployment.
+ // Preserve cached versions only as offline fallbacks.
+ const freshLesson = /\/chinese-day[\w-]*-preview\.html$/.test(url.pathname)
+   || url.pathname.endsWith('/chinese-day2-day3-preview.html')
+   || url.pathname.endsWith('/chinese-daily-questions.js')
+   || url.pathname.endsWith('/chinese-classroom.js');
  // Cloud sync code must not be stuck behind an old cache-first script.
- if(url.pathname.endsWith('/family-auto-sync.js') || url.pathname.endsWith('/r5-bridge.js')){
+ if(freshLesson || url.pathname.endsWith('/family-auto-sync.js') || url.pathname.endsWith('/r5-bridge.js')){
   event.respondWith((async()=>{
    const key=new URL(url.pathname,ROOT.origin);
    try{const fresh=await fetch(req,{cache:'no-store'});if(fresh.ok){await store(RUNTIME,key,fresh);return fresh}}
