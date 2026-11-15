@@ -163,7 +163,8 @@ try {
  check('server uses canonical C0.1 r3 evidence function',sql.includes('evidence := public.r5_day_evidence(p_family_id,current_day)'));
  check('migration demands active r3 record-write guard',sql.includes('R5_AUTO_DAY_RECORD_WRITE_GUARD_REQUIRED'));
  check('client calls auto RPC before status',bridge.indexOf("rpc('r5_auto_rollover_day'")<bridge.indexOf('var st = await cloudStatus(who);',bridge.indexOf('async function runOnce()')));
- check('client rejects absent backends instead of guessing',bridge.includes("state: 'auto_day_backend_not_ready'"));
+ check('client rejects absent backends instead of guessing',bridge.includes("safeDayAlignment ? 'stale_device_day' : 'auto_day_backend_not_ready'")&&bridge.includes("cloud_verified_reason: 'AUTO_DAY_RPC_FAILED'")&&bridge.includes('pending: null, pending_known: false'));
+ check('read-only status requires published authoritative plan',bridge.includes('readOnlyDay.authoritative_day === readOnlyDay.plan_day')&&bridge.includes('readOnlyDay.published'));
  console.log('PASS '+n+'/'+n+' cross-day auto rollover checks');
 } finally {
  await db.close();
