@@ -141,7 +141,11 @@ const FIRST_SUNDAY='2026-11-15',SECOND_SUNDAY='2026-11-22',THIRD_SUNDAY='2026-11
 function dayString(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function sunday(){return new Date().getDay()===0}
 function key(){const d=new Date();d.setDate(d.getDate()-d.getDay());return dayString(d)}
-function officialAllowed(){return sunday()&&key()>=FIRST_SUNDAY}
+// The first official Sunday (2026-11-15) was routed to the legacy baseline
+// screen by a late index.html onclick overwrite. Allow one genuine next-day
+// makeup on 2026-11-16; keep its 11-15 week key and actual completion time.
+function firstSundayMakeup(){return dayString(new Date())==='2026-11-16'&&key()===FIRST_SUNDAY}
+function officialAllowed(){return (sunday()||firstSundayMakeup())&&key()>=FIRST_SUNDAY}
 function store(){return state.weeklyExams||(state.weeklyExams={})}
 function saveExam(){if(!practice){store()[current.week]=current;save()}}
 function build(week){
@@ -157,11 +161,11 @@ function build(week){
  return {week,createdAt:new Date().toISOString(),questions:ordered,answers:{},finishedAt:null};
 }
 function open(){
- if(!sunday()){home();return}
+ if(!officialAllowed()){home();return}
  openScreen('weeklyExam');
  const week=key(),completed=store()[week],canStart=officialAllowed();
  $('weeklyActions').hidden=false;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=true;
- $('weeklyIntro').textContent=canStart?'今天是'+week+'，正式四科合卷，每科6题，共24题。':'正式测评在周日开放。三周试卷都可以提前由家长试做，不计入正式成绩。';
+ $('weeklyIntro').textContent=canStart?(firstSundayMakeup()?'11月15日首周测评补测（由于昨日入口误跳摸底页面）；成绩按真实作答时间保存。':'今天是'+week+'，正式四科合卷，每科6题，共24题。'):'正式测评在周日开放。三周试卷都可以提前由家长试做，不计入正式成绩。';
  $('weeklyStart').hidden=!canStart;
  $('weeklyStart').textContent=completed?(completed.finishedAt?'查看本周成绩':'继续本周测评'):'开始本周测评';
  $('weeklyPreview').textContent='🔎 试做 11月15日（第一周）';
@@ -255,9 +259,22 @@ $('weeklyPreview').insertAdjacentElement('afterend',secondPreview);
 const thirdPreview=document.createElement('button');thirdPreview.id='weeklyPreviewThird';thirdPreview.type='button';thirdPreview.style.cssText=secondPreview.style.cssText;
 secondPreview.insertAdjacentElement('afterend',thirdPreview);
 $('weeklyStart').onclick=()=>enter(false);$('weeklyPreview').onclick=()=>enter(true,FIRST_SUNDAY);secondPreview.onclick=()=>enter(true,SECOND_SUNDAY);thirdPreview.onclick=()=>enter(true,THIRD_SUNDAY);$('weeklyBack').onclick=()=>{if(practice&&current)current=null;openScreen('home')};$('weeklyNext').onclick=()=>render();
-const openAssessmentByDay=()=>{if(sunday())open();else home()};
+const openAssessmentByDay=()=>{if(officialAllowed())open();else home()};
 $('goAssessment').onclick=openAssessmentByDay;
 const nav=document.querySelector('[data-tab="assessment"]');if(nav)nav.onclick=openAssessmentByDay;
+// The official homepage loads an additional INLINE script *after* this file.
+// That script overwrites element.onclick with the old baseline home() route.
+// Capture the real user click before the legacy onclick (including the
+// illustrated home hotzone and bottom nav) and route only on an eligible day.
+document.addEventListener('click',function(event){
+ if(!officialAllowed())return;
+ const target=event.target&&event.target.closest&&event.target.closest(
+  '#goAssessment,[data-tab="assessment"],[data-art-tab="assessment"]');
+ if(!target)return;
+ event.preventDefault();
+ event.stopImmediatePropagation();
+ open();
+},true);
 // 首页直接使用原有图片上的“进入测评”透明热区，不再覆盖额外入口贴片。
 
 })();
