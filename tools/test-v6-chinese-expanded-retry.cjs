@@ -1,0 +1,42 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync(require('node:path').resolve(__dirname,'../v6/r5-bridge.js'),'utf8');
+const begin=source.indexOf('function fromChineseQuiz(');
+const end=source.indexOf('function collectItems(',begin);
+assert.ok(begin>=0&&end>begin,'Chinese quiz collector found');
+const fn=source.slice(begin,end);
+let checks=0;
+function ok(condition,message){assert.ok(condition,message);checks++}
+const todayStr='2026-11-15';
+const context={Number,Object,Array,String,JSON,CFG:{maxDay:30},ymdOf:s=>String(s).slice(0,10)};
+vm.createContext(context);
+vm.runInContext(fn,context);
+function collect(pack){
+ const out=[];
+ const state={dailyChinese:{4:pack}};
+ context.fromChineseQuiz(state,4,todayStr,x=>out.push(x));
+ return out;
+}
+const old={score:3,total:3,at:'2026-11-15T15:30:00.000Z',source:'dom-capture'};
+let rows=collect({cnPageQuiz:old});
+ok(rows.length===3,'old 3/3 preserved as historical three answers');
+ok(rows.every(r=>r.track==='语文闯关·cnPageQuiz'),'legacy IDs stay unchanged');
+const full={score:9,total:10,at:'2026-11-15T15:40:00.000Z',source:'dom-capture-expanded'};
+rows=collect({cnPageQuiz:full,cnPageQuizHistory:[old]});
+ok(rows.length===10,'new actual ten-question attempt yields ten real scored entries');
+ok(rows.filter(r=>r.correct).length===9,'scores are not fabricated');
+ok(rows.every(r=>r.track==='语文闯关·cnPageQuiz-expanded-10'),'new retry uses distinct noncolliding cloud track');
+ok(rows.every(r=>r.day===4),'all records retain original study day 4');
+rows=collect({cnPageQuiz:full,poemQuiz:{score:8,total:10,at:'2026-11-15T15:40:00Z'}});
+ok(rows.length===10,'already reported 10-question quiz is not double counted');
+ok(rows.every(r=>r.track==='语文闯关·poemQuiz'),'verified page quiz is preferred');
+rows=collect({cnPageQuiz:{...full,at:'2026-11-14T10:00:00Z'}});
+ok(rows.length===0,'previous-day attempt is not counted today');
+rows=collect({cnPageQuiz:{...full,score:12}});
+ok(rows.length===0,'invalid score rejected');
+rows=collect({cnPageQuiz:old,cnPageQuizHistory:[full]});
+ok(rows.length===3,'history alone does not invent new credited answers');
+ok(source.includes('previous.total >= total')&&source.includes('pack.cnPageQuizHistory.push(previous)'),'capture accepts longer attempt and archives shorter score');
+ok(source.includes("source: total >= 10 ? 'dom-capture-expanded'"),'capture labels expanded attempts');
+ok(!source.includes('if (pack.cnPageQuiz) return;                       // 只留第一次'),'stale first-attempt-only blockade removed');
+console.log('PASS '+checks+'/'+checks+' Chinese 3-to-10 genuine retry/sync checks');
