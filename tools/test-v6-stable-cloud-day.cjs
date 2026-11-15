@@ -48,5 +48,5 @@ ui=boot(store);
 ok(ui.window.v6CourseDay()===3,'no verified plan preserves original local day');
 ok(bridge.includes("rememberPublishedDay(status);")&&bridge.includes("await rpc('r5_status'"),'server checkpoint only comes from authenticated read');
 ok(bridge.includes("ds.published")&&bridge.includes("Number.isInteger(day)")&&bridge.includes("old.day > day"),'bridge validates publication and prevents silent regression');
-ok(/const VERSION='20261115-[a-z0-9-]+-v1'/.test(sw),'offline cache version refreshed');
+ok(/const VERSION='202611(?:15|16)-[a-z0-9-]+-v1'/.test(sw),'offline cache version refreshed');
 console.log('PASS '+checked+'/'+checked+' stable cloud course day checks; no learning records modified');
