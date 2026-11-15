@@ -83,5 +83,5 @@ monthEnd.w.v6MarkSubject(30,'语文');
 ok(monthEnd.marked===0,'month-end assessment prevents daily completion');
 monthEnd.dom.window.close();
 ok(worker.includes("url.pathname.endsWith('/weekly-exam.js')"),'PWA fetches weekly handler fresh');
-ok(worker.includes('20261116-weekly-locked-v1'),'PWA cache version bumped');
+ok(worker.includes('20261116-weekly-assessment-lock-v1'),'PWA cache version bumped');
 console.log('PASS '+checks+'/'+checks+' Sunday weekly exam deferral and daily classroom lock checks');
