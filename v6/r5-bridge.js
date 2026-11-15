@@ -310,8 +310,33 @@
     return json;
   }
 
-  function cloudStatus(who) {
-    return rpc('r5_status', { p_family_id: CFG.familyId }, who);
+  /* The last authenticated, published course day is a display checkpoint, not
+   * a course-completion record or permission to upload. It must survive bridge
+   * status changes such as "running" and short-lived RPC failures. */
+  function rememberPublishedDay(st) {
+    try {
+      var ds = readDayState(st);
+      var day = ds.plan_day;
+      if (!ds.published || !Number.isInteger(day) || day < 1 || day > CFG.maxDay
+          || (ds.authoritative_day !== null && ds.authoritative_day < day)) return;
+      var key = 'v6-r5-confirmed-course-day';
+      var old = readJson(key);
+      if (old && old.family_id === CFG.familyId
+          && Number.isInteger(old.day) && old.day > day) {
+        // A lower server day requires investigation, not a silent UI regression.
+        return;
+      }
+      localStorage.setItem(key, JSON.stringify({
+        family_id: CFG.familyId, day: day, confirmed_at: new Date().toISOString(),
+        source: 'authenticated_r5_status'
+      }));
+    } catch (e) { /* Never turn an authenticated read into a write failure. */ }
+  }
+
+  async function cloudStatus(who) {
+    var status = await rpc('r5_status', { p_family_id: CFG.familyId }, who);
+    rememberPublishedDay(status);
+    return status;
   }
 
   /* 旧签名：p_family_id / p_day_index / p_no_tasks 三个参数一个都不改。
