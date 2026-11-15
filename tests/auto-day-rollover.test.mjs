@@ -9,7 +9,7 @@ let n=0;
 async function query(q,p){return (await db.query(q,p)).rows}
 function check(name,value){assert(value,name);n++;console.log('PASS '+name)}
 try {
- await db.exec(\`
+ await db.exec(`
  CREATE ROLE authenticated;
  CREATE ROLE anon;
  CREATE TABLE public.growth_family_members(family_id text,user_id text,member_role text);
@@ -100,7 +100,7 @@ try {
  INSERT INTO public.growth_learning_records VALUES ('unchanged-01');
  INSERT INTO public.r5_parent_settings VALUES ('family',1800);
  INSERT INTO public.r5_racing_saves VALUES ('family','preserved');
- \`);
+ `);
  await db.exec(sql);
  async function as(uid,role='authenticated'){
   const claims=JSON.stringify({sub:uid,role}).replaceAll("'","''");
