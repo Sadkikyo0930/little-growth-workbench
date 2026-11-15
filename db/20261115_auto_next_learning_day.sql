@@ -17,6 +17,13 @@ BEGIN
     OR to_regprocedure('public.r5_assert_member(text,boolean)') IS NULL THEN
     RAISE EXCEPTION 'R5_AUTO_DAY_C01_R3_REQUIRED' USING ERRCODE='P0001';
   END IF;
+  -- The original 020 used an automatic progress function; real 030 must have
+  -- disabled that path or it could advance twice with a stale client.
+  IF to_regprocedure('public.r5_progress_maybe_advance(text)') IS NULL
+     OR position('disabled_requires_parent' IN
+           pg_get_functiondef('public.r5_progress_maybe_advance(text)'::regprocedure))=0 THEN
+    RAISE EXCEPTION 'R5_AUTO_DAY_C01_030_REQUIRED' USING ERRCODE='P0001';
+  END IF;
 END;
 $preflight$;
 
@@ -35,7 +42,8 @@ DECLARE
 BEGIN
   -- A grandparent is a valid family member; authorization never depends on
   -- which device reaches the server first. Anonymous/cross-family denied.
-  actor_uid := public.r5_assert_member(p_family_id, false);
+  PERFORM public.r5_assert_member(p_family_id, false);
+  actor_uid := (COALESCE(NULLIF(current_setting('request.jwt.claims', true),''),'{}')::jsonb)->>'sub';
 
   -- Single serializable decision per family: all concurrent devices wait on
   -- the same row lock and then recheck today's result. No +2 after midnight.
