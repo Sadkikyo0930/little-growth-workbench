@@ -141,11 +141,18 @@ const FIRST_SUNDAY='2026-11-15',SECOND_SUNDAY='2026-11-22',THIRD_SUNDAY='2026-11
 function dayString(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function sunday(){return new Date().getDay()===0}
 function key(){const d=new Date();d.setDate(d.getDate()-d.getDay());return dayString(d)}
-// The first official Sunday (2026-11-15) was routed to the legacy baseline
-// screen by a late index.html onclick overwrite. Allow one genuine next-day
-// makeup on 2026-11-16; keep its 11-15 week key and actual completion time.
-function firstSundayMakeup(){return dayString(new Date())==='2026-11-16'&&key()===FIRST_SUNDAY}
-function officialAllowed(){return (sunday()||firstSundayMakeup())&&key()>=FIRST_SUNDAY}
+// 11/15 was missed because the old baseline entry intercepted the weekly exam.
+// The parent elected to defer the *first* official paper to Sunday 11/22.
+// There is no Monday makeup and later weekly papers shift by one Sunday.
+const OFFICIAL_FIRST_DATE='2026-11-22',OFFICIAL_SECOND_DATE='2026-11-29',OFFICIAL_THIRD_DATE='2026-12-06';
+function officialAllowed(){return sunday()&&dayString(new Date())>=OFFICIAL_FIRST_DATE}
+function officialPaperWeek(){
+ const now=dayString(new Date());
+ if(now===OFFICIAL_FIRST_DATE)return FIRST_SUNDAY;
+ if(now===OFFICIAL_SECOND_DATE)return SECOND_SUNDAY;
+ if(now===OFFICIAL_THIRD_DATE)return THIRD_SUNDAY;
+ return key();
+}
 function store(){return state.weeklyExams||(state.weeklyExams={})}
 function saveExam(){if(!practice){store()[current.week]=current;save()}}
 function build(week){
@@ -163,9 +170,9 @@ function build(week){
 function open(){
  if(!officialAllowed()){home();return}
  openScreen('weeklyExam');
- const week=key(),completed=store()[week],canStart=officialAllowed();
+ const week=officialPaperWeek(),completed=store()[week],canStart=officialAllowed();
  $('weeklyActions').hidden=false;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=true;
- $('weeklyIntro').textContent=canStart?(firstSundayMakeup()?'11月15日首周测评补测（由于昨日入口误跳摸底页面）；成绩按真实作答时间保存。':'今天是'+week+'，正式四科合卷，每科6题，共24题。'):'正式测评在周日开放。三周试卷都可以提前由家长试做，不计入正式成绩。';
+ $('weeklyIntro').textContent=canStart?(dayString(new Date())===OFFICIAL_FIRST_DATE?'第一周四科综合测评 · 11月22日补测（24题，每科6题）。':'今天是正式周测日，四科各6题，共24题。'):'正式测评从11月22日起每周日开放。';
  $('weeklyStart').hidden=!canStart;
  $('weeklyStart').textContent=completed?(completed.finishedAt?'查看本周成绩':'继续本周测评'):'开始本周测评';
  $('weeklyPreview').textContent='🔎 试做 11月15日（第一周）';
@@ -175,7 +182,7 @@ function open(){
 }
 function enter(preview,requestedWeek){
  if(!preview&&!officialAllowed()){open();return}
- practice=preview;const week=preview?(requestedWeek||THIRD_SUNDAY):key();
+ practice=preview;const week=preview?(requestedWeek||THIRD_SUNDAY):officialPaperWeek();
  current=preview?build(week):(store()[week]||build(week));
  saveExam();$('weeklyActions').hidden=true;
  current.finishedAt?renderResult():render();
@@ -275,6 +282,43 @@ document.addEventListener('click',function(event){
  event.stopImmediatePropagation();
  open();
 },true);
+// Assessment Sundays are reserved for the four-subject weekly exam.
+// The daily-two-subject classroom is visibly locked and cannot be entered
+// through the homepage or its existing lesson buttons; never delete records.
+function weeklyLessonLockMessage(){
+ return '今天是周日综合测评日，两科学习已锁定。请进入「测评」完成四科周测；课程学习在非测评日继续。';
+}
+function updateWeeklyLessonLock(){
+ const button=$('goLearning');
+ if(!button)return;
+ const locked=officialAllowed();
+ button.setAttribute('aria-disabled',locked?'true':'false');
+ button.title=locked?weeklyLessonLockMessage():'进入今日学习';
+ if(locked)button.setAttribute('aria-label','🔒 今日两科学习已锁定，今天进行四科周测');
+ else button.setAttribute('aria-label','进入今日学习');
+}
+// Capture BEFORE legacy inline onclick runs and before lesson onclick handlers.
+document.addEventListener('click',function(event){
+ if(!officialAllowed())return;
+ const target=event.target&&event.target.closest&&event.target.closest(
+  '#goLearning,#novLesson button,#novLesson a,#novCalendar button');
+ if(!target)return;
+ event.preventDefault();
+ event.stopImmediatePropagation();
+ alert(weeklyLessonLockMessage());
+},true);
+// Guard programmatic course-completion notifications as well, so completing
+// a previously open iframe on Sunday cannot mark the locked daily subject.
+if(typeof v6MarkSubject==='function'){
+ const originalMarkSubject=v6MarkSubject;
+ v6MarkSubject=function(day,name){
+  if(officialAllowed())return;
+  return originalMarkSubject(day,name);
+ };
+}
+updateWeeklyLessonLock();
+window.addEventListener('pageshow',updateWeeklyLessonLock);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)updateWeeklyLessonLock()});
 // 首页直接使用原有图片上的“进入测评”透明热区，不再覆盖额外入口贴片。
 
 })();
