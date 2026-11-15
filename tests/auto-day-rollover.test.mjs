@@ -45,9 +45,9 @@ try {
   RETURN uid;
  END; $$;
  CREATE FUNCTION public.r5_day_passed(p_family_id text,p_date date)
- RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $
+ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $day_pass$
  SELECT COALESCE((SELECT passed FROM public.evidence_days
- WHERE family_id=p_family_id AND study_date=p_date),false) $;
+ WHERE family_id=p_family_id AND study_date=p_date),false) $day_pass$;
  CREATE FUNCTION public.r5_day_evidence(p_family_id text,p_day integer)
  RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER AS $evidence$
  DECLARE v_date date; v_sub jsonb; v_pass boolean;
