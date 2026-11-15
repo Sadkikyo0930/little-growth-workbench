@@ -9,6 +9,17 @@ CloudBase 环境：normal-goose-d5g4qyzr8bb389a4a（ap-shanghai）。
 数学 13/15，英语 13/14；C0.1 010/020/030 **未部署**。
 这是历史报告，部署前务必在正式库重新只读核查，不能当作实时事实。
 
+## 2026-11-15 源文件核对（已找到最终 r3 ZIP）
+
+原始文件：`C016-r3-cross-day-2026-11-14.zip`；目录
+`C016-r3-cross-day/candidate/sql/`，从用户提供的完整包中直接读取。
+
+- `010_authoritative_day.sql`：Git blob `28ba1988e77240ddc6c9fde281d9ce3fe9b8ab9f`，与隔离候选分支一致。
+- `020_gate_and_publish.sql`：Git blob `e66580b7d0190a795e7ad9236212b4fcc4942e33`，与隔离候选分支一致。
+- `030_cross_day.sql`：Git blob `404e3b786c9e3bfc1989f15ceb55e836165e5262`，SHA256 `0ea2be48f48176e8701469a026256406a839939673cd1b38548518aabd940cc6`。此前 GitHub 分支没有 030 文件；部署必须从这个原始 ZIP 读取，不能拿旧 020 代替。
+- 030 的真实证据函数是 `r5_day_evidence(text,integer)`，内部调用 `r5_day_passed(text,date)`；030 将 `r5_progress_maybe_advance` 改为只读返回 `disabled_requires_parent`。040 已重新对齐这两个真实契约，并要求 030 的学习记录写入守卫已安装。
+- 以上仅验证候选文件的一致性，**没有证明正式 CloudBase 010/020/030 已应用**。必须只读核查线上数据库后再执行。
+
 ## 必须保持的上线门禁
 
 1. 只读核实 public.r5_family_progress、public.r5_day_confirmation、
