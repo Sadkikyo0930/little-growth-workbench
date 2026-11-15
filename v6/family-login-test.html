@@ -82,7 +82,7 @@ form.addEventListener('submit',async function(e){
   if(result&&result.error)throw result.error;
   document.getElementById('password').value="";
   stage="家庭记录读取";message("✅ 登录通过。阶段 2/2：读取家庭成员表……");
-  var db=app.rdb();
+  var rdb=await import("./r5/rdb-client.mjs");var db=rdb.makeRdb(auth);
   var read=await db.from('growth_family_members').select('family_id,user_id,member_role');
   if(read&&read.error)throw read.error;
   var rows=read&&Array.isArray(read.data)?read.data:[];

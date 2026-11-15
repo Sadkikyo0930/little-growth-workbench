@@ -129,7 +129,7 @@ $("form").addEventListener("submit",async function(e){
   var session=await auth.getSession();
   var sessionUser=session&&session.data&&session.data.session&&session.data.session.user;
   if(!sessionUser||!sessionUser.id)throw Error("登录身份无效，已停止读取");
-  var db=app.rdb();var m=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY).eq("user_id",sessionUser.id);
+  var rdb=await import("./r5/rdb-client.mjs");var db=rdb.makeRdb(auth);var m=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY).eq("user_id",sessionUser.id);
   if(m&&m.error)throw m.error;
   var members=Array.isArray(m&&m.data)?m.data:[];
   if(members.length!==1||members[0].family_id!==FAMILY||String(members[0].user_id)!==String(sessionUser.id)||!["owner","parent","grandparent"].includes(members[0].member_role))throw Error("家庭成员查询结果异常，已停止读取学习记录。");
