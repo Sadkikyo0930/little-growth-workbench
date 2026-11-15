@@ -130,8 +130,13 @@
       const translatedKey = KEY_LABELS[key] || '其他字段（详见技术原始信息）';
       // Unknown keys are grouped by original name in technical details, so
       // we do not overwrite other unknown values under a single label.
-      if (!(translatedKey in out)) out[translatedKey] = chineseKeys(v);
-      else out[translatedKey + '（另）'] = chineseKeys(v);
+      const shown = key === 'error'
+        ? explainError({error:v})
+        : key === 'cloud_verified_reason' && v === 'AUTO_DAY_BACKEND_NOT_READY'
+          ? '自动跨日接口调用失败，需检查技术原始信息'
+          : chineseKeys(v);
+      if (!(translatedKey in out)) out[translatedKey] = shown;
+      else out[translatedKey + '（另）'] = shown;
     }
     return out;
   }
