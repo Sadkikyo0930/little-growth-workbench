@@ -1293,6 +1293,9 @@
     var day = 0;
     try { if (typeof novSelected === 'number') day = novSelected; } catch (x) { day = 0; }
     if (!Number.isInteger(day) || day < 1 || day > CFG.maxDay) day = courseDay();
+    // The embedded lesson reports its planned learning day. An old iframe, a
+    // different lesson or a cross-day tab must never create a score for today.
+    if (e.data.lessonDay != null && Number(e.data.lessonDay) !== day) return;
 
     if (day !== courseDay() || subjectsFor(day).indexOf('语文') < 0) return;
     var current = readLiveState();
