@@ -1,0 +1,17 @@
+name: V6 Chinese no answer spoilers
+on:
+  push:
+    branches: [feat/v6-poem-chain-20261115]
+  pull_request:
+    branches: [main]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --prefix /tmp/v6-no-leak --no-save jsdom@26.1.0
+      - name: Check lesson JS, pinyin answer hiding, and day 30 interactive challenge
+        run: V6_TEST_JSDOM=/tmp/v6-no-leak/node_modules/jsdom node tools/test-pinyin-no-spoilers.cjs
