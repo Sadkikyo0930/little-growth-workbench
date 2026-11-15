@@ -25,9 +25,9 @@ for(const [day,expected] of Object.entries(pairs)){
   check(w.localStorage.getItem('v6PoemSpeech_'+day)===before,'double answer not counted');
   d.querySelector('#poemSpeechNext').click();
  }
- check(d.querySelector('#poemSpeechState').textContent.includes('已完成'),'all questions finish');dom.window.close();
+ check(d.querySelector('#poemSpeechState').textContent.includes('已完成'),'all questions finish');
 }
-const positions=new Set();for(let i=0;i<24;i++){const dom=setup(4),d=dom.window.document;positions.add([...d.querySelectorAll('.poem-choice')].findIndex(b=>b.dataset.line==='近听水无声'));d.querySelector('[data-line="近听水无声"]').click();check(d.querySelector('#poemSpeechState').textContent.includes('选对'),'correct encouragement');dom.window.close()};check(positions.size>=3,'correct position varies');
+const positions=new Set();for(let i=0;i<24;i++){const dom=setup(4),d=dom.window.document;positions.add([...d.querySelectorAll('.poem-choice')].findIndex(b=>b.dataset.line==='近听水无声'));d.querySelector('[data-line="近听水无声"]').click();check(d.querySelector('#poemSpeechState').textContent.includes('选对'),'correct encouragement');};check(positions.size>=3,'correct position varies');
 const src=fs.readFileSync(root+'poem-speech-check.js','utf8');check(!/getUserMedia|SpeechRecognition|MediaRecorder|开始录音|识别中|识别失败/.test(src),'no recording APIs or UI');
 const manifest=JSON.parse(fs.readFileSync(root+'audio/poems/manifest.json'));for(const [text,path] of Object.entries(manifest.files)){check(fs.statSync(root+path).size>1000,'audio present '+text)}
 console.log('PASS '+count+'/'+count+' assertions; 17 continuation questions across 10 days; SKIP 0');
