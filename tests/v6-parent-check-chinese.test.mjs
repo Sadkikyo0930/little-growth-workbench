@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const html=fs.readFileSync(new URL('../v6/r5-parent-check.html',import.meta.url),'utf8');
+const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
+assert(scripts.length>=2,'inline diagnostic scripts exist');
+for(const code of scripts) new vm.Script(code);
+let n=0;function check(name,p){assert(p,name);console.log('PASS '+name);n++}
+check('all diagnostic scripts compile',true);
+check('Chinese UI for local and cloud day',html.includes('云端权威学习日')&&html.includes('本机学习日'));
+check('Chinese status for backend failure',html.includes('自动跨日接口调用失败'));
+check('no English status in counter UI',!html.includes("'状态        : ' + (c.state ||"));
+check('nested JSON values localized',html.includes('function chineseKeys(')&&html.includes('KEY_LABELS'));
+check('live cloud read-only check',html.includes('R5Bridge.inspectCloud()'));
+check('raw technical information preserved for diagnosis',html.includes('<details class="card">')&&html.includes('rawTechnical'));
+check('new cached bridge build query',html.includes('r5-bridge.js?v=20261115-auto-next-day'));
+check('refresh action rechecks current cloud day',html.includes('render(); inspect();'));
+check('PWA and Safari storage differences explained',html.includes('独立的本机存档'));
+check('no destructive browser operations',!/(localStorage\.clear\(|sessionStorage\.clear\(|indexedDB\.deleteDatabase\(|\.removeItem\(|window\.location\.reload\()/.test(html));
+check('not performing any day or plan mutation RPCs',!/r5_advance_day|r5_publish_today|r5_auto_rollover_day\(/.test(html));
+console.log('PASS '+n+'/'+n+' Chinese parent diagnostic tests');
