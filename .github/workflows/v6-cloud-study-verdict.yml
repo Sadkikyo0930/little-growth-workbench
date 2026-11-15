@@ -1,0 +1,19 @@
+name: V6 cloud study grade versus racing quota
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly-verdict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check R5 learning verification without inventing pass/fail
+        run: |
+          node --check v6/r5-bridge.js
+          node tools/test-v6-cloud-verdict-readonly.cjs
