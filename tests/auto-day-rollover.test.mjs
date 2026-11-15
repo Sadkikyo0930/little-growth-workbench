@@ -27,7 +27,7 @@ try {
  CREATE TABLE public.r5_subject_template(day_index integer primary key,subjects jsonb);
  CREATE TABLE public.evidence_days(family_id text,day_index integer,
  study_date date,passed boolean);
- CREATE TABLE public.growth_learning_records(id text primary key);
+ CREATE TABLE public.growth_learning_records(id text primary key,family_id text);
  CREATE TABLE public.r5_racing_saves(family_id text primary key,save_data text);
  CREATE TABLE public.r5_parent_settings(family_id text primary key,daily_seconds int);
  CREATE FUNCTION public.r5_assert_member(p_family_id text, p_require_parent boolean)
@@ -114,7 +114,7 @@ try {
  ('incomplete',3,timezone('Asia/Shanghai',now())::date-1,false),
  ('todaydone',3,timezone('Asia/Shanghai',now())::date,true),
  ('maxfamily',30,timezone('Asia/Shanghai',now())::date-1,true);
- INSERT INTO public.growth_learning_records VALUES ('unchanged-01');
+ INSERT INTO public.growth_learning_records(id,family_id) VALUES ('unchanged-01','family');
  INSERT INTO public.r5_parent_settings VALUES ('family',1800);
  INSERT INTO public.r5_racing_saves VALUES ('family','preserved');
  `);
