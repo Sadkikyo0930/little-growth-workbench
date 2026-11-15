@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>R5 同步自检 · 家长用（v1.8.0-rc2）</title>
+<title>学习日与云端同步检查 · 家长用</title>
 <style>
   body{margin:0;padding:18px;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f3f7fc;color:#12243d}
   h1{font-size:19px;margin:0 0 4px}
@@ -24,16 +24,14 @@
 
 <div class="note" id="counter-note">
   <strong>关于「待同步」计数：</strong>旧版把「云端已存在、本次去重跳过」误写成
-  <code>pending</code>，所以会出现 <code>pending=21 / uploaded=0</code> 让人以为 21 条没上传。
-  候选版已拆成四个字段：<code>synced_total</code>（云端已持久化总数）、
-  <code>uploaded</code>（本次新增）、<code>skipped_duplicates</code>（已有跳过）、
-  <code>pending</code>（真正待上传，同步成功时恒为 0）。
+  「待同步」，所以会出现「待同步 21 / 本次新增 0」让人误以为 21 条都没上传。
+  现在区分四项：云端已保存、本次新增、已有记录跳过、真正待上传。同步成功后，真正待上传应为 0。
 </div>
 
-<div class="card"><h2>同步计数（v1.8.0-rc2）</h2><pre id="counters">读取中…</pre></div>
-<div class="card"><h2>V6 → 云端</h2><pre id="diag">读取中…</pre></div>
+<div class="card"><h2>同步记录统计</h2><pre id="counters">读取中…</pre></div>
+<div class="card"><h2>本机学习情况</h2><pre id="diag">读取中…</pre></div>
 <div class="card"><h2>今天各科真实题量（本机）</h2><pre id="grading">读取中…</pre></div>
-<div class="card"><h2>云端判定（r5_status）</h2><pre id="cloud">读取中…</pre></div>
+<div class="card"><h2>云端同步详细结果</h2><pre id="cloud">读取中…</pre></div>
 <div class="card">
   <p><a href="./family-sync.html?from=r5-parent-check" target="_self">家长登录云端</a></p>
   <button id="sync">立即同步一次</button>
@@ -41,53 +39,179 @@
 </div>
 <p class="sub" id="tip"></p>
 <p><a href="./" target="_self">返回 V6 首页</a> · <span id="windowType"></span></p>
-<pre id="liveCloud">正在查询云端计划…</pre>
+<div class="card"><h2>云端实时学习日（只读）</h2><pre id="liveCloud">正在查询云端计划…</pre></div>
+<details class="card"><summary>技术排查：查看原始错误和接口字段</summary><pre id="rawTechnical">暂无原始数据</pre></details>
 <script>const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];</script>
-<script src="./r5-bridge.js?v=20261110-parent-check" data-parent-check></script>
+<script src="./r5-bridge.js?v=20261115-auto-next-day" data-parent-check></script>
 <script>
   document.getElementById('windowType').textContent =
     (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '当前窗口：桌面全屏应用' : '当前窗口：普通浏览器';
+  // The diagnostic page is presentation-only. Raw CloudBase keys are retained
+  // under collapsible technical info, never written to a device or the server.
+  const STATUS_LABELS = {
+    ok:'同步成功',partial:'部分完成',unverified:'云端尚未核实',
+    no_local_records:'本机暂无可上传记录',
+    no_local_state:'本机没有学习档案',
+    not_started:'正式学习尚未开始',off:'自动同步已关闭',
+    running:'正在同步',error:'同步失败',
+    stale_device_day:'本机学习日落后于云端，请刷新课程页面',
+    device_ahead:'本机学习日超前于云端，已暂停上传',
+    auto_day_backend_not_ready:'自动跨日接口调用失败',
+    auto_day_requires_review:'云端学习日需要核实',
+    day_not_initialized:'云端权威学习日尚未初始化',
+    plan_unpublished:'今日课程计划尚未发布',
+    cloud_unavailable:'暂时无法获取云端学习日',
+    cloud_day_regression:'云端学习日不一致',
+    subject_mismatch:'本机与云端科目不一致',
+    upload_failed:'上传失败', auth_required:'需要重新登录',
+    already_published:'今日计划已发布',advanced:'已推进到下一学习日',
+    previous_day_incomplete:'上一学习日未达标，继续原课程',
+    no_previous_plan:'没有可核验的上一日计划',
+    max_day_reached:'已到最后一个学习日',
+    R5_AUTH_REQUIRED:'需要家长重新登录云端',
+    R5_MEMBER_DENIED:'当前账号尚未获得该家庭授权',
+    R5_DAY_NOT_INITIALIZED:'家庭学习日尚未初始化',
+    R5_RECORD_DAY_MISMATCH:'本机作答日次与云端不一致',
+    R5_PLAN_DAY_REGRESSION:'不能将云端学习日退回旧日',
+    STUDY_INCOMPLETE_OR_SCORE_UNVERIFIED:'当天科目尚未全部完成或成绩尚未核实',
+    PLAN_UNPUBLISHED:'当天计划尚未发布',
+    PGRST202:'云端尚未识别新的跨日接口，需要管理员检查接口缓存',
+    HTTP_404:'云端接口未找到，需要检查跨日接口是否已生效',
+    HTTP_401:'云端登录凭据失效，请重新登录',
+    HTTP_403:'当前账号缺少接口权限'
+  };
+  const KEY_LABELS = {
+    today:'今天日期',localDay:'本机学习日',subjects:'本机课程',hasState:'存在本机学习档案',
+    records:'本机学习记录数',todayAnswerCount:'今天本机答题数',
+    chineseDays:'语文已有记录日期',courseKeys:'各科本机存档键',
+    math:'数学',science:'科学',english:'英语',
+    state:'同步状态',message:'说明',error:'接口错误代码',at:'最近同步时间',
+    build:'桥接程序版本',uploaded:'本次新增数',already:'已存在数',
+    skipped_duplicates:'已存在跳过数',synced_total:'云端已保存记录数',
+    pending:'待云端确认数',pending_known:'已确定待同步数量',
+    cloud_verified:'云端已复核',cloud_verified_reason:'云端核实状态说明',
+    cloud_day:'云端计划学习日',local_day:'本机学习日',
+    authoritative_day:'云端权威学习日',study_day:'今日计划学习日',
+    today_day:'今天云端学习日',plan_day:'计划学习日',
+    cloud_subjects:'云端课程科目',schedule_published:'今日计划已发布',
+    pending_score_sync:'待同步成绩科目',pending_verification:'待核实的课程',
+    reason:'云端判定原因',allowed:'赛车资格已解锁',study_passed:'当天课程已达标',
+    remaining_seconds:'剩余赛车秒数',modules:'科目详情',
+    subject:'科目',completed:'完成课程',total:'答题总数',correct:'答对题数',
+    score:'成绩',accuracy_pct:'正确率',passed:'是否达标',
+    evidence:'成绩证据',credential_status:'成绩凭据状态',
+    pending_reasons:'待核实原因',graded_day:'实际成绩所属学习日',
+    date:'日期',result:'操作结果',advanced:'是否推进学习日',
+    published:'计划是否已发布',from:'原学习日',to:'新学习日',
+    stale_client:'本机课程版本过旧',idempotent:'重复调用未修改',
+    cloud_verified_at:'云端确认时间',
+    details:'详细信息',status:'状态',state_key:'本机状态键',
+    total_records:'总记录数',uploaded_total:'累计上传数',
+    pending_count:'待同步数量',source:'记录来源',sources:'来源列表',
+    records_checked:'本次检查数量',already_synced:'云端已有记录',
+    duplicate_count:'重复记录数量',blocked:'阻止上传',auth:'登录状态'
+  };
+  function chineseValue(value) {
+    if (value === null || value === undefined) return '尚无数据';
+    if (typeof value === 'boolean') return value ? '是' : '否';
+    if (typeof value === 'string') {
+      if (STATUS_LABELS[value]) return STATUS_LABELS[value];
+      const match = value.match(/^(?:DATABASE_)?(PGRST\d+|HTTP_\d{3}|R5_[A-Z_]+)$/);
+      if (match) return STATUS_LABELS[match[1]] || '接口异常（请查看下方技术原始信息）';
+    }
+    return value;
+  }
+  function chineseKeys(value) {
+    if (Array.isArray(value)) return value.map(chineseKeys);
+    if (!value || typeof value !== 'object') return chineseValue(value);
+    const out = {};
+    for (const [key, v] of Object.entries(value)) {
+      const translatedKey = KEY_LABELS[key] || '其他字段（详见技术原始信息）';
+      // Unknown keys are grouped by original name in technical details, so
+      // we do not overwrite other unknown values under a single label.
+      if (!(translatedKey in out)) out[translatedKey] = chineseKeys(v);
+      else out[translatedKey + '（另）'] = chineseKeys(v);
+    }
+    return out;
+  }
+  function pretty(value) { return JSON.stringify(chineseKeys(value),null,2); }
+  function explainError(c) {
+    if (!c || !c.error) return c && c.message || '';
+    const code = String(c.error).replace(/^DATABASE_/,'');
+    const hint = STATUS_LABELS[code] ||
+      (/PGRST202|Could not find the function|schema cache/i.test(code)
+        ? '云端可能尚未刷新接口缓存'
+        : /permission|denied|42501/i.test(code)
+          ? '接口权限不足或当前家庭成员没有授权'
+          : /auth|token|session|401/i.test(code)
+            ? '云端登录可能已失效'
+            : '跨日接口调用出错，需要核对技术错误代码');
+    return '原因：' + hint + '。学习记录仍保留在本机，未因此重置成绩或手动推进学习日。';
+  }
+  let liveCloudValue = null;
+  function fillRaw(d) {
+    document.getElementById('rawTechnical').textContent =
+      JSON.stringify({本机与同步原始数据:d,云端只读原始数据:liveCloudValue},null,2);
+  }
   async function inspect() {
     var el = document.getElementById('liveCloud');
-    try { el.textContent = JSON.stringify(await window.R5Bridge.inspectCloud(), null, 2); }
-    catch (e) { el.textContent = '无法读取云端：' + (e.code || e.message || '未知错误'); }
+    try {
+      liveCloudValue = await window.R5Bridge.inspectCloud();
+      el.textContent = [
+        '云端权威学习日：' + (liveCloudValue.authoritative_day == null ? '尚未取得' : '第 '+liveCloudValue.authoritative_day+' 日'),
+        '今天计划学习日：' + (liveCloudValue.today_day == null ? '尚未取得' : '第 '+liveCloudValue.today_day+' 日'),
+        '今天课程：' + ((liveCloudValue.cloud_subjects||[]).join('＋') || '暂无'),
+        '今天计划已发布：' + (liveCloudValue.schedule_published?'是':'否'),
+        '云端状态：' + chineseValue(liveCloudValue.reason || '正常')
+      ].join('\n');
+    } catch (e) {
+      liveCloudValue = {error:e.code || e.message || String(e)};
+      el.textContent = '云端实时查询失败：'+(STATUS_LABELS[liveCloudValue.error]||'需要检查登录状态及接口权限')+
+        '\n注意：这一结果不能证明云端尚未进入第四日。';
+    }
+    fillRaw(window.R5Bridge ? window.R5Bridge.diagnose() : null);
   }
   function render() {
     var d = window.R5Bridge ? window.R5Bridge.diagnose() : null;
     var c = d && d.cloud;
     document.getElementById('counters').textContent = c ? [
-      '状态        : ' + (c.state || '–'),
+      '状态        : ' + chineseValue(c.state || '暂无'),
       '云端已持久化: ' + (c.synced_total == null ? '（尚未取得）' : c.synced_total + ' 条'),
       '本次新增    : ' + (c.uploaded == null ? '–' : c.uploaded + ' 条'),
       '已有跳过    : ' + (c.skipped_duplicates == null ? '（尚未取得）' : c.skipped_duplicates + ' 条'),
       '待云端确认  : ' + (c.pending == null ? '未知' : c.pending + ' 条'),
-      '云端已复核  : ' + (c.cloud_verified === true ? '是' : (c.cloud_verified == null ? '（旧版）' : '否')),
+      '云端已复核  : ' + (c.cloud_verified === true ? '是' : (c.cloud_verified == null ? '（尚未取得）' : '否')),
       '说明        : ' + (c.message || '–'),
+      ...(c.state === 'auto_day_backend_not_ready' ? [explainError(c)] : [])
     ].join('\n') : '还没有同步过';
-
-    document.getElementById('diag').textContent = d ? JSON.stringify({
-      today: d.today, localDay: d.localDay, subjects: d.subjects,
-      hasState: d.hasState, records: d.records,
-      todayAnswerCount: (d.grading || []).reduce(function(n, x){ return n + x.total; }, 0),
-      chineseDays: d.chineseDays, courseKeys: d.courseKeys,
-    }, null, 2) : '桥接脚本未加载';
+    document.getElementById('diag').textContent = d ? [
+      '当前日期：'+d.today,
+      '本机学习日：第 '+d.localDay+' 日',
+      '本机课程：'+(d.subjects||[]).join('＋'),
+      '本机有学习档案：'+(d.hasState?'是':'否'),
+      '本机学习记录：'+d.records+' 条',
+      '今日答题数：'+(d.grading||[]).reduce(function(n,x){return n+x.total},0)+' 题',
+      '语文记录日期：'+((d.chineseDays||[]).join('、')||'暂无'),
+      '本机各科存档：\n'+pretty(d.courseKeys)
+    ].join('\n') : '桥接脚本未加载';
 
     var g = document.getElementById('grading');
-    if (!d) { g.textContent = '桥接脚本未加载'; }
-    else if (!d.grading || !d.grading.length) { g.textContent = '今天还没有任何作答记录'; }
-    else {
-      g.textContent = d.grading.map(function (x) {
-        return x.subject + '：' + x.correct + ' / ' + x.total + ' 题（' + x.accuracy_pct + '%）'
-          + (x.passed ? ' ✓ 达标' : ' ✗ 未达标')
-          + '\n  逐题 ' + x.perQuestion + ' 条 · 题组折算 ' + x.aggregate + ' 条'
-          + '\n  来源：' + Object.keys(x.sources).map(function (k) { return k + '×' + x.sources[k]; }).join('、');
-      }).join('\n\n');
-    }
-    document.getElementById('cloud').textContent = c ? JSON.stringify(c, null, 2) : '还没有同步过';
+    if (!d) g.textContent = '桥接脚本未加载';
+    else if (!d.grading || !d.grading.length) g.textContent = '今天还没有任何作答记录';
+    else g.textContent = d.grading.map(function(x) {
+      return x.subject+'：'+x.correct+' / '+x.total+' 题（'+x.accuracy_pct+'%）'
+        +(x.passed?' ✓ 达标':' ✗ 未达标')
+        +'\n  逐题 '+x.perQuestion+' 条 · 题组折算 '+x.aggregate+' 条'
+        +'\n  来源：'+Object.keys(x.sources||{}).map(function(k){return k+'×'+x.sources[k]}).join('、');
+    }).join('\n\n');
+    document.getElementById('cloud').textContent = c ? pretty(c) : '还没有同步过';
     var tip = document.getElementById('tip');
-    if (c && c.state === 'ok') tip.innerHTML = '同步正常：' + (c.allowed ? '<span class="ok">赛车已解锁</span>' : '<span class="bad">尚未达标</span>');
-    else if (c && c.state === 'error') tip.textContent = '同步失败：' + (c.message || c.error);
-    else if (c && c.message) tip.textContent = c.message;
+    if(c && c.state==='ok') tip.innerHTML = '同步正常：'+(c.allowed?'<span class="ok">赛车已解锁</span>':'<span class="bad">尚未达标</span>');
+    else if(c && c.state==='auto_day_backend_not_ready') tip.textContent =
+      '跨日同步遇到接口异常。请先查看「云端实时学习日」，不要清除本机记录或手动推进。';
+    else if(c && c.state==='error') tip.textContent = '同步失败：'+(c.message||explainError(c));
+    else if(c && c.message) tip.textContent = c.message;
+    fillRaw(d);
   }
   document.getElementById('sync').addEventListener('click', function () {
     var button = this;
@@ -96,7 +220,7 @@
       .catch(function(e){ document.getElementById('tip').textContent = '同步失败：' + e.message; })
       .finally(function(){ button.disabled = false; inspect(); });
   });
-  document.getElementById('reload').addEventListener('click', render);
+  document.getElementById('reload').addEventListener('click', function(){ render(); inspect(); });
   render();
   inspect();
   setInterval(render, 3000);
