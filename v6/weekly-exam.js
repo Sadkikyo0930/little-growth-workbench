@@ -285,13 +285,20 @@ document.addEventListener('click',function(event){
 // Assessment Sundays are reserved for the four-subject weekly exam.
 // The daily-two-subject classroom is visibly locked and cannot be entered
 // through the homepage or its existing lesson buttons; never delete records.
+function monthlyExamDay(){
+ const d=new Date(),tomorrow=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,12);
+ return tomorrow.getMonth()!==d.getMonth();
+}
+function assessmentDayLocked(){return officialAllowed()||monthlyExamDay()}
 function weeklyLessonLockMessage(){
- return '今天是周日综合测评日，两科学习已锁定。请进入「测评」完成四科周测；课程学习在非测评日继续。';
+ return monthlyExamDay()&&!officialAllowed()
+   ? '今天是月末测评日，两科学习已锁定。请进入「测评」完成月末测评；普通课程在非测评日继续。'
+   : '今天是周日综合测评日，两科学习已锁定。请进入「测评」完成四科周测；普通课程在非测评日继续。';
 }
 function updateWeeklyLessonLock(){
  const button=$('goLearning');
  if(!button)return;
- const locked=officialAllowed();
+ const locked=assessmentDayLocked();
  button.setAttribute('aria-disabled',locked?'true':'false');
  button.title=locked?weeklyLessonLockMessage():'进入今日学习';
  if(locked)button.setAttribute('aria-label','🔒 今日两科学习已锁定，今天进行四科周测');
@@ -299,7 +306,7 @@ function updateWeeklyLessonLock(){
 }
 // Capture BEFORE legacy inline onclick runs and before lesson onclick handlers.
 document.addEventListener('click',function(event){
- if(!officialAllowed())return;
+ if(!assessmentDayLocked())return;
  const target=event.target&&event.target.closest&&event.target.closest(
   '#goLearning,#novLesson button,#novLesson a,#novCalendar button');
  if(!target)return;
@@ -312,7 +319,7 @@ document.addEventListener('click',function(event){
 if(typeof v6MarkSubject==='function'){
  const originalMarkSubject=v6MarkSubject;
  v6MarkSubject=function(day,name){
-  if(officialAllowed())return;
+  if(assessmentDayLocked())return;
   return originalMarkSubject(day,name);
  };
 }
