@@ -4,6 +4,7 @@ import {PGlite} from '@electric-sql/pglite';
 
 const db=new PGlite();
 const sql=readFileSync(new URL('../db/20261115_auto_next_learning_day.sql',import.meta.url),'utf8');
+const readOnlyPreflight=readFileSync(new URL('../db/20261115_auto_next_day_readonly_preflight.sql',import.meta.url),'utf8');
 const bridge=readFileSync(new URL('../v6/r5-bridge.js',import.meta.url),'utf8');
 let n=0;
 async function query(q,p){return (await db.query(q,p)).rows}
@@ -118,6 +119,13 @@ try {
  INSERT INTO public.r5_racing_saves VALUES ('family','preserved');
  `);
  await db.exec(sql);
+ // The operator's preflight must be executable and must not mutate any
+ // learning record, daily plan or authoritative-day row.
+ const beforePreflight=await query("SELECT count(*) AS n FROM public.r5_daily_plan");
+ await db.exec(readOnlyPreflight);
+ const afterPreflight=await query("SELECT count(*) AS n FROM public.r5_daily_plan");
+ check('read-only production preflight changes no plans',
+   beforePreflight[0].n===afterPreflight[0].n);
  async function as(uid,role='authenticated'){
   const claims=JSON.stringify({sub:uid,role}).replaceAll("'","''");
   await db.exec("SELECT set_config('request.jwt.claims','"+claims+"',false)");
