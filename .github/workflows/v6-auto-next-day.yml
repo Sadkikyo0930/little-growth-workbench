@@ -1,7 +1,7 @@
 name: V6 next-day automatic rollover isolated
 on:
   push:
-    branches: [feat/v6-auto-next-day-20261115]
+    branches: [main, feat/v6-auto-next-day-20261115]
   pull_request:
     branches: [main]
 permissions:
