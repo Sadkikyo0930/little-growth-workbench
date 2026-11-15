@@ -79,7 +79,8 @@ try {
  ('todaydone',3),('maxfamily',30);
  INSERT INTO public.growth_family_members VALUES
  ('incomplete','mother','owner'),('blank','mother','owner'),
- ('todaydone','mother','owner'),('maxfamily','mother','owner');
+ ('todaydone','mother','owner'),('maxfamily','mother','owner'),
+ ('uninitialized','mother','owner');
  INSERT INTO public.r5_daily_plan
  VALUES ('family',timezone('Asia/Shanghai',now())::date-1,3,
  '["数学","英语"]',true),
