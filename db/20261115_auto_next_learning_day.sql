@@ -69,7 +69,7 @@ BEGIN
 
   -- Check only real records of the current authoritative learning day.
   -- A yesterday plan is required, and it must pass the server's existing
-  -- day evidence test. Never infer correctness from local completedDays.
+  -- day evidence test. Never infer correctness from browser-only progress.
   evidence := public.r5_day_evidence(p_family_id,current_day);
   latest_plan := NULLIF(evidence->>'plan_date','')::date;
   passed := COALESCE((evidence->>'passed')::boolean,false);
