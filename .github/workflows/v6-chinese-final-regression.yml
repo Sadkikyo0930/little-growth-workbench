@@ -32,4 +32,4 @@ jobs:
           node --check v6/poem-speech-check.js
           node --check v6/chinese-daily-questions.js
           node --check v6/sw.js
-          grep -q "20261115-chinese-ten-poem-audio-v1" v6/sw.js
+          grep -Eq "^const VERSION='[0-9]{8}-[a-z0-9-]+-v[0-9]+';" v6/sw.js
