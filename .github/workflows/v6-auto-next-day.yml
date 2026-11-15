@@ -1,0 +1,24 @@
+name: V6 next-day automatic rollover isolated
+on:
+  push:
+    branches: [feat/v6-auto-next-day-20261115]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate bridge JS syntax
+        run: node --check v6/r5-bridge.js
+      - name: Install isolated PostgreSQL emulator
+        run: npm install --prefix /tmp/v6-autoroll --no-save @electric-sql/pglite@0.3.15
+      - name: Run atomic rollover and family safety tests
+        run: |
+          ln -s /tmp/v6-autoroll/node_modules node_modules
+          node tests/auto-day-rollover.test.mjs
