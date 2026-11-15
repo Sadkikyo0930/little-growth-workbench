@@ -1,0 +1,21 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'../v6');
+const bridge=fs.readFileSync(path.join(root,'r5-bridge.js'),'utf8');
+const page=fs.readFileSync(path.join(root,'r5-parent-check.html'),'utf8');
+let count=0;const check=(condition,msg)=>{assert.ok(condition,msg);count++};
+new Function(bridge);check(true,'bridge syntax');
+const scripts=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
+for(const s of scripts){new Function(s);count++}
+check(bridge.includes("study_passed: st && typeof st.study_passed === 'boolean'"),'independent study verdict');
+check(bridge.includes("passed: m.passed === true ? true : m.passed === false ? false : null"),'server subject boolean rather than local 80-percent');
+check(bridge.includes("racing_allowed: st && typeof st.allowed === 'boolean'"),'racing allowed handled separately');
+check(bridge.includes("cloud_subjects: (st && st.modules || []).map"),'original subject names retained');
+check(page.includes("id=\"cloudVerdict\""),'dedicated visible verdict');
+check(page.includes("m.passed === true ? '云端判定通过'"),'cloud true shown as pass');
+check(page.includes("m.passed === false ? '云端判定未通过'"),'cloud false shown as failure');
+check(page.includes("尚无云端达标结论"),'unknown is unknown');
+check(page.includes("时间额度已达上限，不代表课程未通过。"),'racing time limit not mistaken for study failure');
+check(page.includes("现有答题记录仍保留，请勿重复答题"),'failed cloud read does not trigger repeat exercises');
+check(!page.includes(":'<span class=\"bad\">尚未达标</span>'"),'racing quota false no longer shown as learning fail');
+check(!page.includes("v6MarkSubject("),'parent diagnostics remains read-only');
+console.log('PASS '+count+'/'+count+' read-only learning score and racing quota verdict tests');
