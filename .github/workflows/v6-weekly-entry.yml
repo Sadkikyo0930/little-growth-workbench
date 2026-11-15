@@ -1,0 +1,22 @@
+name: V6 weekly assessment Sunday entry
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sunday-entry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated DOM test dependency
+        run: npm install --prefix /tmp/v6-weekly-dom --no-save jsdom@26.1.0
+      - name: Verify Sunday entry, first-week make-up, and weekday lock
+        run: |
+          node --check v6/weekly-exam.js
+          node --check v6/sw.js
+          V6_TEST_JSDOM=/tmp/v6-weekly-dom/node_modules/jsdom node tools/test-v6-weekly-routing.cjs
