@@ -1,0 +1,35 @@
+name: V6 Chinese 10 Questions and Poem Audio
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chinese-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated DOM test dependency
+        run: npm install --prefix /tmp/v6-chinese-tests --no-save jsdom@26.1.0
+      - name: Verify daily 10 questions, old history, and parent grade
+        run: V6_TEST_JSDOM=/tmp/v6-chinese-tests/node_modules/jsdom node tools/test-chinese-daily-ten.cjs
+      - name: Verify poem choices, audio resources, and no microphone
+        run: V6_TEST_JSDOM=/tmp/v6-chinese-tests/node_modules/jsdom node tools/test-poem-chain.cjs
+      - name: Verify Min Nong lesson playback controls
+        run: node tools/test-min-nong-audio.cjs
+      - name: Verify phonics answer is not revealed
+        run: V6_TEST_JSDOM=/tmp/v6-chinese-tests/node_modules/jsdom node tools/test-pinyin-no-spoilers.cjs
+      - name: Verify production PWA update and syntax
+        run: |
+          node --check v6/chinese-classroom.js
+          node --check v6/poem-audio.js
+          node --check v6/poem-speech-check.js
+          node --check v6/chinese-daily-questions.js
+          node --check v6/sw.js
+          grep -q "20261115-chinese-ten-poem-audio-v1" v6/sw.js
