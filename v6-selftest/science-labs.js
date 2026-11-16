@@ -15,7 +15,23 @@ const intro=()=> '欢迎来到科学探索岛！今天是'+data.title+'。'+data
 const read=()=>lesson===9?(stage===0?'欢迎来到小小科学家总挑战！科学家先提出问题，再做实验观察结果。准备好了吗？':stage===1?'一共有三个科学挑战。每道题点击选项就能听到语音，再看看实验结果。':stage===2?'你已经完成了三个科学挑战！猜想、实验、观察、记录，是科学探索的好方法。':'恭喜你成为小小科学家！'):lesson===8?(stage===0?'欢迎来到昆虫侦探实验室！蝴蝶和蜘蛛，谁是昆虫？请先点选你的猜想。':stage===1?'点击蝴蝶，数一数它有六条腿。再点击蜘蛛，数一数它有八条腿。最后观察昆虫的头、胸和腹。':stage===2?'昆虫有六条腿，身体通常分为头、胸、腹三部分。蜘蛛有八条腿，属于蛛形纲，不是昆虫。':'你完成了昆虫侦探实验！'):lesson===7?(stage===0?'欢迎来到浮沉造船实验室！同一团橡皮泥，捏成实心球和小船，哪种形状更容易浮起来？点选你的猜想。':stage===1?'先把橡皮泥球放进水里，再把它捏成空心小船，最后往船上装货，看看会发生什么。':stage===2?'同一团橡皮泥，捏成空心小船可以排开更多的水，因此可能浮起来。装货太多还是会沉。':'你完成了浮沉造船实验！'):lesson===6?(stage===0?'欢迎来到天气观察站！要了解今天的天气，应该看天空和树叶，还是看玩具颜色？请点击答案。':stage===1?'请观察天空的云，再观察风吹动树叶，最后看看下雨的过程。':stage===2?'我们可以通过云、风、雨和温度观察天气。每天记录才知道天气怎么变化。':'恭喜你完成天气观察！'):lesson===5?(stage===0?'欢迎来到磁铁寻宝实验室！磁铁能吸住什么？点击一个答案，先猜一猜。':stage===1?'把磁铁靠近回形针、纸片和塑料瓶盖，看看谁会被吸住。':stage===2?'磁铁能吸住铁做的回形针，通常不能吸住纸和塑料。不是所有金属都能被磁铁吸住。':'你完成了磁铁寻宝实验！'):lesson===4?(stage===0?'欢迎来到声音实验室！橡皮筋为什么会发出声音？请点选你的猜想。':stage===1?'请用手指拨动橡皮筋，看看它怎么振动。然后按住橡皮筋，让它停下来。最后再试试拨动。':stage===2?'橡皮筋振动的时候会发出声音。按住它，振动停下来，声音也会停止。':'恭喜你完成声音实验！'):lesson===2?(stage===0?'欢迎来到种子发芽实验室。看看两个花盆，左边浇水，右边不浇水。你猜谁先发芽？点击选项。':stage===1?'请点击浇一点水，然后点击过几天，看看种子先长出什么。':'你发现了吗？种子发芽需要适量的水、空气和合适的温度。'):lesson===3?(stage===0?'欢迎来到影子魔法实验室！看，小熊站在草地上。手电筒在左边，你猜影子在左边还是右边？点选一个答案。':stage===1?'请点击灯放左边，或者灯放右边，观察小熊影子换方向。还可以试试关灯。':stage===2?'你发现了吗？影子总在背对光源的一侧。移动手电筒，影子也会改变位置。':'恭喜你完成影子实验！'):stage===0?intro():stage===1?'现在开始动手实验！请按顺序点击三个大按钮，仔细观察变化。':stage===2?'你观察到了什么？'+data.finish+'点击完成今日科学课。':'恭喜你完成了今天的科学实验！';
 bar.querySelector('#sciHear').onclick=()=>{voice=true;speech(read());bar.querySelector('#sciHear').textContent='🔊 已开启语音'};
 bar.querySelector('#sciAgain').onclick=()=>{voice=true;speech(read())};
-function nextStage(n){stage=n;render();if(voice)speech(read())}
+function nextStage(n){
+ stage=n;render();
+ // Every science lab must offer a visible route to its five-question assessment.
+ // The existing completion callback remains supported, while this button is a recovery path.
+ if(stage===3&&lesson>=2&&lesson<=9&&!panel.querySelector('#seedQuizStart')){
+   const start=document.createElement('button');
+   start.type='button';start.className='sci-main';start.id='sciFiveQuestionEntry';
+   start.textContent='📝 开始五道科学题';
+   start.onclick=()=>{
+     if(typeof window.scienceExperimentFinished==='function')window.scienceExperimentFinished(lesson);
+     else alert('科学题库没有加载，请重新打开课程。');
+   };
+   const replay=panel.querySelector('button');
+   if(replay)panel.insertBefore(start,replay);else panel.appendChild(start);
+ }
+ if(voice)speech(read());
+}
 function render(){
 if(lesson===9){renderChallenge();return}if(lesson===8){renderInsects();return}if(lesson===7){renderBoat();return}if(lesson===6){renderWeather();return}if(lesson===5){renderMagnet();return}if(lesson===4){renderSound();return}if(lesson===3){renderShadow();return}if(lesson===2){renderSeed();return}
 if(stage===0){panel.innerHTML='<div class="sci-step">第 1 步 · 先猜一猜</div><h2>'+data.icon+' '+data.title+'</h2><div class="sci-art">'+data.icon+'</div><p>'+data.intro+'</p><div class="sci-choices" id="sciChoices"></div><p class="sci-note" id="sciHint">点一个你认为正确的答案。</p><button class="sci-main" id="sciStart" disabled>🧪 开始做实验 →</button>';
