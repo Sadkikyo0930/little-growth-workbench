@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261116-science-fresh-v1';
+const VERSION='20261116-four-subject-attempt-v1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -9,7 +9,7 @@ const CORE_FILES=[
 './weekly-exam.js','./clean-art.js','./chinese-classroom.js','./family-auto-sync.js','./pwa.js',
 './chinese-classroom.css','./v6-home-clean.jpg','./v6-assessment-clean.jpg',
 './growth_background.png','./english-classroom-fixed.html',
-'./science-classroom.html','./math-calendar-preview.html',
+'./science-classroom.html','./math-calendar-preview.html','./attempt-history.js','./science-course-quiz.js','./science-labs.js',
 './english-monthly-assessment.html','./phonics-v4-original.html',
 /* 碎片车库：新页面与模块。缺文件由 Promise.allSettled 容忍，不会阻断安装。 */
 './assemble-center.html','./fragment-reward.html',
@@ -72,7 +72,10 @@ self.addEventListener('fetch',event=>{
  // Lessons and the question bank must refresh before the next quiz, not
  // after serving an old cached script or iframe from the previous deployment.
  // Preserve cached versions only as offline fallbacks.
- const freshLesson = url.pathname.endsWith('/science-course-quiz.js')
+ const freshLesson = url.pathname.endsWith('/attempt-history.js')
+   || url.pathname.endsWith('/math-calendar-preview.html')
+   || url.pathname.endsWith('/english-classroom-fixed.html')
+   || url.pathname.endsWith('/science-course-quiz.js')
    || url.pathname.endsWith('/science-labs.js')
    || url.pathname.endsWith('/science-classroom.html')
    || url.pathname.endsWith('/weekly-exam.js')
