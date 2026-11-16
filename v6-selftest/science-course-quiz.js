@@ -7,6 +7,8 @@ const panel=document.createElement('section');
 panel.className='panel hidden';panel.id='scienceFinalQuiz';
 panel.style.cssText='border:3px solid #8bcbd8;box-shadow:0 8px 22px #3c7a8a19';
 root.insertBefore(panel,root.querySelector('main > .muted'));
+// Persistent entry: independent of experiment completion callbacks.
+if(lesson===2){panel.classList.remove('hidden');panel.style.display='block';panel.innerHTML='<h2>📝 第五学习日 · 五道科学题</h2><p>完成种子发芽实验后，请点击下面的按钮开始答题。</p><button class="action" id="scienceManualQuiz">开始五道科学题 →</button>';panel.querySelector('#scienceManualQuiz').onclick=()=>window.scienceExperimentFinished(2);}
 function voice(t){if(!('speechSynthesis'in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='zh-CN';u.rate=.86;window.speechSynthesis.speak(u);}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function key(){return qs.get('cohort')==='20261109'?'v6_science_course_20261109_progress_v1':'v6_science_preview_progress_v1';}
