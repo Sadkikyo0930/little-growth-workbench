@@ -46,11 +46,19 @@ function render(){
 }
 function finish(){
  const at=new Date().toISOString(),payload={experiment:true,quizComplete:true,correct:score,total:answers.length,answers,at};
- try{const old=JSON.parse(localStorage.getItem(key())||'{}');old[lesson]={...(old[lesson]||{}),...payload};localStorage.setItem(key(),JSON.stringify(old))}catch(e){}
+ let attempt=null;
+ try{
+  const old=JSON.parse(localStorage.getItem(key())||'{}');
+  const legacy='v6-science-legacy-snapshot-v1-'+lesson;
+  if(old[lesson]&&old[lesson].quizComplete&&!localStorage.getItem(legacy))localStorage.setItem(legacy,JSON.stringify(old[lesson]));
+  const days=[1,5,8,12,15,19,22,26,29];
+  attempt=window.V6AttemptHistory?.record({subject:'科学',lesson,learningDay:days[lesson-1],correct:score,total:answers.length,at,source:'science-quiz'});
+  old[lesson]={...(old[lesson]||{}),...payload};localStorage.setItem(key(),JSON.stringify(old));
+ }catch(e){console.warn('科学成绩保存失败',e)}
  if(qs.get('cohort')==='20261109'&&window.parent!==window){
- window.parent.postMessage({type:'v6-science-lesson-complete',cohort:'20261109',lesson,quizComplete:true,correct:score,total:answers.length,answers},location.origin);
+ window.parent.postMessage({type:'v6-science-lesson-complete',cohort:'20261109',lesson,quizComplete:true,correct:score,total:answers.length,answers,rate:Math.round(score/answers.length*1000)/10,passed:score*5>=answers.length*4,attemptId:attempt?.entry.id||null,at},location.origin);
  }
- panel.innerHTML='<h2>🏆 科学探索完成！</h2><p style="font-size:22px">答对 '+score+' / '+answers.length+' 题</p><p>今天做到了：大胆猜想、动手观察、认真回答。答错也能从实验中学到新发现！</p><button class="action" id="sqReplay">🔁 再练习五道题</button>';
+ panel.innerHTML='<h2>🏆 科学探索完成！</h2><p style="font-size:22px">本轮答对 '+score+' / '+answers.length+' 题 · '+(score*5>=answers.length*4?'已达标':'未达到80%')+'</p><p>'+(attempt?'累计完整提交 '+attempt.attemptNo+' 次；第一轮存档 '+attempt.first.rate+'%。':'')+'</p><p>今天做到了：大胆猜想、动手观察、认真回答。答错也能从实验中学到新发现！</p><button class="action" id="sqReplay">🔁 再练习五道题</button>';
  panel.querySelector('#sqReplay').onclick=()=>window.scienceExperimentFinished(lesson);
  voice('今天的科学探索完成啦！你答对了'+score+'道题，真棒！');
 }
