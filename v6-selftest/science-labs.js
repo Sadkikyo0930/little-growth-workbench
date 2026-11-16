@@ -3,7 +3,7 @@ const all=[{"title":"种子发芽实验室","icon":"🌱","intro":"两颗豆子�
 const qs=new URLSearchParams(location.search),lesson=Number(qs.get('lesson')||1);
 if(!Number.isInteger(lesson)||lesson<2||lesson>9)return;
 const data=all[lesson-2],root=document.querySelector('main');if(!root)return;
-root.querySelectorAll('.panel').forEach(x=>x.style.display='none');
+root.querySelectorAll('.panel:not(#scienceFinalQuiz)').forEach(x=>x.style.display='none');
 const bar=document.createElement('div');bar.className='sci-voice';bar.innerHTML='<button id="sciHear">🔊 听老师讲</button><button id="sciAgain">🔁 重听</button><span id="sciStatus">请先点击听老师讲</span>';root.insertBefore(bar,root.querySelector('main > .muted'));
 const panel=document.createElement('section');panel.className='sci-lab';root.insertBefore(panel,root.querySelector('main > .muted'));
 let stage=0,guess=null,voice=false,actionIndex=0,completed=false,utterance=null;
