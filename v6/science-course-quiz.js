@@ -13,7 +13,9 @@ function key(){return qs.get('cohort')==='20261109'?'v6_science_course_20261109_
 window.scienceExperimentFinished=function(n){
  if(Number(n)!==lesson)return;
  quizStarted=true;idx=0;score=0;answers=[];locked=false;
- panel.classList.remove('hidden');render();
+ const lab=document.querySelector('.sci-lab, .lab');
+ if(lab)lab.insertAdjacentElement('afterend',panel);
+ panel.classList.remove('hidden');panel.style.display='block';render();
  panel.scrollIntoView({behavior:'smooth',block:'start'});
  voice('实验完成啦！现在来挑战五道科学观察题。点击听题目，也可以点击选项旁的喇叭。');
 };
