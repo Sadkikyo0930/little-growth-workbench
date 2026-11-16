@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261116-weekly-assessment-lock-v1';
+const VERSION='20261116-science-fresh-v1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -72,7 +72,10 @@ self.addEventListener('fetch',event=>{
  // Lessons and the question bank must refresh before the next quiz, not
  // after serving an old cached script or iframe from the previous deployment.
  // Preserve cached versions only as offline fallbacks.
- const freshLesson = url.pathname.endsWith('/weekly-exam.js')
+ const freshLesson = url.pathname.endsWith('/science-course-quiz.js')
+   || url.pathname.endsWith('/science-labs.js')
+   || url.pathname.endsWith('/science-classroom.html')
+   || url.pathname.endsWith('/weekly-exam.js')
    || /\/chinese-day[\w-]*-preview\.html$/.test(url.pathname)
    || url.pathname.endsWith('/chinese-day2-day3-preview.html')
    || url.pathname.endsWith('/chinese-daily-questions.js')
