@@ -44,7 +44,7 @@ a{color:#1264ad}#data{display:none}
 <p><a href="./">返回 V6 学习台</a> · <a href="./family-sync.html">妈妈云端同步中心</a> · <a href="./family-login-test.html">家庭登录诊断页</a></p>
 </main><script>
 (function(){"use strict";
-var FAMILY="little-growth-family-001",app,auth,verifiedRows=null,verifiedMember=null;
+var FAMILY="little-growth-family-001",app,auth,verifiedRows=null,verifiedMember=null,verifiedFamilyMembers=[];
 var RESTORE_OPT_IN="v6-family-auto-restore-enabled";
 function drawRestoreToggle(){
  var enabled=localStorage.getItem(RESTORE_OPT_IN)==="yes";
@@ -55,7 +55,7 @@ var $=id=>document.getElementById(id);
 var cdns=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
 function setStatus(t){$("status").textContent=t}
 function err(e){return String(e&& (e.message||e.code||e.error_description)||e||"未知错误")}
-function reset(){ $("data").style.display="none";$("records").replaceChildren();verifiedRows=null;verifiedMember=null;$("restorePanel").hidden=true;$("restoreMissing").disabled=true;$("restoreAutoToggle").disabled=true }
+function reset(){ verifiedFamilyMembers=[];$("data").style.display="none";$("records").replaceChildren();verifiedRows=null;verifiedMember=null;$("restorePanel").hidden=true;$("restoreMissing").disabled=true;$("restoreAutoToggle").disabled=true }
 function load(i){
  if(i>=cdns.length){setStatus("SDK 加载失败，请检查网络后刷新。");return}
  var s=document.createElement("script");s.src=cdns[i];s.async=true;
@@ -67,6 +67,12 @@ function deviceFromRecord(row){
  const id=String(row&&row.record_id||'');
  const match=id.match(/^v6-([a-f0-9]{16})-(?:answer|course|a-|g-)/);
  return match?match[1]:null;
+}
+function roleOfRecord(row){
+ const uid=String(row&&row.created_by||'');
+ if(!uid)return '';
+ const member=verifiedFamilyMembers.find(m=>String(m.user_id)===uid);
+ return member?({owner:'妈妈账号',parent:'爸爸账号',grandparent:'外婆账号'}[member.member_role]||'家庭账号'):'未能核实账号';
 }
 function renderDeviceCloud(rows){
  const root=$("deviceCloudList");root.replaceChildren();
@@ -87,7 +93,9 @@ function renderDeviceCloud(rows){
    alias.setAttribute('aria-label','设备 '+id.slice(-6)+' 的本机备注');
    alias.style.cssText='margin:7px 0 4px;width:100%;padding:9px';
    alias.onchange=()=>{const value=alias.value.trim().slice(0,30);aliases[id]=value;try{localStorage.setItem(aliasesKey,JSON.stringify(aliases))}catch(_){}};
-   const hint=n('div','此设备上传 '+items.length+' 条云端记录。身份需自行确认，不能只按备注断定。','muted');
+   const accountRoles=[...new Set(items.map(roleOfRecord).filter(Boolean))];
+   const roleInfo=accountRoles.length===1?'上传登录账号：'+accountRoles[0]+'。':accountRoles.length>1?'此设备记录涉及多个上传账号：'+accountRoles.join('、')+'。':'云端没有足够信息识别上传账号。';
+   const hint=n('div','此设备上传 '+items.length+' 条云端记录。'+roleInfo+' 注意：登录账号不等于设备持有人。','muted');
    const groups=new Map();
    for(const r of items){
      const day=Number(r.learning_day),sub=String(r.subject||'');
@@ -204,7 +212,10 @@ $("form").addEventListener("submit",async function(e){
   var members=Array.isArray(m&&m.data)?m.data:[];
   if(members.length!==1||members[0].family_id!==FAMILY||String(members[0].user_id)!==String(sessionUser.id)||!["owner","parent","grandparent"].includes(members[0].member_role))throw Error("家庭成员查询结果异常，已停止读取学习记录。");
   setStatus("家庭身份已确认，正在读取云端学习记录……");
-  var q=await db.from("growth_learning_records").select("record_id,family_id,record_type,subject,learning_day,record_data,created_at");
+  var familyList=await db.from("growth_family_members").select("family_id,user_id,member_role").eq("family_id",FAMILY);
+  verifiedFamilyMembers=(familyList&&!familyList.error&&Array.isArray(familyList.data)?familyList.data:members)
+   .filter(x=>x.family_id===FAMILY);
+  var q=await db.from("growth_learning_records").select("record_id,family_id,record_type,subject,learning_day,record_data,created_at,created_by");
   if(q&&q.error)throw q.error;
   if(!q||!Array.isArray(q.data))throw Error("学习记录接口未返回预期的数据格式");
   var foreign=q.data.some(x=>x.family_id!==FAMILY);
