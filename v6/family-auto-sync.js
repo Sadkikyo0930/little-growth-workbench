@@ -66,6 +66,35 @@ function build(s,b){
  }
  return arr;
 }
+// Upload policy: first completed attempt always; subsequently only a STRICT improvement
+// on the best verified cloud accuracy for the same family + learning day + subject.
+// This preserves all original records, including previously uploaded non-passing attempts.
+// Equal/worse scores stay on the device, but never downgrade cloud's effective best.
+function eligibleAttempts(rows,cloud){
+ var best=Object.create(null),has=Object.create(null),selected=[];
+ function key(r){return String(r.learning_day)+'|'+String(r.subject)}
+ function score(p){var correct=Number(p&&p.correct),total=Number(p&&p.total);return Number.isInteger(correct)&&Number.isInteger(total)&&total>0&&correct>=0&&correct<=total?{correct:correct,total:total}:null}
+ (cloud||[]).forEach(function(r){
+  if(!r||r.record_type!=="course-attempt")return;
+  var p=r.record_data;if(typeof p==="string"){try{p=JSON.parse(p)}catch(e){return}}
+  var sc=score(p);if(!sc)return;
+  var k=key(r);has[k]=true;
+  var v=sc.correct/sc.total;if(best[k]===undefined||v>best[k])best[k]=v;
+ });
+ var candidates=rows.filter(function(r){return r.record_type==="course-attempt"}).sort(function(a,b){
+   var ta=Date.parse(a.record_data.at),tb=Date.parse(b.record_data.at);
+   return ta-tb||a.record_id.localeCompare(b.record_id);
+ });
+ candidates.forEach(function(r){
+  var sc=score(r.record_data);if(!sc)return;
+  var k=key(r),v=sc.correct/sc.total;
+  if(!has[k]||v>best[k]+1e-12){
+    selected.push(r);has[k]=true;best[k]=v;
+  }
+ });
+ var keep=new Set(selected.map(function(r){return r.record_id}));
+ return rows.filter(function(r){return r.record_type!=="course-attempt"||keep.has(r.record_id)});
+}
 function loadSdk(i){return new Promise(function(resolve,reject){
  if(window.cloudbase&&typeof window.cloudbase.init==="function"){resolve();return}
  if(i>=SDK.length){reject(Error("CloudBase SDK 加载失败"));return}
@@ -104,10 +133,13 @@ async function run(){
   if(!Array.isArray(members)||members.length!==1||members[0].family_id!==FAMILY||!["owner","parent","grandparent"].includes(members[0].member_role)||String(members[0].user_id)!==String(session.user.id)){
    saveStatus("当前会话不是该家庭的授权成员，已暂停；本机成绩安全保留",{state:"auth_required",pending:rows.length});return
   }
-  var existing=await db.from("growth_learning_records").select("record_id,family_id,record_type");
+  var existing=await db.from("growth_learning_records").select("record_id,family_id,record_type,subject,learning_day,record_data");
   if(existing&&existing.error)throw existing.error;
   if(!existing||!Array.isArray(existing.data))throw Error("云端读取结果异常");
   if(existing.data.some(x=>x.family_id!==FAMILY))throw Error("检测到其他家庭数据，已停止同步");
+  // Only verified, append-only improved attempt scores are eligible.
+  // The cloud read is mandatory; unknown state must never be treated as a blank history.
+  rows=eligibleAttempts(rows,existing.data);
   var ids=new Set(existing.data.filter(x=>x.record_type!=="sync-test").map(x=>String(x.record_id))),count=0;
   for(var j=0;j<rows.length;j++){
    var item=rows[j];if(ids.has(item.record_id))continue;
