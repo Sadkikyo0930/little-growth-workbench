@@ -122,7 +122,10 @@ function renderDeviceCloud(rows){
      let evidence='逐题上传 '+g.answer+' 条（其中可直接识别对错 '+g.graded+' 条），课程完成标记 '+g.done+' 条。';
      if(g.attempts.length){
        const arr=g.attempts.sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
-       evidence+=' ✅ 云端已收完整成绩 '+arr.length+' 次：'+arr.map((a,i)=>{
+       const best=arr.reduce((x,a)=>Number(a.correct)/Number(a.total)>Number(x.correct)/Number(x.total)?a:x,arr[0]);
+       const bestRate=100*Number(best.correct)/Number(best.total);
+       evidence+=' 当前云端最高成绩 '+bestRate.toFixed(1)+'%（'+best.correct+'/'+best.total+'，'+(bestRate>=80?'✅ 已达标，低分不回退':'未达到80%')+'）。';
+       evidence+=' ✅ 云端已收有效成绩 '+arr.length+' 次：'+arr.map((a,i)=>{
          const rate=Number(a.correct)/Number(a.total)*100;
          return '第'+(i+1)+'次 答对'+a.correct+'题、答错'+(Number(a.total)-Number(a.correct))+'题 / 共'+a.total+'题（'+rate.toFixed(1)+'%，'+(rate>=80?'✅达标':'未达标')+'）';
        }).join('；')+'。';
