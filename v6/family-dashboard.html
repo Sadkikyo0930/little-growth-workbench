@@ -24,7 +24,7 @@ a{color:#1264ad}#data{display:none}
 <section class="card" id="data"><h2 id="greeting">家庭学习记录</h2>
 <div class="summary"><div class="metric"><b id="total">0</b><small>云端记录</small></div><div class="metric"><b id="days">0</b><small>学习日期</small></div><div class="metric"><b id="subjects">0</b><small>涉及学科</small></div></div>
 <section id="deviceCloudPanel" style="margin:18px 0;border:2px solid #bedff2;border-radius:16px;padding:13px;background:#f5fbff">
-<h3>📱 家庭设备答题查询（云端，只读）</h3>
+<h3>📱 家庭设备完整成绩与答题查询（云端，只读）</h3>
 <p class="muted">按云端记录来源设备分组。设备别名只保存在妈妈当前手机；未标记的设备不会自动认定为外婆或爸爸。题目记录不等于完整交卷，不能据此擅自判定80%达标。</p>
 <div id="deviceCloudList"></div>
 </section>
@@ -65,7 +65,7 @@ function load(i){
 function field(row,name,fallback){return row[name]===undefined||row[name]===null?fallback:row[name]}
 function deviceFromRecord(row){
  const id=String(row&&row.record_id||'');
- const match=id.match(/^v6-([a-f0-9]{16})-(?:answer|course|a-|g-)/);
+ const match=id.match(/^v6-([a-f0-9]{16})-(?:answer|course|attempt|a-|g-)/);
  return match?match[1]:null;
 }
 function roleOfRecord(row){
@@ -111,7 +111,7 @@ function renderDeviceCloud(rows){
      }else if(r.record_type==='course-complete')g.done++;
      else if(r.record_type==='course-attempt'){
        let p=r.record_data;try{if(typeof p==='string')p=JSON.parse(p)}catch(_){}
-       if(p&&Number.isInteger(Number(p.correct))&&Number.isInteger(Number(p.total))&&Number(p.total)>0)g.attempts.push(p);
+       if(p&&Number.isInteger(Number(p.correct))&&Number.isInteger(Number(p.total))&&Number(p.total)>0&&Number(p.correct)>=0&&Number(p.correct)<=Number(p.total))g.attempts.push(p);
      }
    }
    const details=n('details');details.open=false;
@@ -119,12 +119,12 @@ function renderDeviceCloud(rows){
    [...groups.values()].sort((a,b)=>b.day-a.day||a.sub.localeCompare(b.sub)).forEach(g=>{
      const d=n('div',null,'item');
      const h=n('strong','第 '+g.day+' 学习日 · '+g.sub);
-     let evidence='云端逐题记录 '+g.answer+' 条（可识别对错 '+g.graded+' 条），课程完成标记 '+g.done+' 条。';
+     let evidence='逐题上传 '+g.answer+' 条（其中可直接识别对错 '+g.graded+' 条），课程完成标记 '+g.done+' 条。';
      if(g.attempts.length){
        const arr=g.attempts.sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
-       evidence+=' 独立交卷 '+arr.length+' 次：'+arr.map((a,i)=>{
+       evidence+=' ✅ 云端已收完整成绩 '+arr.length+' 次：'+arr.map((a,i)=>{
          const rate=Number(a.correct)/Number(a.total)*100;
-         return '第'+(i+1)+'次 '+a.correct+'/'+a.total+'（'+rate.toFixed(1)+'%，'+(rate>=80?'达标':'未达标')+'）';
+         return '第'+(i+1)+'次 答对'+a.correct+'题、答错'+(Number(a.total)-Number(a.correct))+'题 / 共'+a.total+'题（'+rate.toFixed(1)+'%，'+(rate>=80?'✅达标':'未达标')+'）';
        }).join('；')+'。';
      }else evidence+=' 暂无可核验的整轮成绩，不能断定提交次数或80%达标。';
      d.append(h,n('div',evidence,'muted'));details.append(d);
