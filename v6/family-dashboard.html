@@ -23,6 +23,11 @@ a{color:#1264ad}#data{display:none}
 <div id="status" role="status">正在加载 CloudBase 连接组件……</div></section>
 <section class="card" id="data"><h2 id="greeting">家庭学习记录</h2>
 <div class="summary"><div class="metric"><b id="total">0</b><small>云端记录</small></div><div class="metric"><b id="days">0</b><small>学习日期</small></div><div class="metric"><b id="subjects">0</b><small>涉及学科</small></div></div>
+<section id="deviceCloudPanel" style="margin:18px 0;border:2px solid #bedff2;border-radius:16px;padding:13px;background:#f5fbff">
+<h3>📱 家庭设备答题查询（云端，只读）</h3>
+<p class="muted">按云端记录来源设备分组。设备别名只保存在妈妈当前手机；未标记的设备不会自动认定为外婆或爸爸。题目记录不等于完整交卷，不能据此擅自判定80%达标。</p>
+<div id="deviceCloudList"></div>
+</section>
 <h3>各设备共用的云端课程进度</h3><p class="muted">以下统计来自家庭账号能读取的云端记录，不是当前手机独有的本机成绩。未上传的本地进度不计入。</p>
 <div id="cloudProgress" aria-live="polite"></div>
 <div id="records"></div>
@@ -58,12 +63,77 @@ function load(i){
  s.onerror=function(){load(i+1)};document.head.appendChild(s)
 }
 function field(row,name,fallback){return row[name]===undefined||row[name]===null?fallback:row[name]}
+function deviceFromRecord(row){
+ const id=String(row&&row.record_id||'');
+ const match=id.match(/^v6-([a-f0-9]{16})-(?:answer|course|a-|g-)/);
+ return match?match[1]:null;
+}
+function renderDeviceCloud(rows){
+ const root=$("deviceCloudList");root.replaceChildren();
+ const buckets=new Map(),unknown=[];
+ for(const r of rows){
+  const id=deviceFromRecord(r);if(!id){unknown.push(r);continue}
+  if(!buckets.has(id))buckets.set(id,[]);
+  buckets.get(id).push(r);
+ }
+ if(!buckets.size){root.textContent="尚未从云端记录中识别到设备来源；可能未同步或使用旧格式。";return}
+ const aliasesKey="v6-mother-device-aliases-v1";
+ let aliases={};try{aliases=JSON.parse(localStorage.getItem(aliasesKey)||'{}')||{}}catch(_){}
+ function n(tag,txt,cls){const x=document.createElement(tag);if(txt!==null&&txt!==undefined)x.textContent=txt;if(cls)x.className=cls;return x}
+ [...buckets].sort((a,b)=>b[1].length-a[1].length).forEach(([id,items])=>{
+   const section=n('section',null,'item');
+   const title=n('strong','设备 '+id.slice(-6));
+   const alias=n('input');alias.type='text';alias.placeholder='给设备备注：如外婆手机';alias.value=aliases[id]||'';
+   alias.setAttribute('aria-label','设备 '+id.slice(-6)+' 的本机备注');
+   alias.style.cssText='margin:7px 0 4px;width:100%;padding:9px';
+   alias.onchange=()=>{const value=alias.value.trim().slice(0,30);aliases[id]=value;try{localStorage.setItem(aliasesKey,JSON.stringify(aliases))}catch(_){}};
+   const hint=n('div','此设备上传 '+items.length+' 条云端记录。身份需自行确认，不能只按备注断定。','muted');
+   const groups=new Map();
+   for(const r of items){
+     const day=Number(r.learning_day),sub=String(r.subject||'');
+     if(!Number.isInteger(day)||day<1||day>30||!['语文','数学','英语','科学'].includes(sub))continue;
+     const k=String(day).padStart(2,'0')+'|'+sub;
+     if(!groups.has(k))groups.set(k,{day,sub,answer:0,correct:0,graded:0,done:0,attempts:[]});
+     const g=groups.get(k);
+     if(r.record_type==='answer'){
+       g.answer++;
+       let payload=r.record_data;try{if(typeof payload==='string')payload=JSON.parse(payload)}catch(_){}
+       const a=payload&&payload.answer;
+       if(a&&typeof a.correct==='boolean'&&!a.derived){g.graded++;if(a.correct)g.correct++}
+     }else if(r.record_type==='course-complete')g.done++;
+     else if(r.record_type==='course-attempt'){
+       let p=r.record_data;try{if(typeof p==='string')p=JSON.parse(p)}catch(_){}
+       if(p&&Number.isInteger(Number(p.correct))&&Number.isInteger(Number(p.total))&&Number(p.total)>0)g.attempts.push(p);
+     }
+   }
+   const details=n('details');details.open=false;
+   const summary=n('summary','查看按学习日、学科的记录（'+groups.size+' 组）');details.append(summary);
+   [...groups.values()].sort((a,b)=>b.day-a.day||a.sub.localeCompare(b.sub)).forEach(g=>{
+     const d=n('div',null,'item');
+     const h=n('strong','第 '+g.day+' 学习日 · '+g.sub);
+     let evidence='云端逐题记录 '+g.answer+' 条（可识别对错 '+g.graded+' 条），课程完成标记 '+g.done+' 条。';
+     if(g.attempts.length){
+       const arr=g.attempts.sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
+       evidence+=' 独立交卷 '+arr.length+' 次：'+arr.map((a,i)=>{
+         const rate=Number(a.correct)/Number(a.total)*100;
+         return '第'+(i+1)+'次 '+a.correct+'/'+a.total+'（'+rate.toFixed(1)+'%，'+(rate>=80?'达标':'未达标')+'）';
+       }).join('；')+'。';
+     }else evidence+=' 暂无可核验的整轮成绩，不能断定提交次数或80%达标。';
+     d.append(h,n('div',evidence,'muted'));details.append(d);
+   });
+   if(!groups.size)details.append(n('p','暂无可归入四科学习日的记录。','muted'));
+   section.append(title,alias,hint,details);root.append(section);
+ });
+ if(unknown.length)root.append(n('p','另有 '+unknown.length+' 条云端记录无法识别设备来源，未强行分配给任何成员。','muted'));
+}
+
 function render(rows,member){
  $("data").style.display="block";
  var names={owner:"妈妈（所有者）",parent:"爸爸",grandparent:"外婆"};
  $("greeting").textContent="家庭学习记录 · "+(names[member.member_role]||"家庭成员");
  rows=rows.filter(x=>x&&x.family_id===FAMILY&&x.record_type!=="sync-test");
  rows.sort((a,b)=>String(b.learning_day||b.created_at||"").localeCompare(String(a.learning_day||a.created_at||"")));
+ renderDeviceCloud(rows);
  var days=new Set(rows.map(r=>r.learning_day).filter(Boolean)),subjects=new Set(rows.map(r=>r.subject).filter(Boolean));
  $("total").textContent=rows.length;$("days").textContent=days.size;$("subjects").textContent=subjects.size;
  var progress=$("cloudProgress");progress.replaceChildren();
