@@ -24,6 +24,29 @@ function build(s,b){
  (s.records||[]).forEach(function(r,i){if(i<b.answerCount||!r||typeof r!=="object")return;
   arr.push({record_id:"v6-"+prefix+"-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
  });
+ // Every completed attempt is uploaded, including scores below 80%.
+ // IDs include a stable device ID and immutable attempt ID; retries never overwrite history.
+ try{
+  var history=JSON.parse(localStorage.getItem("v6-attempt-history-v1")||"{}");
+  if(history&&typeof history==="object"){
+   Object.keys(history).forEach(function(k){
+    var attempts=history[k];if(!Array.isArray(attempts))return;
+    attempts.forEach(function(a){
+     if(!a||!map[a.subject]||!a.id||!/^[a-zA-Z0-9-]{8,100}$/.test(String(a.id)))return;
+     var ld=Number(a.learningDay),correct=Number(a.correct),total=Number(a.total);
+     if(!Number.isInteger(ld)||ld<1||ld>30||!Number.isInteger(total)||total<1||
+        !Number.isInteger(correct)||correct<0||correct>total)return;
+     if(!Number.isFinite(Date.parse(a.at))||Date.parse(a.at)<Date.parse(b.start))return;
+     arr.push({record_id:"v6-"+prefix+"-attempt-"+a.id,record_type:"course-attempt",
+       subject:a.subject,learning_day:ld,
+       record_data:{version:1,source:"v6-attempt-history-v1",device_id:prefix,
+        attempt_id:a.id,lesson:Number(a.lesson),correct:correct,wrong:total-correct,
+        total:total,accuracy_pct:Math.round(correct/total*1000)/10,
+        passed:correct*5>=total*4,at:a.at}});
+    });
+   });
+  }
+ }catch(e){saveStatus("成绩历史读取异常，保留本机记录",{state:"warning"})}
  var course=s.v6Course||{},subjs=course.subjects||{};
  Object.keys(subjs).forEach(function(day){var n=Number(day);if(!Number.isInteger(n)||n<1||n>30)return;
   var m=subjs[day];if(!m||typeof m!=="object")return;
