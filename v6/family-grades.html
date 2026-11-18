@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f2a4a" />
+<title>家庭成绩单 · 小小赛车成长工坊</title>
+<style>
+  :root{
+    --ink:#12243d; --sub:#5b7290; --line:#dbe6f3; --card:#fff;
+    --green:#2fae6a; --red:#e23b2e; --amber:#d9822b; --blue:#2f6fd0;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    color:var(--ink);background:#eef4fb;padding:16px 12px 40px;
+  }
+  header{max-width:860px;margin:0 auto 14px}
+  h1{font-size:20px;margin:0 0 6px}
+  .sub{color:var(--sub);font-size:13px;line-height:1.6;margin:0}
+  .card{max-width:860px;margin:0 auto 14px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{border:0;border-radius:11px;padding:11px 16px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;background:var(--blue);color:#fff}
+  .btn.ghost{background:#eef4fb;color:var(--ink);border:1px solid var(--line)}
+  .btn:disabled{opacity:.5}
+  .status{font-size:13px;line-height:1.6;color:var(--sub);margin:10px 0 0;white-space:pre-wrap}
+  .status.err{color:var(--red)}
+  .status.ok{color:var(--green)}
+  .day{margin:0 0 16px}
+  .day h2{font-size:15px;margin:0 0 8px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .day h2 small{font-weight:400;color:var(--sub);font-size:12px}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:#eef4fb;color:var(--sub)}
+  .tag.pass{background:#e6f7ee;color:var(--green)}
+  .tag.fail{background:#fdecea;color:var(--red)}
+  .tag.pend{background:#fdf3e6;color:var(--amber)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;color:var(--sub);font-weight:600;background:#f8fbfe}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .muted{color:var(--sub)}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .empty{color:var(--sub);font-size:13px;padding:8px 0}
+  .legend{font-size:12px;color:var(--sub);line-height:1.7;margin:8px 0 0}
+  code{background:#f4f7fb;padding:1px 5px;border-radius:5px;font-size:12px}
+  .sync-card{border-left-width:5px}
+  .sync-card.ok{border-left-color:var(--green)}
+  .sync-card.warn{border-left-color:var(--amber)}
+  .sync-card.bad{border-left-color:var(--red);background:#fff8f7}
+  .sync-card h2{font-size:15px;margin:0 0 8px}
+  .sync-line{font-size:13px;line-height:1.7;margin:4px 0;color:var(--ink)}
+  .sync-line.warn{color:#8a5210}
+  .sync-line.bad{color:var(--red);font-weight:600}
+  .sync-note{font-size:12px;color:var(--sub);line-height:1.7;margin:8px 0 0;border-top:1px dashed var(--line);padding-top:8px}
+  .bind-box{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+  .bind-box h3{font-size:13px;margin:0 0 8px}
+  .bind-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+  .bind-row code{font-size:12px;word-break:break-all}
+  .bind-row input{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;min-width:180px;flex:1}
+  .bind-row .btn{padding:8px 12px;font-size:13px}
+  @media (max-width:520px){ th.hide-s,td.hide-s{display:none} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏁 家庭成绩单</h1>
+  <p class="sub">给妈妈／爸爸看的真实学习成绩。数据只来自云端 <code>growth_learning_records</code>，
+     按「家庭 + 学习日 + 学科」取历史最高有效成绩判定，低于 80% 的真实成绩同样保留展示。</p>
+  <p class="sub">同步状态只反映云端实际收到了什么。设备本地有没有开启自动同步、同步基线是否匹配、
+     登录会话是否还在有效期内，服务器读不到——所以这里只做「收到 / 没收到」的事实判断，不承诺打开页面就一定上传成功。</p>
+</header>
+
+<section class="card">
+  <div class="row">
+    <button class="btn" id="btn-load">刷新云端成绩</button>
+    <button class="btn ghost" id="btn-login" hidden>去登录家长账号</button>
+    <button class="btn ghost" id="btn-dashboard">返回家庭管理</button>
+  </div>
+  <p class="status" id="status">正在确认家长身份…</p>
+</section>
+
+<section class="card sync-card" id="sync" hidden></section>
+
+<main id="report"></main>
+
+<p class="legend">
+  判定说明：<span class="tag pass">已达标</span> 该学习日该科历史最高 ≥80%；
+  <span class="tag fail">未达标</span> 有真实成绩但最高仍 &lt;80%；
+  <span class="tag pend">待同步</span> 只有完成标记、没有拿到分数；
+  <span class="muted">暂无成绩</span> 云端没有任何该科交卷。
+  设备归属只有在家长明确绑定过设备后才显示名称，否则一律显示「设备待识别」。
+</p>
+
+<script type="module">
+import { currentMember, loginUrl } from './r5/identity.mjs';
+import { buildSyncHealth, describeSync } from './r5/sync-health.mjs';
+
+const RDB_REAL = 'https://normal-goose-d5g4qyzr8bb389a4a.api.tcloudbasegateway.com/v1/rdb/rest';
+const $ = (id) => document.getElementById(id);
+const FAMILY_FALLBACK = 'little-growth-family-001';
+
+const state = { member: null, source: '' };
+
+function setStatus(text, kind) {
+  const el = $('status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+const pct = (c, t) => (Number(t) > 0 ? Math.round(Number(c) / Number(t) * 1000) / 10 : null);
+const passed = (c, t) => Number(t) > 0 && Number(c) * 5 >= Number(t) * 4;
+
+function shanghaiDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
+}
+
+/* ---------------- 首选：服务端判定接口（r5_family_grades） ---------------- */
+async function fetchServerGrades(member) {
+  const res = await fetch(`${RDB_REAL}/rpc/r5_family_grades`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${member.token}`,
+    },
+    body: JSON.stringify({ p_family_id: member.family_id, p_days: 14 }),
+    cache: 'no-store',
+  });
+  if (res.status === 404) return null;             // 迁移尚未执行：走本地汇总
+  if (!res.ok) throw new Error('云端判定接口返回 ' + res.status);
+  const body = await res.json();
+  const payload = Array.isArray(body) ? body[0] : body;
+  if (!payload || !Array.isArray(payload.days)) return null;
+  return payload;
+}
+
+/* ---------------- 回退：直接读记录表，在前端按同一规则汇总 ---------------- */
+async function fetchRecords(member) {
+  const url = `${RDB_REAL}/growth_learning_records`
+    + '?select=record_id,record_type,subject,learning_day,record_data,created_by,created_at'
+    + `&family_id=eq.${encodeURIComponent(member.family_id)}`
+    + '&order=created_at.desc&limit=2000';
+  const res = await fetch(url, {
+    headers: { authorization: `Bearer ${member.token}`, accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error('读取学习记录失败 ' + res.status);
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+const CANON = {
+  语文: '语文', chinese: '语文', yw: '语文', 国文: '语文',
+  数学: '数学', math: '数学', sx: '数学',
+  英语: '英语', english: '英语', en: '英语', yy: '英语',
+  科学: '科学', science: '科学', kx: '科学',
+};
+const canon = (s) => CANON[String(s || '').trim().toLowerCase()] || CANON[String(s || '').trim()] || null;
+
+/** 一整轮的最少题量，与服务端 r5v2.round_min_total() 一致 */
+const MIN_ROUND_TOTAL = 5;
+
+/** ISO → 上海时区的 YYYY-MM-DD；无法解析返回 '' */
+function shDate(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(t));
+}
+
+function aggregate(records) {
+  // key = learning_day|subject
+  const map = new Map();
+  const slotOf = (k) => {
+    if (!map.has(k)) map.set(k, { attempts: [], completed: false });
+    return map.get(k);
+  };
+
+  // 旧成绩的分组：subject|day|date，只有配上 course-complete 且达到整轮题量才算一次交卷
+  const legacy = new Map();
+  const completeKeys = new Set();
+
+  for (const r of records) {
+    const subject = canon(r.subject);
+    if (!subject || !Number.isInteger(Number(r.learning_day))) continue;
+    const data = typeof r.record_data === 'string' ? safeJson(r.record_data) : (r.record_data || {});
+    const day = Number(r.learning_day);
+    const key = `${day}|${subject}`;
+
+    if (r.record_type === 'course-complete') {
+      slotOf(key).completed = true;
+      const d = shDate(data.completed_at);
+      if (d) completeKeys.add(`${subject}|${day}|${d}`);
+      continue;
+    }
+
+    if (r.record_type === 'answer') {
+      const a = data.answer;
+      if (!a) continue;
+      const isRight = a.correct === true || a.correct === 'true';
+      const isWrong = a.correct === false || a.correct === 'false';
+      if (!isRight && !isWrong) continue;
+      const d = shDate(a.date);
+      if (!d) continue;
+      const k = `${subject}|${day}|${d}`;
+      const g = legacy.get(k) || { correct: 0, total: 0, date: d };
+      g.total += 1;
+      if (isRight) g.correct += 1;
+      legacy.set(k, g);
+      continue;
+    }
+
+    if (r.record_type !== 'course-attempt') continue;
+    const total = Number(data.total), correct = Number(data.correct);
+    if (!Number.isInteger(total) || total < 1 || !Number.isInteger(correct)) continue;
+    if (correct < 0 || correct > total) continue;
+    slotOf(key).attempts.push({
+      correct, total,
+      accuracy_pct: pct(correct, total),
+      passed: passed(correct, total),
+      at: data.at || r.created_at,
+      uploaded_at: r.created_at,
+      created_by: r.created_by || '',
+      device_id: data.device_id || '',
+      device_label: null,
+      kind: 'course-attempt',
+      recovered: data.recovered === true,
+    });
+  }
+
+  // 旧成绩入表：只认「同一学科 + 同一学习日 + 同一答题日期上有整轮完成标记」的组
+  for (const [k, g] of legacy) {
+    if (!completeKeys.has(k)) continue;
+    if (g.total < MIN_ROUND_TOTAL) continue;      // 1/1、2/2 这类零散练习不算成绩
+    const parts = k.split('|');
+    const subject = parts[0];
+    const day = parts[1];
+    slotOf(`${day}|${subject}`).attempts.push({
+      correct: g.correct,
+      total: g.total,
+      accuracy_pct: pct(g.correct, g.total),
+      passed: passed(g.correct, g.total),
+      at: `${g.date}T12:00:00+08:00`,
+      uploaded_at: `${g.date}T12:00:00+08:00`,
+      created_by: '',
+      device_id: '',
+      device_label: null,
+      kind: 'answer-verified',
+      recovered: false,
+    });
+  }
+
+  for (const slot of map.values()) {
+    slot.attempts.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    slot.best = slot.attempts.reduce((best, a) => {
+      if (!best) return a;
+      return (a.correct * best.total > best.correct * a.total) ? a : best;
+    }, null) || null;
+  }
+  return map;
+}
+
+function safeJson(text) { try { return JSON.parse(text); } catch { return {}; } }
+
+/* ---------------- 同步状态 ---------------- */
+const SYNC_ICON = { ok: '✅', warn: '⚠️', bad: '⛔' };
+
+function renderSync(health) {
+  const host = $('sync');
+  if (!host) return;
+  if (!health) { host.hidden = true; return; }
+  const d = describeSync(health);
+  const unbound = Array.isArray(health.unbound_devices) ? health.unbound_devices : [];
+  const bindBox = unbound.length ? `<div class="bind-box">
+      <h3>家长确认设备归属</h3>
+      ${unbound.map((u) => `<div class="bind-row">
+        <code>${esc(u.device_hash)}</code>
+        <input type="text" data-bind-input="${esc(u.device_hash)}" placeholder="例如：外婆的手机" aria-label="设备名称" />
+        <button class="btn ghost" type="button" data-bind-device="${esc(u.device_hash)}">确认设备</button>
+      </div>`).join('')}
+      <p class="sync-note">这里的 16 位编号是 V6 本机同步号，不是赛车里的设备号；只有你在这里确认过，成绩单才会显示设备名称。未确认前一律显示「设备待识别」。</p>
+    </div>` : '';
+  host.hidden = false;
+  host.className = 'card sync-card ' + d.level;
+  host.innerHTML = `<h2>${SYNC_ICON[d.level] || '⚠️'} 同步状态
+      <small class="muted">${esc(health.today || '')}</small></h2>`
+    + d.lines.map((line, i) => `<p class="sync-line${i === 0 && d.level !== 'ok' ? ' ' + d.level : ''}">${esc(line)}</p>`).join('')
+    + bindBox;
+  host.querySelectorAll('[data-bind-device]').forEach((btn) => {
+    btn.addEventListener('click', () => confirmDevice(btn));
+  });
+}
+
+async function confirmDevice(btn) {
+  const hash = btn.getAttribute('data-bind-device');
+  const input = $('sync').querySelector(`[data-bind-input="${hash}"]`);
+  const label = String(input && input.value || '').trim();
+  if (!label) { setStatus('请先给这台设备起一个家里看得懂的名字，再确认。', 'err'); return; }
+  const member = state.member;
+  if (!member) { setStatus('家长身份已失效，请刷新页面重新登录。', 'err'); return; }
+  btn.disabled = true;
+  setStatus('正在确认设备归属…');
+  try {
+    const res = await fetch(`${RDB_REAL}/rpc/r5_bind_device_hash`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
+      body: JSON.stringify({ p_family_id: member.family_id, p_device_hash: hash, p_label: label }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error('设备确认失败 ' + res.status);
+    setStatus('设备已确认，正在刷新成绩单…', 'ok');
+    await load();
+  } catch (e) {
+    btn.disabled = false;
+    setStatus('设备确认失败：' + String(e && e.message || e), 'err');
+  }
+}
+
+/* ---------------- 渲染 ---------------- */
+const ROLE_LABEL = { owner: '妈妈（owner）', parent: '爸爸（parent）', grandparent: '外婆（grandparent）' };
+
+function subjectRow(subject, info) {
+  const best = info.best || info;
+  const hasScore = best && Number(best.total) > 0;
+  const isPass = hasScore && passed(best.correct, best.total);
+  const tag = isPass ? '<span class="tag pass">已达标</span>'
+    : hasScore ? '<span class="tag fail">未达标</span>'
+    : info.state === 'PENDING' || info.evidence === 'COMPLETED_UNSCORED'
+      ? '<span class="tag pend">待同步</span>'
+      : '<span class="muted">暂无成绩</span>';
+  const attempts = info.attempts_detail || info.attempts || [];
+  const last = Array.isArray(attempts) ? attempts[0] : null;
+  const device = last
+    ? (last.device_label ? esc(last.device_label) : (last.device_id ? '设备待识别' : '—'))
+    : '—';
+  const account = last
+    ? (ROLE_LABEL[last.member_role] || (last.created_by ? '已登录家庭成员' : '—'))
+    : '—';
+  const recovered = Array.isArray(attempts) ? attempts.filter(a => a.recovered).length : 0;
+  const legacyCount = Array.isArray(attempts) ? attempts.filter(a => a.kind === 'answer-verified').length : 0;
+  const receivedToday = Array.isArray(attempts) ? attempts.filter(a => a.received_today).length : 0;
+  const countCell = `${Array.isArray(attempts) ? attempts.length : 0}`
+    + (legacyCount ? ` <span class="tag">旧记录 ${legacyCount}</span>` : '')
+    + (receivedToday ? ` <span class="tag pass">今日收到 ${receivedToday}</span>` : '')
+    + (recovered ? ` <span class="tag">补同步 ${recovered}</span>` : '');
+  return `<tr>
+    <td>${esc(subject)}${info.in_plan === false ? ' <span class="tag">未排课</span>' : ''}</td>
+    <td class="num">${hasScore ? best.correct : '—'}</td>
+    <td class="num">${hasScore ? (best.total - best.correct) : '—'}</td>
+    <td class="num">${hasScore ? best.total : '—'}</td>
+    <td class="num">${hasScore ? best.accuracy_pct + '%' : '—'}</td>
+    <td class="num">${hasScore ? best.accuracy_pct + '%' : '—'}</td>
+    <td>${tag}</td>
+    <td class="hide-s muted">${last ? shanghaiDate(last.uploaded_at || last.at) : '—'}</td>
+    <td class="hide-s">${device}</td>
+    <td class="hide-s muted">${account}</td>
+    <td class="num muted">${countCell}</td>
+  </tr>`;
+}
+
+function render(days, meta) {
+  const host = $('report');
+  if (!days.length) {
+    host.innerHTML = '<section class="card"><p class="empty">云端还没有任何学习计划或成绩记录。</p></section>';
+    return;
+  }
+  host.innerHTML = days.map(day => {
+    const subj = day.subjects || [];
+    const rows = subj.map(s => subjectRow(s.subject, s)).join('');
+    return `<section class="card day">
+      <h2>学习日 ${esc(day.learning_day)} <small>${esc(day.study_date)}${day.published ? '' : ' · 计划未发布'}</small></h2>
+      <div class="scroll"><table>
+        <thead><tr>
+          <th>科目</th><th>答对</th><th>答错</th><th>总题</th>
+          <th>有效成绩</th><th>最高正确率</th><th>判定</th>
+          <th class="hide-s">上传时间</th><th class="hide-s">设备</th><th class="hide-s">账号</th><th>次数</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="11" class="empty">这一天的计划没有学科</td></tr>'}</tbody>
+      </table></div>
+    </section>`;
+  }).join('') + `<section class="card"><p class="status">数据来源：${esc(meta)}</p></section>`;
+}
+
+async function load() {
+  setStatus('正在确认家长身份…');
+  let member;
+  try {
+    member = await currentMember();
+  } catch (e) {
+    $('btn-login').hidden = false;
+    setStatus(e.code === 'NO_MEMBER'
+      ? '这个账号不是家庭里的成员，无法查看家庭成绩。'
+      : '需要先登录家长账号才能查看云端成绩。', 'err');
+    return;
+  }
+  $('btn-login').hidden = true;
+  state.member = member;
+  if (!member.family_id) { setStatus('没有读到家庭信息。', 'err'); return; }
+  if (!['owner', 'parent'].includes(member.role)) {
+    setStatus(`当前登录的是「${ROLE_LABEL[member.role] || member.role}」，成绩单只对妈妈／爸爸账号开放。`, 'err');
+    return;
+  }
+
+  setStatus('正在从云端读取成绩…');
+  try {
+    const server = await fetchServerGrades(member);
+    if (server) {
+      const days = server.days.map(d => ({
+        ...d,
+        subjects: (d.subjects || []).map(s => ({ ...s, best: s, attempts: s.attempts_detail || [] })),
+      }));
+      render(days, `云端判定引擎 ${server.engine} · 生成于 ${server.generated_at}`);
+      renderSync(server.sync || null);
+      setStatus('已读取云端判定结果（服务端按历史最高有效成绩判定）。', 'ok');
+      return;
+    }
+    // 迁移尚未执行：用同一条记录、同一套规则在前端汇总，并如实标注来源
+    const records = await fetchRecords(member);
+    const agg = aggregate(records);
+    const byDay = new Map();
+    for (const [key, slot] of agg) {
+      const [day, subject] = key.split('|');
+      const dayNum = Number(day);
+      if (!byDay.has(dayNum)) byDay.set(dayNum, []);
+      byDay.get(dayNum).push({
+        subject, best: slot.best, attempts: slot.attempts,
+        attempts_detail: slot.attempts,
+        state: slot.best ? (passed(slot.best.correct, slot.best.total) ? 'PASSED' : 'BELOW_THRESHOLD')
+          : (slot.completed ? 'PENDING' : 'NOT_STARTED'),
+        evidence: slot.best ? 'SCORED' : (slot.completed ? 'COMPLETED_UNSCORED' : 'NOT_STARTED'),
+      });
+    }
+    const days = [...byDay.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([d, subjects]) => ({ learning_day: d, study_date: '', published: true, subjects }));
+    render(days, '云端原始学习记录 + 前端按同一规则汇总（服务端判定接口尚未开启）');
+    renderSync(buildSyncHealth({
+      records,
+      devices: [],
+      plan: null,
+      planKnown: false,
+      today: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date()),
+    }));
+    setStatus('已读取云端原始记录并汇总；服务端判定接口上线后会自动改用服务端结果。', 'ok');
+  } catch (e) {
+    renderSync(null);
+    setStatus('读取失败：' + String(e && e.message || e) + '\n本机数据未做任何改动。', 'err');
+  }
+}
+
+$('btn-load').addEventListener('click', load);
+$('btn-login').addEventListener('click', () => { location.href = loginUrl('./family-grades.html'); });
+$('btn-dashboard').addEventListener('click', () => { location.href = './family-dashboard.html'; });
+load();
+</script>
+</body>
+</html>
