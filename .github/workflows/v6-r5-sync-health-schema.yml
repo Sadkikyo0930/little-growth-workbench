@@ -1,0 +1,31 @@
+name: V6 R5 sync health SQL schema compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'v6/r5/sync-health.mjs'
+      - 'v6/family-grades.html'
+      - 'tests/r5-sync-health-sql-shape.test.mjs'
+      - '.github/workflows/v6-r5-sync-health-schema.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'v6/r5/sync-health.mjs'
+      - 'v6/family-grades.html'
+      - 'tests/r5-sync-health-sql-shape.test.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Syntax check
+        run: node --check v6/r5/sync-health.mjs
+      - name: Match production CloudBase JSON response
+        run: node tests/r5-sync-health-sql-shape.test.mjs
