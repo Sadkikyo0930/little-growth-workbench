@@ -92,7 +92,7 @@
 
 <script type="module">
 import { currentMember, loginUrl } from './r5/identity.mjs';
-import { buildSyncHealth, describeSync, normalizeSyncHealth } from './r5/sync-health.mjs';
+import { buildSyncHealth, describeSync } from './r5/sync-health.mjs';
 
 const RDB_REAL = 'https://normal-goose-d5g4qyzr8bb389a4a.api.tcloudbasegateway.com/v1/rdb/rest';
 const $ = (id) => document.getElementById(id);
@@ -274,8 +274,7 @@ function safeJson(text) { try { return JSON.parse(text); } catch { return {}; } 
 /* ---------------- 同步状态 ---------------- */
 const SYNC_ICON = { ok: '✅', warn: '⚠️', bad: '⛔' };
 
-function renderSync(rawHealth) {
-  const health = normalizeSyncHealth(rawHealth);
+function renderSync(health) {
   const host = $('sync');
   if (!host) return;
   if (!health) { host.hidden = true; return; }
