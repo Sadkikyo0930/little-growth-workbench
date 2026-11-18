@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261117-family-attempt-cloud-v1';
+const VERSION='20261118-r5-complete-v4';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -15,6 +15,8 @@ const CORE_FILES=[
 './assemble-center.html','./fragment-reward.html',
 './r5/config.mjs','./r5/catalog.mjs','./r5/identity.mjs','./r5/rdb-client.mjs','./r5/fragment-client.mjs',
 './r5/fragment-contract.mjs','./r5/fragment-reward.mjs','./r5/member-fragments.mjs','./r5/reward-hook.mjs','./r5/weekly-goal.mjs',
+/* 成绩上传策略与本机补救：必须和 family-auto-sync.js 一起更新，不能落后一个版本。 */
+'./r5/attempt-upload-policy.mjs','./r5/attempt-recovery.mjs','./r5/sync-health.mjs',
 './assets/cars/frag_common_01-thumb.png','./assets/cars/frag_rare_01-thumb.png'
 ];
 self.addEventListener('install',event=>{
@@ -84,7 +86,12 @@ self.addEventListener('fetch',event=>{
    || url.pathname.endsWith('/chinese-daily-questions.js')
    || url.pathname.endsWith('/chinese-classroom.js');
  // Cloud sync code must not be stuck behind an old cache-first script.
- if(freshLesson || url.pathname.endsWith('/family-auto-sync.js') || url.pathname.endsWith('/r5-bridge.js')){
+ // 上传策略与补救模块同理：它们决定「这条成绩要不要传」，落后一个版本就会
+ // 用旧规则把新的高分挡在外面。
+ const freshSync = url.pathname.endsWith('/family-auto-sync.js')
+   || url.pathname.endsWith('/r5-bridge.js')
+   || /\/r5\/(attempt-upload-policy|attempt-recovery|sync-health)\.mjs$/.test(url.pathname);
+ if(freshLesson || freshSync){
   event.respondWith((async()=>{
    const key=new URL(url.pathname,ROOT.origin);
    try{const fresh=await fetch(req,{cache:'no-store'});if(fresh.ok){await store(RUNTIME,key,fresh);return fresh}}
