@@ -2,7 +2,7 @@
 (function(){"use strict";
 var KEY="growth-workbench-v6-adaptive-2",BASELINE="v6-family-sync-baseline-20261105",ENABLED="v6-family-auto-sync-enabled",STATUS="v6-family-auto-sync-status",FAMILY="little-growth-family-001";
 var SDK=["https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js","https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js","https://imgcache.qq.com/qcloud/cloudbase-js-sdk/latest/cloudbase.full.js"];
-var running=false,app=null,auth=null,db=null,lastFingerprint="",lastAttempt=0;
+var running=false,app=null,auth=null,db=null,lastFingerprint="",lastAttempt=0,lastOffNotice=0;
 var RESTORE_OPT_IN="v6-family-auto-restore-enabled",RESTORE_STATUS="v6-family-auto-restore-status",restoreRunning=false,lastRestoreAttempt=0;
 function restoreStatus(message,state,added){try{localStorage.setItem(RESTORE_STATUS,JSON.stringify({message:message,state:state,added:added||0,at:new Date().toISOString()}))}catch(e){}}
 function saveStatus(message,meta){try{localStorage.setItem(STATUS,JSON.stringify(Object.assign({at:new Date().toISOString(),message:message},meta||{})));}catch(e){}}
@@ -70,31 +70,11 @@ function build(s,b){
 // on the best verified cloud accuracy for the same family + learning day + subject.
 // This preserves all original records, including previously uploaded non-passing attempts.
 // Equal/worse scores stay on the device, but never downgrade cloud's effective best.
-function eligibleAttempts(rows,cloud){
- var best=Object.create(null),has=Object.create(null),selected=[];
- function key(r){return String(r.learning_day)+'|'+String(r.subject)}
- function score(p){var correct=Number(p&&p.correct),total=Number(p&&p.total);return Number.isInteger(correct)&&Number.isInteger(total)&&total>0&&correct>=0&&correct<=total?{correct:correct,total:total}:null}
- (cloud||[]).forEach(function(r){
-  if(!r||r.record_type!=="course-attempt")return;
-  var p=r.record_data;if(typeof p==="string"){try{p=JSON.parse(p)}catch(e){return}}
-  var sc=score(p);if(!sc)return;
-  var k=key(r);has[k]=true;
-  var v=sc.correct/sc.total;if(best[k]===undefined||v>best[k])best[k]=v;
- });
- var candidates=rows.filter(function(r){return r.record_type==="course-attempt"}).sort(function(a,b){
-   var ta=Date.parse(a.record_data.at),tb=Date.parse(b.record_data.at);
-   return ta-tb||a.record_id.localeCompare(b.record_id);
- });
- candidates.forEach(function(r){
-  var sc=score(r.record_data);if(!sc)return;
-  var k=key(r),v=sc.correct/sc.total;
-  if(!has[k]||v>best[k]+1e-12){
-    selected.push(r);has[k]=true;best[k]=v;
-  }
- });
- var keep=new Set(selected.map(function(r){return r.record_id}));
- return rows.filter(function(r){return r.record_type!=="course-attempt"||keep.has(r.record_id)});
-}
+//
+// 2026-11-17：策略本身搬到 ./r5/attempt-upload-policy.mjs，由 run() 动态 import。
+// 这样同一条规则既能被自动同步调用，也能被单元测试直接覆盖，
+// 而且「旧成绩（逐题 + course-complete 整轮证据）」与「新 course-attempt」
+// 会用同一套整数比较取历史最高，不再只认 course-attempt。
 function loadSdk(i){return new Promise(function(resolve,reject){
  if(window.cloudbase&&typeof window.cloudbase.init==="function"){resolve();return}
  if(i>=SDK.length){reject(Error("CloudBase SDK 加载失败"));return}
@@ -114,9 +94,31 @@ async function connect(){
  if(!db||typeof db.from!=="function")throw Error("RDB 客户端初始化失败")
 }
 async function run(){
- if(running||localStorage.getItem(ENABLED)!=="yes"||!navigator.onLine)return;
+ if(running||!navigator.onLine)return;
+ if(localStorage.getItem(ENABLED)!=="yes"){
+  // 开关没开时不能一声不响：妈妈端要能分清「孩子没答题」和「这台设备没开同步」。
+  if(Date.now()-lastOffNotice>300000){lastOffNotice=Date.now();saveStatus("自动同步未开启：本机成绩只保存在这台设备上，云端不会收到",{state:"off"})}
+  return;
+ }
  var s=readState(),b=baseline();if(!s||!b){saveStatus("未设置正式同步起点，已暂停自动同步",{state:"paused"});return}
  var rows=build(s,b);
+ // 本机补救：attempt-history 偶尔会缺一轮（课程页没加载 attempt-history.js，
+ // 或者手机还在跑旧缓存的课程页）。这时把课程进度里已经记下的同一轮真实分数
+ // 补成一条 course-attempt，否则「本机 15/15、云端 0 条」会一直卡住闸门。
+ // 只搬运本机已记录的真实分数，不推算、不补题。
+ try{
+  var recovery=await import("./r5/attempt-recovery.mjs");
+  var extra=recovery.recoverAttempts({
+   history:JSON.parse(localStorage.getItem("v6-attempt-history-v1")||"{}"),
+   getItem:function(k){return localStorage.getItem(k)},
+   deviceId:deviceId(),
+   since:b.start
+  });
+  if(extra.length){
+   var seenIds={};rows.forEach(function(r){seenIds[r.record_id]=1});
+   extra.forEach(function(r){if(!seenIds[r.record_id]){rows.push(r);seenIds[r.record_id]=1}});
+  }
+ }catch(e){saveStatus("成绩补救检查失败，本机记录未改动："+error(e),{state:"warning"})}
  if(!rows.length){saveStatus("已启用，等待孩子产生第一条正式学习记录",{state:"idle",pending:0});return}
  var fp=rows.map(x=>x.record_id).join("|");
  // Avoid repeating requests on idle pages and avoid tight retry loops after network failures.
@@ -137,9 +139,16 @@ async function run(){
   if(existing&&existing.error)throw existing.error;
   if(!existing||!Array.isArray(existing.data))throw Error("云端读取结果异常");
   if(existing.data.some(x=>x.family_id!==FAMILY))throw Error("检测到其他家庭数据，已停止同步");
-  // Only verified, append-only improved attempt scores are eligible.
-  // The cloud read is mandatory; unknown state must never be treated as a blank history.
-  rows=eligibleAttempts(rows,existing.data);
+  // 上传策略（外部模块，与单元测试同一份实现）：
+  //   · 首次完整交卷必传，即使低于 80%
+  //   · 之后只有严格高于云端历史最高有效成绩才传
+  //   · 云端最高分同时包含已整轮验证通过的旧成绩与新 course-attempt
+  // 云端这次读取失败/为空时，绝不退化成「当作没有历史」把低分全传上去。
+  var policy=await import("./r5/attempt-upload-policy.mjs");
+  var decision=policy.selectUploads(rows,existing.data);
+  rows=policy.rowsToInsert(rows,decision);
+  var diag={selected:decision.selected.length,skipped:decision.skipped.length,
+            cloud_rows:existing.data.length,reasons:decision.reason};
   var ids=new Set(existing.data.filter(x=>x.record_type!=="sync-test").map(x=>String(x.record_id))),count=0;
   for(var j=0;j<rows.length;j++){
    var item=rows[j];if(ids.has(item.record_id))continue;
@@ -158,7 +167,7 @@ async function run(){
   lastFingerprint=fp;
   // 云端学习记录写入成功后，再询问服务器是否已完成本周目标。
   import("./r5/weekly-goal.mjs").then(function(m){return m.resumeWeeklyGoal()}).catch(function(){});
-  saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",{state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()});
+  saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",Object.assign({state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()},diag));
  }catch(e){
   // 身份类失败必须和「网络失败」分开：它既不代表孩子没达标，也不代表本机数据坏了，
   // 更不允许因此清空或重写本机档案。
