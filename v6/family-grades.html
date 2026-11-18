@@ -419,7 +419,16 @@ async function load() {
         subjects: (d.subjects || []).map(s => ({ ...s, best: s, attempts: s.attempts_detail || [] })),
       }));
       render(days, `云端判定引擎 ${server.engine} · 生成于 ${server.generated_at}`);
-      renderSync(server.sync || null);
+      // 成绩单和同步诊断相互独立：同步卡片若出现版本差异，绝不再把整份成绩单判成读取失败。
+      try {
+        renderSync(server.sync || null);
+      } catch (syncError) {
+        console.warn('同步状态显示异常（不会影响成绩单）', syncError);
+        const syncBox = $('sync');
+        syncBox.hidden = false;
+        syncBox.className = 'card sync-card warn';
+        syncBox.textContent = '⚠️ 云端成绩已经读取，但同步状态暂时无法显示，请刷新页面。成绩不会因此丢失。';
+      }
       setStatus('已读取云端判定结果（服务端按历史最高有效成绩判定）。', 'ok');
       return;
     }

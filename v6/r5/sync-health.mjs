@@ -218,12 +218,45 @@ export function buildSyncHealth({
   };
 }
 
-const SUBJECT_TAG = { RECEIVED_TODAY: '已收到', MISSING_TODAY: '今日未收到' };
+/**
+ * CloudBase r5v2.sync_health SQL uses today_subjects and
+ * can_confirm_local_flags; older JS buildSyncHealth uses subject_status
+ * and local_flags_known. Accept both without turning an absent field
+ * into a false "no scores" result. Never mutate server data.
+ */
+export function normalizeSyncHealth(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const subjects = Array.isArray(raw.subject_status) ? raw.subject_status
+    : Array.isArray(raw.today_subjects) ? raw.today_subjects : [];
+  const normalizedSubjects = subjects.filter((s) => s && typeof s === 'object').map((s) => ({
+    ...s,
+    subject: String(s.subject || '未命名科目'),
+    status: ['RECEIVED_TODAY', 'MISSING_TODAY'].includes(s.status)
+      ? s.status
+      : (Number.isFinite(Number(s.today_scores))
+        ? (Number(s.today_scores) > 0 ? 'RECEIVED_TODAY' : 'MISSING_TODAY')
+        : 'UNKNOWN'),
+  }));
+  const allowedOverall = ['UNKNOWN_PLAN','NO_PUBLISHED_PLAN_TODAY','NOTHING_RECEIVED_TODAY','PARTIAL_TODAY','RECEIVING_TODAY'];
+  return {
+    ...raw,
+    overall: allowedOverall.includes(raw.overall) ? raw.overall : 'UNKNOWN_PLAN',
+    subject_status: normalizedSubjects,
+    day_cumulative_subjects: Array.isArray(raw.day_cumulative_subjects) ? raw.day_cumulative_subjects : [],
+    devices: Array.isArray(raw.devices) ? raw.devices : [],
+    accounts: Array.isArray(raw.accounts) ? raw.accounts : [],
+    unbound_devices: Array.isArray(raw.unbound_devices) ? raw.unbound_devices : [],
+    local_flags_known: raw.local_flags_known === true || raw.can_confirm_local_flags === true,
+  };
+}
+
+const SUBJECT_TAG = { RECEIVED_TODAY: '已收到', MISSING_TODAY: '今日未收到', UNKNOWN: '云端状态未知' };
 
 /**
  * 给妈妈端直接显示的文字与级别。level: ok / warn / bad
  */
 export function describeSync(health) {
+  health = normalizeSyncHealth(health);
   if (!health) return { level: 'warn', lines: ['同步状态未知。'] };
 
   const lines = [];
@@ -242,9 +275,14 @@ export function describeSync(health) {
     level = 'warn';
     const missing = health.subject_status.filter((s) => s.status === 'MISSING_TODAY')
       .map((s) => s.subject).join('、');
-    lines.push(`今天只收到部分科目，未收到：${missing} —— 成绩待同步或需核实。`);
-  } else {
+    lines.push(missing
+      ? `今天只收到部分科目，未收到：${missing} —— 成绩待同步或需核实。`
+      : '云端提示今天只收到部分科目，但暂未提供逐科详情；需要核实同步情况。');
+  } else if (health.overall === 'RECEIVING_TODAY') {
     lines.push('今天计划内的科目都已从云端收到成绩。');
+  } else {
+    level = 'warn';
+    lines.push('云端同步状态格式尚未识别，不能据此判定孩子没有学习。');
   }
 
   if (health.subject_status.length) {
