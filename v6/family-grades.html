@@ -80,6 +80,8 @@
 
 <section class="card sync-card" id="sync" hidden></section>
 
+<section class="card" id="dayAlign" hidden></section>
+
 <main id="report"></main>
 
 <p class="legend">
@@ -411,6 +413,8 @@ async function load() {
   }
 
   setStatus('正在从云端读取成绩…');
+  /* 学习日对齐卡片：只读云端权威日，是否对齐由家长在这里明确确认。 */
+  try { renderDayAlign(await fetchCloudDay(member)); } catch (_) { renderDayAlign(null); }
   try {
     const server = await fetchServerGrades(member);
     if (server) {
@@ -464,6 +468,98 @@ async function load() {
     renderSync(null);
     setStatus('读取失败：' + String(e && e.message || e) + '\n本机数据未做任何改动。', 'err');
   }
+}
+
+
+/* ---------------- 本机课次对齐（家长授权，绝不自动执行） ---------------- */
+const LOCAL_STATE_KEY = 'growth-workbench-v6-adaptive-2';
+
+/** 本机自然课次：第一个还没完成的学习日。 */
+function readLocalCourse() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LOCAL_STATE_KEY) || 'null');
+    const c = (s && s.v6Course) || {};
+    const done = c.completedDays || {};
+    let natural = 30;
+    for (let d = 1; d <= 30; d++) { if (!done[d]) { natural = d; break; } }
+    const a = Number(c.cloudAlignedDay);
+    return {
+      natural,
+      aligned: Number.isInteger(a) && a >= 1 && a <= 30 ? a : 0,
+      records: Array.isArray(s && s.records) ? s.records.length : 0,
+    };
+  } catch (_) { return { natural: 1, aligned: 0, records: 0 }; }
+}
+
+/** 只读云端权威学习日；失败返回 null，绝不猜测。 */
+async function fetchCloudDay(member) {
+  const res = await fetch(`${RDB_REAL}/rpc/r5_status`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${member.token}` },
+    body: JSON.stringify({ p_family_id: member.family_id }),
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  const body = await res.json();
+  const p = Array.isArray(body) ? body[0] : body;
+  const day = Number(p && p.study_day);
+  if (!Number.isInteger(day) || day < 1 || day > 30) return null;
+  return {
+    day,
+    subjects: p && Array.isArray(p.modules) ? p.modules.map((m) => m && m.subject).filter(Boolean) : [],
+  };
+}
+
+function renderDayAlign(cloudDay) {
+  const host = $('dayAlign');
+  if (!host) return;
+  const local = readLocalCourse();
+  const current = Math.max(local.natural, local.aligned);
+  host.hidden = false;
+  if (!cloudDay) {
+    host.innerHTML = '<h2>🗓️ 本机学习日</h2>'
+      + `<p class="sync-line">本机当前课次：第 ${current} 天 · 记录 ${local.records} 条</p>`
+      + '<p class="sync-note">暂时没有读到云端学习日，未做任何改动。</p>';
+    return;
+  }
+  const behind = cloudDay.day > current;
+  host.innerHTML = '<h2>🗓️ 本机学习日对齐</h2>'
+    + `<p class="sync-line">云端权威学习日：第 ${cloudDay.day} 天 · 本机课次：第 ${current} 天</p>`
+    + `<p class="sync-line">本机记录 ${local.records} 条；对齐不会删除或改写其中任何一条。</p>`
+    + (behind
+      ? `<button class="btn" type="button" id="btn-align-day">仅在本设备对齐到第 ${cloudDay.day} 天</button>
+         <p class="sync-note">对齐只抬高本机课次：不改云端学习日、不清空本机记录、不删除历史成绩。孩子随后从第 ${cloudDay.day} 天继续学习。</p>`
+      : '<p class="sync-note">本机课次已不落后于云端，无需对齐。</p>');
+  const btn = $('btn-align-day');
+  if (btn) btn.addEventListener('click', () => alignLocalDay(btn, cloudDay));
+}
+
+async function alignLocalDay(btn, cloudDay) {
+  const local = readLocalCourse();
+  const current = Math.max(local.natural, local.aligned);
+  if (cloudDay.day <= current) { setStatus('本机课次已与云端一致，未做改动', 'ok'); return; }
+  const ok = window.confirm(
+    `云端权威学习日是第 ${cloudDay.day} 天，本机还停在第 ${current} 天。\n\n`
+    + `只在本设备把课次对齐到第 ${cloudDay.day} 天：\n`
+    + '· 不改动云端学习日\n· 不清空本机记录\n· 不删除任何历史成绩\n\n确定对齐吗？'
+  );
+  if (!ok) { setStatus('已取消，本机与云端均未改动', 'ok'); return; }
+  btn.disabled = true;
+  try {
+    const s = JSON.parse(localStorage.getItem(LOCAL_STATE_KEY) || '{}');
+    s.v6Course = s.v6Course && typeof s.v6Course === 'object' ? s.v6Course : {};
+    const at = new Date().toISOString();
+    s.v6Course.cloudAlignedDay = cloudDay.day;
+    s.v6Course.cloudAlignedAt = at;
+    s.v6Course.cloudAlignedSource = 'parent_family_grades';
+    s.v6Course.alignAudit = (Array.isArray(s.v6Course.alignAudit) ? s.v6Course.alignAudit : [])
+      .concat([{ day: cloudDay.day, from: current, at, by: 'parent' }]);
+    localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(s));
+    renderDayAlign(cloudDay);
+    setStatus(`已在本设备对齐到第 ${cloudDay.day} 天；本机 ${local.records} 条记录未改动。`, 'ok');
+  } catch (e) {
+    setStatus('对齐失败：' + String(e && e.message || e), 'err');
+  } finally { btn.disabled = false; }
 }
 
 $('btn-load').addEventListener('click', load);

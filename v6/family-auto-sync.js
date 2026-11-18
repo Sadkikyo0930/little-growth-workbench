@@ -18,6 +18,8 @@ function deviceId(){
 }
 
 function dayIndex(d){var x=Number(String(d||"").slice(-2));return Number.isInteger(x)&&x>=1&&x<=31?x:0}
+// 上海本地日期：逐题答案的 date 必须与同一轮摘要的答题日一致，否则云端会判为跨轮混用。
+function shDate(iso){try{var t=Date.parse(iso);if(!Number.isFinite(t))return '';return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date(t))}catch(e){return ''}}
 function build(s,b){
  var prefix=deviceId();
  var arr=[],subjectNames={cn:"语文",ma:"数学",en:"英语",sc:"科学"},map={"语文":"cn","数学":"ma","英语":"en","科学":"sc"};
@@ -43,6 +45,25 @@ function build(s,b){
         attempt_id:a.id,lesson:Number(a.lesson),correct:correct,wrong:total-correct,
         total:total,accuracy_pct:Math.round(correct/total*1000)/10,
         passed:correct*5>=total*4,at:a.at}});
+     // 同一轮的逐题答案：与摘要共用 attempt_id，云端据此校验整轮一致性。
+     // 条数必须等于 total，任何缺失都不上传，绝不补齐或臆造题序。
+     if(Array.isArray(a.answers)&&a.answers.length===total){
+      var ad=shDate(a.at);
+      if(ad){
+       a.answers.forEach(function(ans){
+        var ai=Number(ans&&ans.index);
+        if(!Number.isInteger(ai)||ai<0||ai>=total)return;
+        arr.push({record_id:"v6-"+prefix+"-a-"+a.id+"-"+String(ai).padStart(3,"0"),
+          record_type:"answer",subject:a.subject,learning_day:ld,
+          record_data:{version:1,source:"v6-attempt-history-v1",index:ai,
+            attempt_id:a.id,device_id:prefix,
+            answer:{date:ad,index:ai,level:1,skill:"完整交卷",track:"完整交卷",
+              choice:(ans&&ans.choice!==undefined)?ans.choice:null,
+              lesson:Number(a.lesson)||null,correct:!!(ans&&ans.correct===true),
+              subject:map[a.subject],learningDay:ld,source:"v6-attempt-history-v1"}}});
+       });
+      }
+     }
     });
    });
   }

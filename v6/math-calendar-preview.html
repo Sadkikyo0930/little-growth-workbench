@@ -7,7 +7,7 @@ const plan=[
 ['20以内混合加减','数字迷宫'],['看图列式','应用题条件'],['几个几个数','方块分组'],['相同数量的几组','4×4数独'],['认识乘法','积木阵列'],['2和5的乘法启蒙','模拟购物'],['加减与乘法复习','每周测评'],
 ['4×4图形数独','排除法'],['4×4数字数独','找规律'],['立体方块计数','隐藏方块'],['正面与俯视图','视角配对'],['方块计数进阶','空间旋转'],['对称与七巧板','图形拼搭'],['数独空间挑战','每周测评'],
 ['20以内巧算','计算策略'],['乘法分组进阶','阵列拼图'],['人民币购物找零','生活应用题'],['认识钟表','逻辑排序'],['复杂方块计数','三视图'],['多条件数学推理','数独进阶'],['数学侦探挑战','每周测评'],['错题专项训练','薄弱项强化'],['月末大闯关','能力成长报告']];
-const mathDates=[2,3,5,6,9,10,12,13,16,17,19,20,23,24,26,27,30];const $=id=>document.getElementById(id);let day=1,week=0,pos=0,first=0,errors=0,hints=0,miss=false,done=false,active=[],results=[];
+const mathDates=[2,3,5,6,9,10,12,13,16,17,19,20,23,24,26,27,30];const $=id=>document.getElementById(id);let day=1,week=0,pos=0,first=0,errors=0,hints=0,miss=false,done=false,active=[],results=[],answerTrace=[];
 const bank=[];const add=(d,q,a,choices,tip,kind='number',visual='')=>bank.push({d,q,a,choices,tip,kind,visual});
 const n=(d,a,b,op='+')=>{if(op==='-'&&b>a)b=a-1;let v=op==='+'?a+b:a-b;const opts=[v,v-1,v+1,v+2].filter(x=>x>=0&&x<=30);while(opts.length<4)opts.push(v+opts.length+2);opts.sort((x,y)=>((x*17+d*13)%11)-((y*17+d*13)%11));add(d,a+' '+op+' '+b+' = ?',v,opts,'先想想能不能把一个数凑成10，再计算。','calc',String(a))};
 const c=(d,q,a,tip,kind='number',visual='')=>{let choices=typeof a==='number'?[a,a+1,a-1,a+2].filter(x=>x>=0):[a,'左边','右边','都不是'];while(choices.length<4)choices.push(typeof a==='number'?a+choices.length+3:'其他');choices=choices.slice(0,4).sort((x,y)=>String(x).localeCompare(String(y),'zh-CN'));add(d,q,a,choices,tip,kind,visual)};
@@ -53,7 +53,7 @@ function showSudoku(q,area){const sol=sudokuSolution,mask=q.visual.split('|').ma
 function repaint(){cells.forEach((cell,i)=>{cell.textContent=values[i]||'？';cell.className=(mask.includes(i)?'editable ':'')+(selected===i?'selected ':'')+(values[i]&&values[i]!==sol[Math.floor(i/4)][i%4]?'wrong':'')});}
 for(let i=0;i<16;i++){const cell=el('button','',values[i]?String(values[i]):'？');cell.type='button';if(i%4===1)cell.style.borderRightWidth='3px';if(Math.floor(i/4)===1)cell.style.borderBottomWidth='3px';cell.disabled=!mask.includes(i);cell.onclick=()=>{if(done)return;selected=i;repaint()};grid.append(cell);cells.push(cell)}
 for(let value=1;value<=4;value++){const b=el('button','',String(value));b.onclick=()=>{if(done)return;values[selected]=value;repaint();feedback.textContent='继续填空，完成后点检查。'};pad.append(b)}
-const clear=el('button','action','清空选中格');clear.onclick=()=>{if(done)return;values[selected]=0;repaint()};const check=el('button','action','✓ 检查数独');check.onclick=()=>{if(done)return;if(mask.some(i=>!values[i])){feedback.textContent='还有空格没填完。';return}const bad=mask.filter(i=>values[i]!==sol[Math.floor(i/4)][i%4]);if(bad.length){attempted=true;miss=true;errors++;feedback.textContent='还有'+bad.length+'格不对，检查每行、每列和小宫。';speak('再检查一下每行每列');repaint();return}done=true;if(!attempted)first++;results.push({question:q.q,firstTry:!attempted});feedback.textContent='🌟 数独完成！';next.classList.remove('hidden');speak('恭喜你回答正确')};const hint=el('button','action','💡 数独提示');hint.onclick=()=>{hints++;feedback.textContent='每行、每列、每个2×2小宫都只能出现一次1到4。';speak('观察每一行和每一列缺少什么数字')};area.append(info,grid,pad,clear,check,hint,feedback,next);repaint()}
+const clear=el('button','action','清空选中格');clear.onclick=()=>{if(done)return;values[selected]=0;repaint()};const check=el('button','action','✓ 检查数独');check.onclick=()=>{if(done)return;if(mask.some(i=>!values[i])){feedback.textContent='还有空格没填完。';return}const bad=mask.filter(i=>values[i]!==sol[Math.floor(i/4)][i%4]);if(bad.length){attempted=true;miss=true;errors++;feedback.textContent='还有'+bad.length+'格不对，检查每行、每列和小宫。';speak('再检查一下每行每列');repaint();return}done=true;if(!attempted)first++;if(answerTrace[pos]===undefined)answerTrace[pos]={index:pos,choice:null,correct:!attempted};results.push({question:q.q,firstTry:!attempted});feedback.textContent='🌟 数独完成！';next.classList.remove('hidden');speak('恭喜你回答正确')};const hint=el('button','action','💡 数独提示');hint.onclick=()=>{hints++;feedback.textContent='每行、每列、每个2×2小宫都只能出现一次1到4。';speak('观察每一行和每一列缺少什么数字')};area.append(info,grid,pad,clear,check,hint,feedback,next);repaint()}
 function speak(t){if(!window.speechSynthesis)return;window.speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(String(t).replace(/\+/g,'加').replace(/=/g,'等于').replace(/\?/g,'多少'));u.lang='zh-CN';u.rate=.78;window.speechSynthesis.speak(u)}
 function el(tag,cls,txt){const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x}
 function renderCalendar(){const w=$('weeks');w.replaceChildren();['第1组','第2组','第3组'].forEach((s,i)=>{let b=el('button',i===week?'active':'',s);b.onclick=()=>{week=i;renderCalendar()};w.append(b)});const d=$('dates');d.replaceChildren();for(let i=week*7;i<Math.min(week*7+7,17);i++){const b=el('button',day===i+1?'active':'','第'+(i+1)+'天');b.append(el('small','', '11月'+mathDates[i]+'日 · '+plan[i][0]));b.onclick=()=>{day=i+1;renderCalendar();start()};d.append(b)}}
@@ -72,7 +72,7 @@ const reveal=el('button','action','🔎 查看俯视结构线索'),clue=el('div'
 if(q.kind==='group'){const [groups,each]=q.visual.split('|').map(Number),wrap=el('div','groups');for(let g=0;g<groups;g++){let part=el('div','group');for(let j=0;j<each;j++)part.append(el('span','','🏎️'));wrap.append(part)}area.append(wrap)}
 if(q.kind==='sudoku'){const [row,col]=q.visual.split('|').map(Number),grid=el('div','sudoku');const sol=[[1,2,3,4],[3,4,1,2],[2,1,4,3],[4,3,2,1]];for(let r=0;r<4;r++)for(let k=0;k<4;k++){let cell=el('div',r===row&&k===col?'missing':'',r===row&&k===col?'?':String(sol[r][k]));if(r===1)cell.style.borderBottomWidth='3px';if(k===1)cell.style.borderRightWidth='3px';grid.append(cell)}area.append(grid)}
 }
-function setMathBanner(){const im=document.getElementById('mathBanner'),fb=document.getElementById('mathBannerFallback');im.hidden=false;fb.hidden=true;im.onerror=()=>{im.hidden=true;fb.hidden=false};im.src='./math_banner_'+(day<=8?1:2)+'.webp'}function start(){setMathBanner();active=selectDaily(day);pos=0;first=0;errors=0;hints=0;results=[];$('lessonTitle').textContent='11月'+mathDates[day-1]+'日 · 数学第'+day+'课 · '+plan[day-1][0];$('challenge').textContent='思维挑战：'+plan[day-1][1];$('status').textContent='完整互动课程 · '+active.length+'题';show()}
+function setMathBanner(){const im=document.getElementById('mathBanner'),fb=document.getElementById('mathBannerFallback');im.hidden=false;fb.hidden=true;im.onerror=()=>{im.hidden=true;fb.hidden=false};im.src='./math_banner_'+(day<=8?1:2)+'.webp'}function start(){setMathBanner();active=selectDaily(day);pos=0;first=0;errors=0;hints=0;results=[];answerTrace=[];$('lessonTitle').textContent='11月'+mathDates[day-1]+'日 · 数学第'+day+'课 · '+plan[day-1][0];$('challenge').textContent='思维挑战：'+plan[day-1][1];$('status').textContent='完整互动课程 · '+active.length+'题';show()}
 function showMakeTen(q,area){
  const a=q.makeTenA,b=q.makeTenB,need=10-a,remaining=b-need,total=a+b;
  let step=0,moved=0,mistake=false;
@@ -124,7 +124,7 @@ function showMakeTen(q,area){
        choices.replaceChildren();feedback.textContent='';
        if(step===0){step=1;stageTitle.textContent='从下面红色木条中拿 '+need+' 个，补满上面的10格。';speak('选对了。现在从红色木条里拿'+need+'个，补满十。');drawRows();}
        else if(step===2){step=3;stageTitle.textContent='10 + '+remaining+' = 多少？';speak('现在十加'+remaining+'等于多少？');showChoices([total,total-1,total+1,total+2],total)}
-       else if(step===3){done=true;if(!mistake)first++;results.push({question:q.q,firstTry:!mistake,method:'make-ten-board',transfer:need,remainder:remaining});stageTitle.textContent='做对啦！ '+a+' + '+b+' = '+total;feedback.textContent='先凑成10，再加剩下的'+remaining+'，答案是'+total+'。';board.append(el('div','makeTenResult','10 + '+remaining+' = '+total));next.classList.remove('hidden');speak('恭喜你。'+a+'加'+b+'等于'+total)}
+       else if(step===3){done=true;if(!mistake)first++;if(answerTrace[pos]===undefined)answerTrace[pos]={index:pos,choice:null,correct:!mistake};results.push({question:q.q,firstTry:!mistake,method:'make-ten-board',transfer:need,remainder:remaining});stageTitle.textContent='做对啦！ '+a+' + '+b+' = '+total;feedback.textContent='先凑成10，再加剩下的'+remaining+'，答案是'+total+'。';board.append(el('div','makeTenResult','10 + '+remaining+' = '+total));next.classList.remove('hidden');speak('恭喜你。'+a+'加'+b+'等于'+total)}
      };choices.append(btn);
    });
  }
@@ -132,9 +132,11 @@ function showMakeTen(q,area){
  area.append(board);drawRows();
  showChoices([need,Math.max(0,need-1),need+1,need+2],need);
 }
-function show(){const q=active[pos];miss=false;done=false;const area=$('interactive');area.replaceChildren();area.append(el('h3','', (q.stage||'基础练习')+' · 第'+(pos+1)+' / '+active.length+'题'),el('div','question',q.q));if(q.kind==='sudokuFill'){showSudoku(q,area);return}if(q.kind==='makeTenBoard'){showMakeTen(q,area);return}drawVisual(q,area);const choices=el('div','answers'),feedback=el('p','feedback','');const next=el('button','action next hidden',pos===active.length-1?'完成本日课程 ✓':'下一题 →');next.onclick=()=>{if(!done)return;if(pos===active.length-1)finish();else{pos++;show()}};q.choices.forEach(v=>{let b=el('button','',String(v));b.onclick=()=>{if(done)return;if(v===q.a){if(!miss)first++;done=true;results.push({question:q.q,firstTry:!miss});b.style.background='#c9f2d6';choices.querySelectorAll('button').forEach(x=>x.disabled=true);feedback.textContent='🌟 恭喜你回答正确！';next.classList.remove('hidden');speak('恭喜你回答正确')}else{miss=true;errors++;b.disabled=true;b.style.background='#ffe0dc';feedback.textContent='再想一想，可以点击提示。';speak('再想一想')}};choices.append(b)});area.append(choices,feedback);const hear=el('button','action','🔊 听题');hear.onclick=()=>speak(q.q);const hint=el('button','action','💡 提示');hint.onclick=()=>{hints++;feedback.textContent='💡 '+q.tip;speak(q.tip)};area.append(hear,hint,next)}
+function show(){const q=active[pos];miss=false;done=false;const area=$('interactive');area.replaceChildren();area.append(el('h3','', (q.stage||'基础练习')+' · 第'+(pos+1)+' / '+active.length+'题'),el('div','question',q.q));if(q.kind==='sudokuFill'){showSudoku(q,area);return}if(q.kind==='makeTenBoard'){showMakeTen(q,area);return}drawVisual(q,area);const choices=el('div','answers'),feedback=el('p','feedback','');const next=el('button','action next hidden',pos===active.length-1?'完成本日课程 ✓':'下一题 →');next.onclick=()=>{if(!done)return;if(pos===active.length-1)finish();else{pos++;show()}};q.choices.forEach(v=>{let b=el('button','',String(v));b.onclick=()=>{if(done)return;if(answerTrace[pos]===undefined)answerTrace[pos]={index:pos,choice:v,correct:v===q.a};if(v===q.a){if(!miss)first++;done=true;results.push({question:q.q,firstTry:!miss});b.style.background='#c9f2d6';choices.querySelectorAll('button').forEach(x=>x.disabled=true);feedback.textContent='🌟 恭喜你回答正确！';next.classList.remove('hidden');speak('恭喜你回答正确')}else{miss=true;errors++;b.disabled=true;b.style.background='#ffe0dc';feedback.textContent='再想一想，可以点击提示。';speak('再想一想')}};choices.append(b)});area.append(choices,feedback);const hear=el('button','action','🔊 听题');hear.onclick=()=>speak(q.q);const hint=el('button','action','💡 提示');hint.onclick=()=>{hints++;feedback.textContent='💡 '+q.tip;speak(q.tip)};area.append(hear,hint,next)}
 function finish(){
  const at=new Date().toISOString(),total=active.length,correct=first;
+ const attemptUid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'m'+Date.now()+'-'+Math.random().toString(36).slice(2);
+ const fullTrace=answerTrace.length===total&&answerTrace.every((x,i)=>x&&x.index===i);
  const payload={first:correct,total,errors,hints,at,results,pass:correct*5>=total*4};
  const area=$('interactive');area.replaceChildren();
  let attempt=null;
@@ -146,7 +148,8 @@ function finish(){
    if(old[day]&&!localStorage.getItem(historyKey))localStorage.setItem(historyKey,JSON.stringify(old[day]));
    attempt=window.V6AttemptHistory?.record({subject:'数学',lesson:day,
      learningDay:({1:2,2:3,3:5,4:6,5:9,6:10,7:12,8:13,9:16,10:17,11:19,12:20,13:23,14:24,15:26,16:27,17:30})[day],
-     correct,total,at,source:'math-finish'});
+     correct,total,at,attemptId:attemptUid,
+     answers:fullTrace?answerTrace.slice():null,source:'math-finish'});
    old[day]=payload;
    localStorage.setItem(key,JSON.stringify(old));
  }catch(e){console.warn('数学成绩保存失败',e)}
@@ -157,7 +160,7 @@ function finish(){
  if(new URLSearchParams(location.search).get('cohort')==='20261109'&&window.parent!==window)
    window.parent.postMessage({type:'v6-math-lesson-complete',lesson:day,cohort:'20261109',
     correct,total,rate:Math.round(correct/total*1000)/10,passed:payload.pass,
-    attemptId:attempt?.entry.id||null,at},location.origin);
+    attemptId:attempt?.entry.id||null,answers:fullTrace?answerTrace:[],at},location.origin);
  speak('今天的数学探险完成啦！');
 }
 const lessonParam=new URLSearchParams(window.location.search).get('lesson');if(lessonParam&&Number(lessonParam)>=1&&Number(lessonParam)<=17){day=Number(lessonParam);week=Math.floor((day-1)/7);document.body.classList.add('embeddedLesson')}renderCalendar();start();setMathBanner();

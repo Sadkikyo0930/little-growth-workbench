@@ -405,7 +405,26 @@ function novEscape(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 const V6_COURSE_START='2026-11-09';
 const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];
 function v6CourseRecord(){if(!state.v6Course||typeof state.v6Course!=='object')state.v6Course={completedDays:{},subjects:{}};if(!state.v6Course.completedDays)state.v6Course.completedDays={};if(!state.v6Course.subjects)state.v6Course.subjects={};return state.v6Course}
-function v6CourseDay(){const c=v6CourseRecord();for(let d=1;d<=30;d++)if(!c.completedDays[d])return d;return 30}
+function v6NaturalCourseDay(){const c=v6CourseRecord();for(let d=1;d<=30;d++)if(!c.completedDays[d])return d;return 30}
+/* 家长授权后的云端对齐日：只抬高本机课次，不动任何历史记录。 */
+function v6AlignedDay(){const a=Number(v6CourseRecord().cloudAlignedDay);return Number.isInteger(a)&&a>=1&&a<=30?a:0}
+function v6CourseDay(){const n=v6NaturalCourseDay(),a=v6AlignedDay();return a>n&&a<=30?a:n}
+/* 家长明确确认后，把本机课次对齐到云端权威日。
+   只写对齐标记：不清空本机记录、不删除历史、不推进云端、不改任何已有学习日归属。 */
+function v6AlignToCloudDay(cloudDay,source){
+ const target=Number(cloudDay);
+ if(!Number.isInteger(target)||target<1||target>30)return {ok:false,reason:'INVALID_CLOUD_DAY'};
+ const natural=v6NaturalCourseDay();
+ const current=Math.max(natural,v6AlignedDay());
+ if(target<=current)return {ok:false,reason:'NOT_BEHIND',natural:natural,aligned:current};
+ const c=v6CourseRecord();
+ c.cloudAlignedDay=target;c.cloudAlignedAt=new Date().toISOString();
+ c.cloudAlignedSource=source||'cloud_authoritative';
+ c.alignAudit=(Array.isArray(c.alignAudit)?c.alignAudit:[]).concat([{day:target,from:current,at:c.cloudAlignedAt}]);
+ if(typeof save==='function')save();
+ return {ok:true,from:current,to:target};
+}
+window.v6AlignToCloudDay=v6AlignToCloudDay;
 function v6EnglishMonthlyUnlocked(){return v6CourseStarted()&&v6SubjectDone(29,'英语')}
 function v6EnglishMonthlyRecord(){const exam=v6CourseRecord().englishMonthlyExam;return exam&&typeof exam==='object'?exam:null}
 function openOfficialEnglishMonthly(){const {weekly,monthly}=assessmentAccess();if(!weekly&&!monthly){refreshAssessmentAccess();return;}if(!v6EnglishMonthlyUnlocked()){alert('请先完成第29天的英语第17课，再参加月末测评。');return}openScreen('englishMonthlyExam');$('englishMonthlyFrame').src='./english-monthly-assessment.html?official=1&v=20261105-official-monthly1'}

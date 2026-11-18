@@ -1,4 +1,6 @@
-/* V6 four-subject attempt history. Append-only; never fabricates cloud answers. */
+/* V6 four-subject attempt history. Append-only; never fabricates cloud answers.
+   2026-11-18: each attempt can carry its own round of per-question answers,
+   bound by the same stable attemptId, so retakes never overwrite history. */
 (function(){
 'use strict';
 const KEY='v6-attempt-history-v1';
@@ -14,9 +16,18 @@ function record(input){
  const id=typeof input.attemptId==='string'&&input.attemptId?input.attemptId:
    (typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2));
  if(history.some(x=>x.id===id))return history.find(x=>x.id===id);
+ /* 逐题答案与摘要必须同轮：只有条数等于 total 时才保存，绝不臆造顺序。 */
+ const answers=Array.isArray(input.answers)&&input.answers.length===total
+   ?input.answers.map((a,i)=>({
+       index:Number.isInteger(Number(a&&a.index))?Number(a.index):i,
+       choice:a&&a.choice!==undefined?a.choice:null,
+       correct:!!(a&&a.correct===true)
+     }))
+   :null;
  const entry={id,subject:input.subject,lesson:Number(input.lesson),
    learningDay:Number.isInteger(day)&&day>=1&&day<=30?day:null,
    correct,total,rate:Math.round(correct/total*1000)/10,passed:correct*5>=total*4,
+   answers,
    at:input.at||new Date().toISOString(),
    source:input.source||'course-finish'};
  history.push(entry);

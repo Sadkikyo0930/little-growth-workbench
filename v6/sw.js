@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261118-r5-complete-v4';
+const VERSION='20261118-r5-release-v5';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -7,7 +7,7 @@ const ROOT=new URL(self.registration.scope);
 const CORE_FILES=[
 './','./index.html','./manifest.webmanifest','./app-icon.svg',
 './weekly-exam.js','./clean-art.js','./chinese-classroom.js','./family-auto-sync.js','./pwa.js',
-'./chinese-classroom.css','./v6-home-clean.jpg','./v6-assessment-clean.jpg',
+'./chinese-classroom.css','./v6-home-clean.jpg','./v6-assessment-clean.jpg','./family-grades.html',
 './growth_background.png','./english-classroom-fixed.html',
 './science-classroom.html','./math-calendar-preview.html','./attempt-history.js','./science-course-quiz.js','./science-labs.js',
 './english-monthly-assessment.html','./phonics-v4-original.html',

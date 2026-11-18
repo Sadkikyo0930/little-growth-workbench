@@ -63,10 +63,22 @@ if(!window.__v6ChineseAttemptCloudCollector){
    const key='v6-attempt-history-v1';
    const data=JSON.parse(localStorage.getItem(key)||'{}'),group='语文|day'+lessonDay;
    const history=Array.isArray(data[group])?data[group]:[];
-   const id=crypto&&crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2);
-   history.push({id,subject:'语文',lesson:lessonDay,learningDay:lessonDay,correct:score,total,
+   /* 学习日(6)与课次(3)必须分开：learningDay 决定归属哪一天，lesson 是当天的第几课。 */
+   const lessonNo=Number(e.data.lesson);
+   const lesson=Number.isInteger(lessonNo)&&lessonNo>=1&&lessonNo<=30?lessonNo:lessonDay;
+   const id=typeof e.data.attemptId==='string'&&/^[A-Za-z0-9-]{8,100}$/.test(e.data.attemptId)
+     ?e.data.attemptId
+     :(crypto&&crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2));
+   if(history.some(x=>x&&x.id===id))return; // 同一条成绩重复上报不新增记录
+   const rawAnswers=Array.isArray(e.data.answers)?e.data.answers:[];
+   const answers=rawAnswers.length===total?rawAnswers.map((a,i)=>({
+     index:Number.isInteger(Number(a&&a.index))?Number(a.index):i,
+     choice:a&&a.choice!==undefined?a.choice:null,
+     correct:!!(a&&a.correct===true)
+   })):null;
+   history.push({id,subject:'语文',lesson,learningDay:lessonDay,correct:score,total,
      rate:Math.round(score/total*1000)/10,passed:score*5>=total*4,
-     at:e.data.at||new Date().toISOString(),source:type});
+     answers,at:e.data.at||new Date().toISOString(),source:type});
    data[group]=history;localStorage.setItem(key,JSON.stringify(data));
   }catch(err){console.warn('语文完整成绩保存失败',err)}
  });

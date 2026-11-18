@@ -987,9 +987,15 @@
         return saveStatus({
           state: 'stale_device_day',
           message: '云端已到第 ' + ds.today + ' 天，本机还是第 ' + localDay
-            + ' 天；本机这次不上传，避免把旧课次的成绩记到新学习日。请刷新课程表后再试。',
+            + ' 天；本机这次不上传，避免把旧课次的成绩记到新学习日。请家长在家长入口把本机课次对齐到第 '
+            + ds.today + ' 天后再试。',
           cloud_day: ds.today, local_day: localDay,
           authoritative_day: ds.authoritative_day,
+          /* 只给出对齐建议，绝不自动改动本机课次；必须家长在家长入口确认。 */
+          needs_day_alignment: true,
+          align_target_day: ds.today,
+          align_action: 'parent_align_to_cloud_day',
+          align_note: '对齐只在本设备抬高课次：不改云端学习日、不清空本机记录、不删除历史成绩。',
           pending: null, pending_known: false,
           cloud_verified: false, cloud_verified_reason: 'STALE_DEVICE_DAY',
         });
