@@ -20,7 +20,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-21.device-day-d2.1';
+  var BRIDGE_BUILD = '2026-11-21.rc5-device-round-v3';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -347,9 +347,17 @@
   /* 本机一次性授权：家长输入口令后，生成设备令牌并绑定到本家庭。
    * 复用赛车页同一个网关接口 /v1/parent/bind，不新增服务端能力。
    * 口令只在本次请求头里出现，绝不写入 localStorage / 状态 / 日志。 */
-  async function bindThisDevice(secret, label) {
-    var s = String(secret || '');
-    if (!s) throw gatewayError('R5_PARENT_SECRET_REQUIRED', 0);
+  /**
+   * 一次性授权这台设备。
+   * 凭据是「家长自己的账号 + 自己的密码」（妈妈 / 爸爸 / 外婆），
+   * 由网关转发给 CloudBase Auth 校验；本机不保存、不缓存、不写日志。
+   * 不再有任何共享「家长口令」。
+   */
+  async function bindThisDevice(account, password, label) {
+    var acc = String(account || '').trim().toLowerCase();
+    var pw = String(password || '');
+    if (!acc) throw gatewayError('R5_PARENT_CREDENTIALS_REQUIRED', 0);
+    if (!pw) throw gatewayError('R5_PARENT_CREDENTIALS_REQUIRED', 0);
     /* 复用上次未确认的候选令牌：网络中断后重试不会在云端留下孤儿设备。
      * 与赛车绑定页共用同一个 pending 键。 */
     var token = '';
@@ -368,8 +376,12 @@
     try {
       res = await fetch(CFG.gatewayBase + '/v1/parent/bind', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-r5-parent': s },
-        body: JSON.stringify({ family_id: CFG.familyId, device: token, label: String(label || '孩子的学习设备') }),
+        headers: { 'content-type': 'application/json', 'x-r5-device': token },
+        body: JSON.stringify({
+          family_id: CFG.familyId, device: token,
+          account: acc, password: pw,
+          label: String(label || '孩子的学习设备'),
+        }),
       });
       text = await res.text();
     } catch (e) {
@@ -471,6 +483,127 @@
       fetched_at: new Date().toISOString(),
       raw: json,
     };
+  }
+
+  /* 通用网关调用：只带设备令牌，不携带任何家长凭据。 */
+  async function gatewayCall(pathname, payload) {
+    var token = deviceToken();
+    if (!token) throw gatewayError('R5_DEVICE_REQUIRED', 0);
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) { /* ignore */ } }, 15000) : null;
+    var res, text;
+    try {
+      res = await fetch(CFG.gatewayBase + pathname, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-r5-device': token },
+        body: JSON.stringify(Object.assign({ family_id: CFG.familyId }, payload || {})),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      text = await res.text();
+    } catch (e) {
+      var aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message)));
+      throw gatewayError(aborted ? 'R5_TIMEOUT' : 'R5_NETWORK', 0);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    var json = null;
+    try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+    if (!json) throw gatewayError('R5_BAD_RESPONSE', res.status);
+    if (json.error) throw gatewayError(String(json.error), res.status);
+    if (!res.ok) throw gatewayError('HTTP_' + res.status, res.status);
+    return json;
+  }
+
+  /* 答题时刻 -> 上海日期。服务端校验 (at AT TIME ZONE 'Asia/Shanghai')::date = date，
+     浏览器在别的时区时也不能用本机时区去切片，否则会被 R5_ATTEMPT_DATE_MISMATCH 拒绝。 */
+  function ymdSH(v) {
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return ymdOf(v);
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(d);
+    } catch (e) {
+      return ymdOf(v);
+    }
+  }
+
+  /* 本机整轮 -> 网关 /v1/child/round-upload 的 rounds[]。
+     只带 attempt_id、科目、学习日、答题时刻与逐题对错；
+     correct / total / 是否学完一律由服务端按这轮逐题证据自己算，本机不交任何结论。 */
+  function roundPayload(rounds) {
+    var token = deviceToken();
+    if (!token) return [];
+    var out = [];
+    (rounds || []).forEach(function (rd) {
+      if (!rd || !rd.attempt_id || !rd.answers || !rd.answers.length) return;
+      var at = (rd.attempt && rd.attempt.record_data && rd.attempt.record_data.at) || new Date().toISOString();
+      var answers = rd.answers.map(function (a, i) {
+        var d = (a && a.record_data && a.record_data.answer) || {};
+        return { index: i, correct: d.correct === true };
+      });
+      /* rd.subject 在桥接器里可能是「语文」也可能已经是代码「cn」（两处历史来源不同），
+         网关要的是中文名；这里统一归一化，否则服务端 r5_round_subject_code() 认不出，
+         会以 R5_INVALID_SUBJECT 整批拒绝。 */
+      var code = rd.code || (CFG.subjectKey[rd.subject] ? rd.subject : '');
+      var name = CFG.subjectName[code] || CFG.subjectName[rd.subject]
+        || (CFG.subjectKey[rd.subject] ? rd.subject : '');
+      if (!name) { out.__badSubject = (out.__badSubject || []).concat([String(rd.subject) + '/' + String(rd.code)]); return; }
+      out.push({
+        attempt_id: String(rd.attempt_id),
+        subject: String(name),
+        day: Number(rd.day),
+        date: ymdSH(at),
+        at: String(at),
+        device_id: token,
+        answers: answers,
+      });
+    });
+    return out;
+  }
+
+  /**
+   * 设备身份上传：家长会话过期也能把今天的成绩送到云端。
+   * 只传答题记录；「学完」由服务端按真实答题派生，客户端不能直接断言。
+   */
+  async function deviceUpload(day) {
+    var state = readState();
+    if (!state) return null;
+    var todayStr = today();
+    var rounds = collectRounds(state, day, todayStr);
+    var out = {
+      day: day, channel: 'round-v2',
+      rounds: rounds.length, uploaded: 0,
+      verified: [], rejected: [], errors: [], after: null, after_error: null,
+    };
+    if (!rounds.length) return out;
+
+    var payload = roundPayload(rounds);
+    /* 诊断：把这一轮到底准备交什么留下来（只读，不上传任何额外内容） */
+    try {
+      window.__r5LastUpload = {
+        at: new Date().toISOString(), day: day, todayStr: todayStr,
+        rounds: rounds.map(function (r) { return { subject: r.subject, code: r.code, total: r.total, answers: (r.answers || []).length }; }),
+        payload: payload.map(function (p) { return { subject: p.subject, day: p.day, date: p.date, n: p.answers.length }; }),
+      };
+    } catch (e) { /* ignore */ }
+    if (!payload.length) return out;
+
+    try {
+      var r = await gatewayCall('/v1/child/round-upload', { rounds: payload });
+      (r && r.rounds ? r.rounds : []).forEach(function (v) {
+        if (v && v.ok === true) out.verified.push(v);
+        else out.rejected.push(v);
+      });
+      out.uploaded = out.verified.length;
+    } catch (e) {
+      out.errors.push('rounds:' + (e.code || e.message));
+      return out;
+    }
+
+    /* 上传后立刻用同一台设备回读闸门：只读，不推送学习日，也不改写任何成绩。
+       读到的 study_passed / allowed 就是赛车页看到的那一份（同一个 r5_child_entry）。 */
+    try { out.after = await gatewayReadDay(); }
+    catch (e2) { out.after_error = String(e2 && (e2.code || e2.message) || 'UNKNOWN'); }
+    return out;
   }
 
   /* 最近一次云端读取结果（带核对时间），用于「实时失败时不冒充当前状态」。 */
@@ -628,7 +761,10 @@
         subj: String(r.subject || '').toLowerCase(),
         day: ld,
         track: r.track || '练习',
-        index: Number(r.index) || i,
+        /* 题号必须取「这道题自己的 index」。旧写法 `Number(r.index) || i` 在
+         * index=0 时会退化成数组下标，导致英语第 1 题被记成 10，整轮题号不连续、
+         * 云端无法核验。0 是合法题号，不能被 || 吃掉。 */
+        index: (r.index === undefined || r.index === null) ? i : Number(r.index),
         correct: r.correct,
         date: r.date,
         today: todayStr,
@@ -840,6 +976,243 @@
       .map(function (it) { return toRow(it, device); });
   }
 
+  /* ==================================================================
+   * 整轮（round）：v6.1.0 起上传的唯一单位
+   *
+   * 云端判定要求「一次完整交卷 = 摘要 + 同一 attempt_id 的逐题答案」，
+   * 因此本机必须先把今天的逐题记录拼成一整轮再发，不能只发摘要。
+   *
+   * 拼轮规则（与云端 R5_SAFE_ROUND_V4 口径一致）：
+   *   · 同一学科可能来自多个来源（学习记录 / 课件进度 / 语文故事 / 语文闯关），
+   *     逐个来源检查「题号是否恰好是 0..n-1」，只有完全连续的才算一轮；
+   *   · 取题量最多的那一组，n < 5 不构成一轮（零散练习不算）；
+   *   · attempt_id 由「学科+学习日+日期+逐题对错序列」决定 →
+   *     同一天同一结果重复同步得到同一个 id（PWA 重启、断网重试都幂等），
+   *     结果改变才会得到新 id。
+   *
+   * ---- rc3 修复：同一天重新答题（第二次）传不上去 ----
+   * 旧实现对着「同一 source|track 只允许一组 0..n-1」这条规则，
+   * 同一天再答一轮时这组会变成 0..9,0..9，连续性检查直接 return，
+   * 于是整科被丢弃 → 「第一次 4/10、第二次 10/10」的第二轮永远到不了云端，
+   * 孩子当天被判未完成、赛车继续锁死。这是 rc2 之前就存在的前端缺陷。
+   *
+   * rc3 两条最小修复（不改变云端评分口径，也不拼接不同轮次）：
+   *   1) 优先取 v6-attempt-history-v1 里「带完整逐题答案」的轮次：
+   *      每轮自带 answers 与 at，天然不覆盖旧轮（语文、数学会带）；
+   *   2) 退回逐题记录时，把重复题号拆成多轮再取最好的一轮，
+   *      不再因为一段不连续就丢掉整科（英语、科学走这条）。
+   * 每科每天仍然只上传「最好的一轮」：半轮不上传，跨轮不合并分子分母。
+   * ================================================================== */
+  /* 本机 attempt 历史（append-only，四科共用同一个 key） */
+  var HISTORY_KEY = 'v6-attempt-history-v1';
+
+  function readAttemptHistory() {
+    try {
+      var v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch (e) { return {}; }
+  }
+
+  /**
+   * 今天这个学习日、带完整逐题证据的轮次。
+   * 只收「题号 0..n-1 连续、逐题正确数与摘要一致、at 落在今天」的轮次；
+   * 任何一项不符就整轮丢掉，绝不臆造顺序、绝不补题。
+   */
+  function historyRounds(day, todayStr) {
+    var data = readAttemptHistory();
+    var out = [];
+    Object.keys(data).forEach(function (group) {
+      var list = Array.isArray(data[group]) ? data[group] : [];
+      list.forEach(function (it) {
+        if (!it || typeof it !== 'object') return;
+        if (!CFG.subjectKey[it.subject]) return;
+        if (Number(it.learningDay) !== day) return;
+        var total = Number(it.total), correct = Number(it.correct);
+        if (!Number.isInteger(total) || total < 5) return;
+        if (!Number.isInteger(correct) || correct < 0 || correct > total) return;
+        if (!Array.isArray(it.answers) || it.answers.length !== total) return;
+        if (ymdOf(it.at) !== todayStr) return;      // 只认「今天答的」，不改挂旧日成绩
+        var marks = [], strict = true;
+        it.answers.forEach(function (a, i) {
+          if (!a || Number(a.index) !== i) strict = false;
+          marks.push(!!(a && a.correct === true));
+        });
+        if (!strict) return;
+        if (marks.filter(Boolean).length !== correct) return;   // 摘要与逐题不一致，不收
+        out.push({ subject: it.subject, marks: marks, at: String(it.at || '') });
+      });
+    });
+    return out;
+  }
+
+  /**
+   * 把同一来源的逐题记录拆成多次完整作答。
+   * 反复「从题号 0 起按 0,1,2… 贪心取一条」，取到不能再取为止 ——
+   * 这样 0..9,0..9 会拆成两轮，而不是像旧实现那样因为不连续丢掉整科。
+   */
+  function extractRuns(list) {
+    var pool = list.slice().sort(function (a, b) { return a.index - b.index; });
+    var runs = [];
+    while (pool.length) {
+      var start = -1, i;
+      for (i = 0; i < pool.length; i++) if (pool[i].index === 0) { start = i; break; }
+      if (start < 0) break;                       // 剩余题目都没有题号 0，不成轮
+      var run = [pool.splice(start, 1)[0]];
+      var next = 1, guard = 0;
+      while (guard++ < 500) {
+        var found = -1;
+        for (i = 0; i < pool.length; i++) if (pool[i].index === next) { found = i; break; }
+        if (found < 0) break;
+        run.push(pool.splice(found, 1)[0]);
+        next++;
+      }
+      runs.push(run);
+    }
+    return runs;
+  }
+
+  /** 用「逐题对错序列」造一整轮（摘要 + 同一 attempt_id 的逐题答案） */
+  function buildRound(subj, day, todayStr, marks, at, sourceTag, track) {
+    var total = marks.length;
+    var correct = marks.filter(Boolean).length;
+    var vector = marks.map(function (b) { return b ? '1' : '0'; }).join('');
+    var code = CFG.subjectKey[subj] || subj;
+    var token = deviceToken() || deviceId();
+    /* attempt_id 公式与 v6.1.0 完全一致：同一天同一结果重复同步得到同一个 id
+       （PWA 重开、断网重试都幂等）；结果不同才得到新 id，由 rc3 云端规则接受。 */
+    var aid = 'r5r-' + hash8('v1|' + code + '|' + day + '|' + todayStr + '|' + vector);
+
+    var answers = marks.map(function (ok, i) {
+      return {
+        record_id: 'v6-' + token + '-a-' + code + '-' + day + '-' + aid + '-' + ('00' + i).slice(-2),
+        record_type: 'answer',
+        subject: CFG.subjectName[subj],
+        learning_day: day,
+        record_data: {
+          version: 1,
+          attempt_id: aid,
+          device_id: token,
+          index: i,
+          source: sourceTag,
+          answer: {
+            index: i,
+            correct: ok === true,
+            date: todayStr,
+            learningDay: day,
+            subject: code,
+            track: track || sourceTag,
+            source: sourceTag,
+          },
+        },
+      };
+    });
+
+    return {
+      subject: CFG.subjectName[subj],
+      code: code,
+      day: day,
+      attempt_id: aid,
+      correct: correct,
+      total: total,
+      attempt: {
+        record_id: 'v6-' + token + '-attempt-' + code + '-' + day + '-' + aid,
+        record_type: 'course-attempt',
+        subject: CFG.subjectName[subj],
+        learning_day: day,
+        record_data: {
+          attempt_id: aid,
+          device_id: token,
+          correct: correct,
+          total: total,
+          wrong: total - correct,
+          at: at || new Date().toISOString(),
+          source: 'device-upload',
+        },
+      },
+      answers: answers,
+    };
+  }
+
+  function collectRounds(state, day, todayStr) {
+    var items = collectItems(state, day, todayStr)
+      .filter(function (it) { return it.day === day; });
+    var rounds = [];
+    var covered = {};      // 已有整轮证据的学科，逐题记录不再重复计分
+
+    /* 1) attempt 历史里带逐题答案的轮次优先（语文、数学会带）。
+          同科多轮 → 只留单轮最好的一轮，用整数交叉相乘比较，避免浮点误差。 */
+    var picked = {};
+    historyRounds(day, todayStr).forEach(function (rd) {
+      var c = rd.marks.filter(Boolean).length, t = rd.marks.length;
+      var prev = picked[rd.subject];
+      if (!prev || c * prev.marks.length > prev.marks.filter(Boolean).length * t) {
+        picked[rd.subject] = rd;
+      }
+    });
+    Object.keys(picked).forEach(function (subj) {
+      var hit = picked[subj];
+      if (hit.marks.length < 5) return;
+      covered[subj] = true;
+      rounds.push(buildRound(subj, day, todayStr, hit.marks, hit.at, 'attempt-history', 'attempt-history'));
+    });
+
+    /* 2) 历史里没有可核验轮次的学科，退回逐题记录。
+          先按「来源|赛道」分组，再拆成多轮 ——
+          题量最多优先（完整交卷才算一轮），同题量下取正确率最高的一轮。 */
+    var bySubject = {};
+    items.forEach(function (it) {
+      if (!CFG.subjectName[it.subj]) return;
+      if (covered[CFG.subjectName[it.subj]]) return;
+      (bySubject[it.subj] = bySubject[it.subj] || []).push(it);
+    });
+
+    Object.keys(bySubject).forEach(function (subj) {
+      var groups = {};
+      bySubject[subj].forEach(function (it) {
+        var k = String(it.source) + '|' + String(it.track);
+        (groups[k] = groups[k] || []).push(it);
+      });
+
+      var best = null, bestCorrect = -1, bestAt = '', bestSrc = '', bestTrack = '';
+      Object.keys(groups).forEach(function (k) {
+        extractRuns(groups[k]).forEach(function (run) {
+          if (run.length < 5) return;
+          var correct = run.filter(function (it) { return it.correct === true; }).length;
+          var longer = !best || run.length > best.length;
+          var sameLenBetter = best && run.length === best.length && correct * best.length > bestCorrect * run.length;
+          if (longer || sameLenBetter) {
+            best = run; bestCorrect = correct;
+            bestAt = run[0].at || '';
+            bestSrc = run[0].source || 'device-upload';
+            bestTrack = run[0].track || '练习';
+          }
+        });
+      });
+      if (!best) return;
+
+      rounds.push(buildRound(subj, day, todayStr,
+        best.map(function (it) { return it.correct === true; }),
+        bestAt, bestSrc, bestTrack));
+    });
+
+    return rounds.sort(function (a, b) { return a.code < b.code ? -1 : a.code > b.code ? 1 : 0; });
+  }
+
+  /** 把整轮摊平成行数组（网关 / REST 都收同一形状） */
+  function roundRows(rounds) {
+    var rows = [];
+    rounds.forEach(function (rd) {
+      rows.push(rd.attempt);
+      rows = rows.concat(rd.answers);
+    });
+    return rows;
+  }
+
+  /**
+   * @deprecated v6.1.0 起客户端不再上传 course-complete。
+   * 完成态一律由服务端按整轮证据派生（r5_child_complete_course），
+   * 这里保留函数只为诊断页/旧状态读取，任何上传路径都不再调用。
+   */
   function collectCompletions(state, day, todayStr) {
     var device = deviceId();
     var subs = (state.v6Course && state.v6Course.subjects) || {};
@@ -1076,20 +1449,31 @@
     out.already = rows.length - fresh.length;
     if (!fresh.length) return out;
 
-    var claim = await claimOnServer(fresh, who);
-    if (claim) {
-      out.reclaimed = claim.reclaimed.size;
-      fresh = fresh.filter(function (r) { return claim.claimed.has(r.record_id); });
-      out.duplicates += claim.duplicates.size;
-    } else {
-      var day = fresh[0].learning_day;
-      var seenQ = await cloudQuestionKeys(who, day);
-      if (seenQ) {
-        var before = fresh.length;
-        fresh = fresh.filter(function (r) { return !seenQ[fingerprint(r)]; });
-        out.duplicates += before - fresh.length;
+    /* 整轮行（带 attempt_id）不参与「逐题指纹抢占」：
+     * 抢占键是 学科|日期|关卡|题号，会把同一学科第二轮的逐题挡掉，
+     * 导致这一轮摘要与逐题配不齐、整轮核验必然失败。
+     * 整轮行靠 record_id（含 attempt 哈希）天然幂等，重复 POST 不会多写。 */
+    var withAid = fresh.filter(function (r) { return r.record_data && r.record_data.attempt_id; });
+    var legacy = fresh.filter(function (r) { return !(r.record_data && r.record_data.attempt_id); });
+
+    if (legacy.length) {
+      var claim = await claimOnServer(legacy, who);
+      if (claim) {
+        out.reclaimed = claim.reclaimed.size;
+        legacy = legacy.filter(function (r) { return claim.claimed.has(r.record_id); });
+        out.duplicates += claim.duplicates.size;
+      } else {
+        var day = legacy[0].learning_day;
+        var seenQ = await cloudQuestionKeys(who, day);
+        if (seenQ) {
+          var before = legacy.length;
+          legacy = legacy.filter(function (r) { return !seenQ[fingerprint(r)]; });
+          out.duplicates += before - legacy.length;
+        }
       }
     }
+
+    fresh = withAid.concat(legacy);
     if (!fresh.length) return out;
 
     var payload = fresh.map(function (r) {
@@ -1144,21 +1528,35 @@
         log('设备身份只读查询失败', deviceError);
       }
 
-      /* ================= 阶段 B：家长身份上传成绩 =================
-       * 上传需要家长会话；会话过期只影响「上传」，不再顺带把学习日锁死。 */
+      /* ================= 阶段 B：上传（设备身份优先） =================
+       * 没有家长会话时，已授权设备凭 x-r5-device 直接上传今天的整轮成绩，
+       * 走 /v1/child/round-upload（V5 统一评分）。家长会话只用来做跨日结算。 */
       var who = null, authError = null;
       try { who = await identity(); } catch (authFail) {
         authError = String(authFail && (authFail.code || authFail.message) || 'NO_SESSION');
       }
       if (!who) {
         var cache = readCloudCache();
+        /* 家长会话过期不再等于「什么都不能做」：
+         * 已授权设备直接用设备身份上传今天的答题记录，完成态由服务端派生。
+         * 拉不到学习日或没有设备令牌时，自动跳过，绝不影响首页显示。 */
+        var devUp = null, devUpErr = null;
+        if (deviceRead && deviceRead.today) {
+          try { devUp = await deviceUpload(deviceRead.today); }
+          catch (upFail) { devUpErr = String(upFail && (upFail.code || upFail.message) || 'UNKNOWN'); }
+        /* 上传成功就用手上的回读结果替换掉上传前的状态，页面上「是否达标 / 能否进赛车」
+           才不会停在上传前的那一秒。回读失败时保留旧值，不猜测。 */
+        if (devUp && devUp.after) { deviceRead = devUp.after; saveCloudCache(deviceRead); }
+        }
         /* 实时失败时，缓存只能作为「上次核对到第几日」的提示，
          * 不能写进 cloud_day 冒充当前学习日。 */
         var devDay = deviceRead ? deviceRead.today : null;
         return saveStatus({
           state: deviceRead ? 'device_day_synced' : 'device_day_unavailable',
           auth_required: true,
-          upload_blocked_by_auth: true,
+          upload_blocked_by_auth: !devUp,
+          upload_via_device: devUp || null,
+          upload_via_device_error: devUpErr,
           cloud_settled_by_server: true,
           local_day: courseDay(),
           cloud_day: devDay,
@@ -1189,16 +1587,25 @@
           message: deviceRead
             ? '已按本机设备身份核对：云端现在是第 ' + deviceRead.today + ' 日'
               + (deviceRead.subjects && deviceRead.subjects.length ? '（' + deviceRead.subjects.join('＋') + '）' : '')
-              + '，首页与课程已对齐。这台设备没有家长登录凭证，本机成绩仍安全保存在本机，家长登录后会自动上传；'
+              + '，首页与课程已对齐。'
+              + (devUp
+                ? (devUp.uploaded > 0
+                  ? '今天有 ' + devUp.uploaded + ' 轮成绩已由这台设备直接送到云端'
+                    + (devUp.after && devUp.after.study_passed ? '，两科已达标，赛车闸门已解锁' : '')
+                    + (devUp.errors.length ? '（另有 ' + devUp.errors.length + ' 项待重试）' : '') + '。'
+                  : (devUp.errors.length
+                    ? '云端暂未接收今天的成绩：' + devUp.errors.join('；')
+                    : '今天的成绩云端已有，没有重复上传。'))
+                : '本机成绩仍安全保存在本机，稍后会自动重试；')
               + '云端每日结算由服务器独立完成。'
             : (deviceError === 'R5_DEVICE_REQUIRED'
-              ? '这台设备还没有绑定，因此暂时读不到云端学习日。'
-                + '请家长用赛车页的「家长授权这台手机」完成一次绑定；绑定后孩子每天打开学习页会自动跟到云端学习日，不需要家长每天登录。'
+              ? '这台设备还没有授权，所以暂时读不到云端学习日。'
+                + '请家长用这个账号（妈妈/爸爸）和自己的密码在下方完成一次授权；授权后孩子每天打开学习页会自动跟到云端学习日，不需要家长每天登录。'
                 + '本机成绩与学习日都未被改动，云端结算不受影响。'
               : /R5_MEMBER_DENIED|R5_AUTH_REQUIRED/.test(deviceError || '')
                 ? '这台设备的授权已被撤销或不属于这个家庭，所以读不到云端学习日。'
                   + '请家长重新授权这台设备；本机成绩与学习日都未被改动。'
-                : '这台设备没有家长登录凭证，设备身份只读查询也没成功（' + deviceError + '）。'
+                : '这台设备没有家长登录凭证，设备身份查询也没成功（' + deviceError + '）。'
                   + '本机成绩与学习日均未被改动，云端结算不受影响。'),
           pending: null, pending_known: false,
           build: BRIDGE_BUILD,
@@ -1412,9 +1819,10 @@
           cloud_verified: false, cloud_verified_reason: 'SUBJECT_MISMATCH' });
       }
 
-      /* learning_day 恒为 cloudDay（= 本机 day），item 自己的学习日不会被改写。 */
-      rows = collectAnswers(state, cloudDay, todayStr)
-        .concat(collectCompletions(state, cloudDay, todayStr));
+      /* learning_day 恒为 cloudDay（= 本机 day），item 自己的学习日不会被改写。
+       * v6.1.0：只上传「整轮」（摘要 + 逐题），不再由客户端写 course-complete。 */
+      var roundsForSession = collectRounds(state, cloudDay, todayStr);
+      rows = roundRows(roundsForSession);
 
       if (diagnostic && !rows.length) {
         return saveStatus({ state: 'no_local_records', cloud_day: cloudDay,
@@ -1424,6 +1832,22 @@
       }
 
       var up = await upload(rows, who);
+
+      /* 完成态仍由服务端派生（家长会话也是家庭成员，可直接调用同一函数）。 */
+      for (var ri = 0; ri < roundsForSession.length; ri++) {
+        try {
+          await rpc('r5_child_complete_course', {
+            p_family_id: CFG.familyId,
+            p_subject: roundsForSession[ri].subject,
+            p_day: cloudDay,
+            p_attempt_id: roundsForSession[ri].attempt_id,
+          }, who);
+        } catch (compErr) {
+          log('派生完成态未成立', roundsForSession[ri].subject,
+            String(compErr && (compErr.code || compErr.message) || 'UNKNOWN'));
+        }
+      }
+
       st = await cloudStatus(who);
 
       /* ---- 关键闸门 3：云端课次不允许回退 ---- */
@@ -1678,6 +2102,15 @@
   /* ------------------------------------------------------ 对外接口 & 触发器 */
 
   window.R5Bridge = {
+    roundsFor: function (day) {
+      try {
+        var rd = collectRounds(readState(), day || courseDay(), today());
+        return rd.map(function (r) {
+          return { subject: r.subject, code: r.code, day: r.day, attempt_id: r.attempt_id,
+                   correct: r.correct, total: r.total, answers: (r.answers || []).length };
+        });
+      } catch (e) { return { error: String(e && e.message || e) }; }
+    },
     version: BRIDGE_BUILD,
     build: BRIDGE_BUILD,
     run: run,
@@ -1880,6 +2313,12 @@
     collectAnswers: function () {
       var s = readState();
       return s ? collectAnswers(s, courseDay(), today()) : [];
+    },
+
+    /* 诊断/测试用：本机某一天会拼成哪几整轮（不写任何东西） */
+    collectRounds: function () {
+      var s = readState();
+      return s ? collectRounds(s, courseDay(), today()) : [];
     },
 
     /**

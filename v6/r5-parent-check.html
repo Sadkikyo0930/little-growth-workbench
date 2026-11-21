@@ -28,7 +28,7 @@
   现在区分四项：云端已保存、本次新增、已有记录跳过、真正待上传。同步成功后，真正待上传应为 0。
 </div>
 
-<div class="note"><strong>为什么 Safari 和桌面图标显示不同学习日？</strong>iPhone 上 Safari 与桌面安装的学习应用可能使用独立的本机存档。新开的 Safari 显示第一日，并不表示云端回到第一日。本页会先用这台已绑定设备的身份直接向服务器核对“云端实时学习日”，不需要家长重新登录。若本页提示“还没有绑定”，家长在下方输入一次口令即可完成授权，之后不再需要每天登录。<strong>不要卸载、清除网站数据或手动推进学习日。</strong></div>
+<div class="note"><strong>为什么 Safari 和桌面图标显示不同学习日？</strong>iPhone 上 Safari 与桌面安装的学习应用可能使用独立的本机存档。新开的 Safari 显示第一日，并不表示云端回到第一日。本页会先用这台已绑定设备的身份直接向服务器核对“云端实时学习日”，不需要家长重新登录。若本页提示“还没有绑定”，家长在下方选择自己的账号、输入自己的密码即可完成一次授权（妈妈 / 爸爸 / 外婆各自的账号，密码只在这一次请求里用到），之后不再需要每天登录。<strong>不要卸载、清除网站数据或手动推进学习日。</strong></div>
 <div class="card"><h2>同步记录统计</h2><pre id="counters">读取中…</pre></div>
 <div class="card"><h2>本机学习情况</h2><pre id="diag">读取中…</pre></div>
 <div class="card"><h2>今天各科真实题量（本机）</h2><pre id="grading">读取中…</pre></div>
@@ -42,8 +42,9 @@
 <p><a href="./" target="_self">返回 V6 首页</a> · <span id="windowType"></span></p>
 <div class="card" id="bindCard">
   <h2>这台设备还没有授权？在这里完成一次</h2>
-  <p class="sub">家长输入一次口令即可。之后孩子每天打开学习页都会自动跟到云端学习日，不需要家长每天登录。口令只用于这一次请求，不会被保存。</p>
-  <p><label for="bindSecret">家长口令</label><br /><input id="bindSecret" type="password" maxlength="200" autocomplete="off" spellcheck="false" placeholder="请输入家长口令" style="width:100%;padding:11px;border:1px solid #cfdcea;border-radius:10px;font-size:15px" /></p>
+  <p class="sub">家长选自己的账号、输入自己的密码即可。之后孩子每天打开学习页都会自动跟到云端学习日，不需要家长每天登录。密码只在这一次请求里用到，校验在云端完成，本机不保存、不写日志。</p>
+  <p><label for="bindAccount">家长账号</label><br /><select id="bindAccount" autocomplete="off" style="width:100%;padding:11px;border:1px solid #cfdcea;border-radius:10px;font-size:15px;background:#fff"><option value="growth_mom">妈妈</option><option value="growth_dad">爸爸</option><option value="growth_grandma">外婆</option></select></p>
+  <p><label for="bindPassword">登录密码</label><br /><input id="bindPassword" type="password" maxlength="200" autocomplete="off" spellcheck="false" placeholder="请输入该账号的登录密码" style="width:100%;padding:11px;border:1px solid #cfdcea;border-radius:10px;font-size:15px" /></p>
   <p><label for="bindLabel">设备名称（可选）</label><br /><input id="bindLabel" type="text" maxlength="40" placeholder="例如：妈妈手机" style="width:100%;padding:11px;border:1px solid #cfdcea;border-radius:10px;font-size:15px" /></p>
   <p><button id="bindBtn" type="button">授权这台设备</button><span class="sub" id="bindMsg"></span></p>
 </div>
@@ -78,6 +79,10 @@
     R5_TIMEOUT:'云端响应超时',
     R5_BAD_RESPONSE:'云端返回内容异常',
     R5_GATEWAY_ERROR:'云端网关错误',
+    R5_PARENT_CREDENTIALS_REQUIRED:'请选择家长账号并输入密码',
+    R5_PARENT_CREDENTIALS_INVALID:'账号或密码格式不正确',
+    R5_PARENT_AUTH_FAILED:'账号或密码不正确',
+    R5_MEMBER_DENIED:'这个账号不是本家庭的家长账号',
     cloud_day_regression:'云端学习日不一致',
     subject_mismatch:'本机与云端科目不一致',
     upload_failed:'上传失败', auth_required:'需要重新登录',
@@ -326,18 +331,19 @@
   });
   document.getElementById('bindBtn').addEventListener('click', function () {
     var btn = this, msg = document.getElementById('bindMsg');
-    var secret = document.getElementById('bindSecret').value || '';
+    var account = document.getElementById('bindAccount').value || '';
+    var password = document.getElementById('bindPassword').value || '';
     var label = document.getElementById('bindLabel').value || '';
-    if (!secret) { msg.textContent = '请先输入家长口令。'; return; }
+    if (!account || !password) { msg.textContent = '请先选择家长账号并输入密码。'; return; }
     btn.disabled = true; msg.textContent = '正在授权…';
     Promise.resolve().then(function () {
-      return window.R5Bridge.bindThisDevice(secret, label);
+      return window.R5Bridge.bindThisDevice(account, password, label);
     }).then(function (r) {
-      document.getElementById('bindSecret').value = '';
+      document.getElementById('bindPassword').value = '';
       msg.textContent = '已授权（令牌尾号 ' + r.token_tail + '），这台设备现在可以直接读到云端学习日。';
       render(); inspect();
     }).catch(function (e) {
-      msg.textContent = '授权失败：' + (STATUS_LABELS[e.code] || e.code || e.message || '请检查家长口令');
+      msg.textContent = '授权失败：' + (STATUS_LABELS[e.code] || e.code || e.message || '请检查账号与密码');
     }).finally(function () { btn.disabled = false; });
   });
   document.getElementById('reload').addEventListener('click', function(){ render(); inspect(); });
