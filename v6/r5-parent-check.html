@@ -18,7 +18,7 @@
 </style>
 </head>
 <body>
-<h1>R5 同步自检 · v1.8.0-rc2</h1>
+<h1>R5 同步自检 · v1.9.0-device-day</h1>
 <p class="sub">家长排查用：孩子那台设备上的成绩有没有真的传到云端。<br />
 请在与孩子学习时<strong>同一台设备、同一个浏览器</strong>里打开。</p>
 
@@ -28,7 +28,7 @@
   现在区分四项：云端已保存、本次新增、已有记录跳过、真正待上传。同步成功后，真正待上传应为 0。
 </div>
 
-<div class="note"><strong>为什么 Safari 和桌面图标显示不同学习日？</strong>iPhone 上 Safari 与桌面安装的学习应用可能使用独立的本机存档。新开的 Safari 显示第一日，并不表示云端回到第一日。请在原来有学习记录的桌面应用中查看本页，并以“云端实时学习日”为准。<strong>不要卸载、清除网站数据或手动推进学习日。</strong></div>
+<div class="note"><strong>为什么 Safari 和桌面图标显示不同学习日？</strong>iPhone 上 Safari 与桌面安装的学习应用可能使用独立的本机存档。新开的 Safari 显示第一日，并不表示云端回到第一日。本页会先用这台已绑定设备的身份直接向服务器核对“云端实时学习日”，不需要家长重新登录。若本页提示“还没有绑定”，家长在下方输入一次口令即可完成授权，之后不再需要每天登录。<strong>不要卸载、清除网站数据或手动推进学习日。</strong></div>
 <div class="card"><h2>同步记录统计</h2><pre id="counters">读取中…</pre></div>
 <div class="card"><h2>本机学习情况</h2><pre id="diag">读取中…</pre></div>
 <div class="card"><h2>今天各科真实题量（本机）</h2><pre id="grading">读取中…</pre></div>
@@ -40,11 +40,18 @@
 </div>
 <p class="sub" id="tip"></p>
 <p><a href="./" target="_self">返回 V6 首页</a> · <span id="windowType"></span></p>
-<div class="card"><h2>云端实时学习日（只读）</h2><pre id="liveCloud">正在查询云端计划…</pre></div>
-<div class="card"><h2>第四日两科云端达标核验（只读）</h2><pre id="cloudVerdict">正在读取云端科目成绩…</pre><p class="sub">服务器达标与赛车时间额度独立判断。未取得云端成绩时不将本机正确率当作最终达标。</p></div>
+<div class="card" id="bindCard">
+  <h2>这台设备还没有授权？在这里完成一次</h2>
+  <p class="sub">家长输入一次口令即可。之后孩子每天打开学习页都会自动跟到云端学习日，不需要家长每天登录。口令只用于这一次请求，不会被保存。</p>
+  <p><label for="bindSecret">家长口令</label><br /><input id="bindSecret" type="password" maxlength="200" autocomplete="off" spellcheck="false" placeholder="请输入家长口令" style="width:100%;padding:11px;border:1px solid #cfdcea;border-radius:10px;font-size:15px" /></p>
+  <p><label for="bindLabel">设备名称（可选）</label><br /><input id="bindLabel" type="text" maxlength="40" placeholder="例如：妈妈手机" style="width:100%;padding:11px;border:1px solid #cfdcea;border-radius:10px;font-size:15px" /></p>
+  <p><button id="bindBtn" type="button">授权这台设备</button><span class="sub" id="bindMsg"></span></p>
+</div>
+<div class="card"><h2>云端实时学习日（只读）</h2><pre id="liveCloud">正在查询云端学习日…</pre></div>
+<div class="card"><h2 id="verdictTitle">今日两科云端达标核验（只读）</h2><pre id="cloudVerdict">正在读取云端科目成绩…</pre><p class="sub">服务器达标与赛车时间额度独立判断。未取得实时云端成绩时不将本机正确率、也不将上次缓存的结论当作当前达标。</p></div>
 <details class="card"><summary>技术排查：查看原始错误和接口字段</summary><pre id="rawTechnical">暂无原始数据</pre></details>
 <script>const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];</script>
-<script src="./r5-bridge.js?v=20261121-daily-settle-d1" data-parent-check></script>
+<script src="./r5-bridge.js?v=20261121-device-day-d2" data-parent-check></script>
 <script>
   document.getElementById('windowType').textContent =
     (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '当前窗口：桌面全屏应用' : '当前窗口：普通浏览器';
@@ -64,6 +71,13 @@
     day_not_initialized:'云端权威学习日尚未初始化',
     plan_unpublished:'今日课程计划尚未发布',
     cloud_unavailable:'暂时无法获取云端学习日',
+    device_day_synced:'已按设备身份核对云端学习日（成绩暂存本机待上传）',
+    device_day_unavailable:'设备身份与家长登录均未取得云端学习日',
+    R5_DEVICE_REQUIRED:'这台设备还没有绑定（请家长在赛车/学习页完成一次绑定）',
+    R5_NETWORK:'网络连接失败',
+    R5_TIMEOUT:'云端响应超时',
+    R5_BAD_RESPONSE:'云端返回内容异常',
+    R5_GATEWAY_ERROR:'云端网关错误',
     cloud_day_regression:'云端学习日不一致',
     subject_mismatch:'本机与云端科目不一致',
     upload_failed:'上传失败', auth_required:'需要重新登录',
@@ -111,6 +125,12 @@
     published:'计划是否已发布',from:'原学习日',to:'新学习日',
     stale_client:'本机课程版本过旧',idempotent:'重复调用未修改',
     cloud_verified_at:'云端确认时间',
+    day_source:'学习日数据来源',day_fetched_at:'云端核对时间',
+    device_day_error:'设备身份查询错误',cache_stale:'缓存是否过期',
+    source_label:'数据来源说明',fetched_at:'核对时间',stale:'是否过期',
+    upload_blocked_by_auth:'上传被登录状态阻止',checked_at:'本次检查时间',
+    cached_study_passed:'上次缓存的达标结论（非当前）',cached_racing_allowed:'上次缓存的赛车资格（非当前）',
+    remaining_seconds:'剩余赛车秒数',attempts:'查询尝试',
     details:'详细信息',status:'状态',state_key:'本机状态键',
     total_records:'总记录数',uploaded_total:'累计上传数',
     pending_count:'待同步数量',source:'记录来源',sources:'来源列表',
@@ -166,20 +186,70 @@
   }
   async function inspect() {
     var el = document.getElementById('liveCloud');
+    var verdict = document.getElementById('cloudVerdict');
+    var title = document.getElementById('verdictTitle');
+    var stamp = function (v) {
+      if (!v) return '尚未取得';
+      var d = new Date(v);
+      if (isNaN(d.getTime())) return String(v);
+      return d.toLocaleString('zh-CN', { hour12: false });
+    };
     try {
-      liveCloudValue = await window.R5Bridge.inspectCloud();
-      el.textContent = [
-        '云端权威学习日：' + (liveCloudValue.authoritative_day == null ? '尚未取得' : '第 '+liveCloudValue.authoritative_day+' 日'),
-        '今天计划学习日：' + (liveCloudValue.today_day == null ? '尚未取得' : '第 '+liveCloudValue.today_day+' 日'),
-        '今天课程：' + ((liveCloudValue.cloud_subjects||[]).join('＋') || '暂无'),
-        '今天计划已发布：' + (liveCloudValue.schedule_published?'是':'否'),
-        '云端状态：' + chineseValue(liveCloudValue.reason || '正常')
-      ].join('\n');
-      const verdict = document.getElementById('cloudVerdict');
-      const mods = Array.isArray(liveCloudValue.modules) ? liveCloudValue.modules : [];
-      const day = Number(liveCloudValue.today_day);
-      const expected = V6_SUBJECT_DAYS[day - 1] || [];
-      const output = expected.map(function (subject) {
+      liveCloudValue = await window.R5Bridge.cloudView();
+      var lines = [];
+      if (liveCloudValue.ok) {
+        lines.push('数据来源：' + (liveCloudValue.source_label || liveCloudValue.source));
+        lines.push('核对时间：' + stamp(liveCloudValue.fetched_at));
+        lines.push('云端权威学习日：' + (liveCloudValue.authoritative_day == null ? '尚未取得' : '第 ' + liveCloudValue.authoritative_day + ' 日'));
+        lines.push('今天计划学习日：' + (liveCloudValue.today_day == null ? '尚未取得' : '第 ' + liveCloudValue.today_day + ' 日'));
+        lines.push('今天课程：' + ((liveCloudValue.cloud_subjects || []).join('＋') || '暂无'));
+        lines.push('今天计划已发布：' + (liveCloudValue.schedule_published ? '是' : '否'));
+        lines.push('云端状态：' + chineseValue(liveCloudValue.reason || '正常'));
+        if (liveCloudValue.remaining_seconds != null) lines.push('今日剩余赛车秒数：' + liveCloudValue.remaining_seconds + ' 秒');
+      } else {
+        lines.push('实时查询失败，未取得当前云端学习日。');
+        var reasons = (liveCloudValue.attempts || []).map(function (a) {
+          return (a.source === 'parent' ? '家长会话' : '设备身份') + '：' + (STATUS_LABELS[a.error] || a.error || '未知');
+        });
+        if (reasons.length) lines.push('失败原因：' + reasons.join('；'));
+        var needBind = (liveCloudValue.attempts || []).some(function (a) { return a.error === 'R5_DEVICE_REQUIRED'; });
+        var denied = (liveCloudValue.attempts || []).some(function (a) { return /R5_MEMBER_DENIED/.test(a.error || ''); });
+        if (needBind) {
+          lines.push('这台设备还没有绑定。请家长打开赛车页的「家长授权这台手机」完成一次绑定：');
+          lines.push('https://sadkikyo0930.github.io/little-racing-v2/bind.html');
+          lines.push('绑定后孩子每天打开学习页会自动跟到云端学习日，不需要家长每天登录。');
+        } else if (denied) {
+          lines.push('这台设备的授权已被撤销或不属于这个家庭，请家长重新授权后再试。');
+        }
+        if (liveCloudValue.fetched_at) {
+          lines.push('上次成功核对时间：' + stamp(liveCloudValue.fetched_at) + (liveCloudValue.stale ? '（已过期）' : ''));
+          lines.push('上次核对到：第 ' + liveCloudValue.today_day + ' 日'
+            + '（' + ((liveCloudValue.cloud_subjects || []).join('＋') || '科目未知') + '）');
+          lines.push('注意：以上只是缓存，不代表当前状态，请勿据此判断今天是否达标。');
+        } else {
+          lines.push('本机没有任何云端核对记录。');
+        }
+      }
+      el.textContent = lines.join('\n');
+      document.getElementById('bindCard').hidden = (liveCloudValue.source === 'device');
+
+      var day = Number(liveCloudValue.today_day);
+      title.textContent = (liveCloudValue.ok && day >= 1 ? '第 ' + day + ' 日' : '今日')
+        + '两科云端达标核验（只读）';
+
+      if (!liveCloudValue.ok) {
+        verdict.textContent = [
+          '实时云端成绩未取得，本次不作达标结论。',
+          liveCloudValue.cached_study_passed == null ? ''
+            : '（上次核对曾记录「' + (liveCloudValue.cached_study_passed ? '已达标' : '未达标') + '」，那是旧结果，不是今天的结论。）',
+          '现有答题记录仍在，请勿因本页结果重复答题。'
+        ].filter(Boolean).join('\n');
+        fillRaw(window.R5Bridge ? window.R5Bridge.diagnose() : null);
+        return;
+      }
+      var mods = Array.isArray(liveCloudValue.modules) ? liveCloudValue.modules : [];
+      var expected = V6_SUBJECT_DAYS[day - 1] || [];
+      var output = expected.map(function (subject) {
         const m = mods.find(function (entry) { return entry.subject === subject; });
         if (!m) return subject + '：尚未收到云端科目成绩（待核实）';
         const outcome = m.passed === true ? '云端判定通过'
@@ -193,12 +263,13 @@
       output.push('学习日总判定：'+(liveCloudValue.study_passed===true?'云端通过':liveCloudValue.study_passed===false?'云端未通过':'尚未取得'));
       output.push('赛车资格：'+(liveCloudValue.racing_allowed===true?'当前可用':liveCloudValue.racing_allowed===false?'当前不可用':'尚未取得')+'（单独判断）');
       if(liveCloudValue.reason==='TIME_LIMIT_REACHED') output.push('时间额度已达上限，不代表课程未通过。');
+      output.push('核对时间：' + stamp(liveCloudValue.fetched_at) + ' · 来源：' + (liveCloudValue.source_label || liveCloudValue.source));
       verdict.textContent = output.join('\n');
     } catch (e) {
       liveCloudValue = {error:e.code || e.message || String(e)};
-      document.getElementById('cloudVerdict').textContent = '云端科目成绩查询失败：'+liveCloudValue.error+'。现有答题记录仍保留，请勿重复答题。';
-      el.textContent = '云端实时查询失败：'+(STATUS_LABELS[liveCloudValue.error]||'需要检查登录状态及接口权限')+
-        '\n注意：这一结果不能证明云端尚未进入第四日。';
+      document.getElementById('cloudVerdict').textContent = '云端查询失败：'+liveCloudValue.error+'。现有答题记录仍保留，请勿重复答题；本次不作达标结论。';
+      el.textContent = '云端查询失败：'+(STATUS_LABELS[liveCloudValue.error]||'请检查设备是否已绑定，以及网络是否正常')+
+        '\n注意：这一结果不能证明云端停在旧学习日，也不能证明今天已达标。';
     }
     fillRaw(window.R5Bridge ? window.R5Bridge.diagnose() : null);
   }
@@ -252,6 +323,22 @@
     Promise.resolve().then(function(){ return window.R5Bridge.runNow(); }).then(render)
       .catch(function(e){ document.getElementById('tip').textContent = '同步失败：' + e.message; })
       .finally(function(){ button.disabled = false; inspect(); });
+  });
+  document.getElementById('bindBtn').addEventListener('click', function () {
+    var btn = this, msg = document.getElementById('bindMsg');
+    var secret = document.getElementById('bindSecret').value || '';
+    var label = document.getElementById('bindLabel').value || '';
+    if (!secret) { msg.textContent = '请先输入家长口令。'; return; }
+    btn.disabled = true; msg.textContent = '正在授权…';
+    Promise.resolve().then(function () {
+      return window.R5Bridge.bindThisDevice(secret, label);
+    }).then(function (r) {
+      document.getElementById('bindSecret').value = '';
+      msg.textContent = '已授权（令牌尾号 ' + r.token_tail + '），这台设备现在可以直接读到云端学习日。';
+      render(); inspect();
+    }).catch(function (e) {
+      msg.textContent = '授权失败：' + (STATUS_LABELS[e.code] || e.code || e.message || '请检查家长口令');
+    }).finally(function () { btn.disabled = false; });
   });
   document.getElementById('reload').addEventListener('click', function(){ render(); inspect(); });
   render();

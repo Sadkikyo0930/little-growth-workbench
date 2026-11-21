@@ -20,13 +20,19 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-21.daily-settle-d1.1';
+  var BRIDGE_BUILD = '2026-11-21.device-day-d2.1';
 
   var CFG = {
     familyId: 'little-growth-family-001',
     env: 'normal-goose-d5g4qyzr8bb389a4a',
     region: 'ap-shanghai',
     restBase: 'https://normal-goose-d5g4qyzr8bb389a4a.api.tcloudbasegateway.com/v1/rdb/rest',
+    /* 已上线的 R5 网关：按 x-r5-device 设备令牌鉴权，只读入口 /v1/child/entry。
+     * 与赛车页共用同一套设备绑定，不新增任何服务端接口。 */
+    gatewayBase: 'https://normal-goose-d5g4qyzr8bb389a4a.service.tcloudbase.com/r5',
+    deviceTokenKey: 'r5_device',
+    devicePendingKey: 'r5_device_pending',
+    cloudCacheKey: 'v6-r5-cloud-day-cache',
     stateKey: 'growth-workbench-v6-adaptive-2',
     deviceKey: 'v6-family-sync-device-id',
     statusKey: 'v6-r5-bridge-status',
@@ -170,22 +176,36 @@
     return aligned > natural ? aligned : natural;
   }
 
-  /* 云端刚跨日（权威日 = 本机 + 1）时让本机跟上。
+  /* 云端刚跨日时让本机跟上。
    * 只写对齐标记：不清空记录、不改历史学习日、不动云端。
-   * 只在「恰好落后一天」时自动跟随——这正是正常跨日的形态；
-   * 落后更多（换设备/清过档）不自动跳，留给家长一键对齐，避免孩子跳过课程。 */
-  function followCloudDay(cloudDay, localDay) {
+   *   opts.allowGap=true（设备身份只读核对时）：只要云端更靠前就跟上。
+   *   否则维持旧规则——只在「恰好落后一天」时自动跟随（家长会话路径），
+   *   落后更多留给家长一键对齐，避免孩子跳过课程。
+   * 任何情况下都只抬高、不降低，也绝不修改 completedDays / records。 */
+  function followCloudDay(cloudDay, localDay, opts) {
     if (!Number.isInteger(cloudDay) || !Number.isInteger(localDay)) return null;
-    if (cloudDay !== localDay + 1 || cloudDay > CFG.maxDay) return null;
+    if (cloudDay < 1 || cloudDay > CFG.maxDay) return null;
+    var allowGap = !!(opts && opts.allowGap);
+    if (allowGap) {
+      if (cloudDay <= localDay) return null;
+    } else if (cloudDay !== localDay + 1) {
+      return null;
+    }
     var live = readLiveState();
     if (!live || typeof live !== 'object') return null;
     if (!live.v6Course || typeof live.v6Course !== 'object') live.v6Course = {};
     var prev = Number(live.v6Course.cloudAlignedDay) || 0;
     if (prev >= cloudDay) return null;
     live.v6Course.cloudAlignedDay = cloudDay;
+    live.v6Course.cloudAlignedAt = new Date().toISOString();
+    live.v6Course.cloudAlignedSource = (opts && opts.source) || 'cloud_authoritative';
     if (typeof save === 'function') { try { save(); } catch (e) { /* ignore */ } }
     try { localStorage.setItem(CFG.stateKey, JSON.stringify(live)); } catch (e) { /* ignore */ }
-    log('本机课次跟随云端跨日', localDay, '→', cloudDay);
+    log('本机课次跟随云端跨日', localDay, '→', cloudDay, allowGap ? '(设备身份)' : '(家长会话)');
+    /* 首页与课程页需要立刻按新学习日重绘；历史记录原样保留。 */
+    try {
+      if (typeof window.v6OnCloudDayChanged === 'function') window.v6OnCloudDayChanged(cloudDay);
+    } catch (e) { /* 页面没有钩子时忽略 */ }
     return { from: localDay, to: cloudDay };
   }
 
@@ -321,6 +341,167 @@
     if (!token) throw new Error('NO_TOKEN');
     return { uid: String(session.user.id), token: token };
   }
+
+  /* ------------------------------------------------ 设备身份只读学习日 */
+
+  /* 本机一次性授权：家长输入口令后，生成设备令牌并绑定到本家庭。
+   * 复用赛车页同一个网关接口 /v1/parent/bind，不新增服务端能力。
+   * 口令只在本次请求头里出现，绝不写入 localStorage / 状态 / 日志。 */
+  async function bindThisDevice(secret, label) {
+    var s = String(secret || '');
+    if (!s) throw gatewayError('R5_PARENT_SECRET_REQUIRED', 0);
+    /* 复用上次未确认的候选令牌：网络中断后重试不会在云端留下孤儿设备。
+     * 与赛车绑定页共用同一个 pending 键。 */
+    var token = '';
+    try { token = localStorage.getItem(CFG.devicePendingKey) || ''; } catch (e) { token = ''; }
+    if (!/^r5dev_[a-f0-9]{32}$/.test(token)) {
+      var bytes = new Uint8Array(16);
+      if (!window.crypto || !window.crypto.getRandomValues) throw gatewayError('R5_NO_CRYPTO', 0);
+      window.crypto.getRandomValues(bytes);
+      token = 'r5dev_' + Array.prototype.map.call(bytes, function (x) {
+        return ('0' + x.toString(16)).slice(-2);
+      }).join('');
+      try { localStorage.setItem(CFG.devicePendingKey, token); } catch (e) { /* ignore */ }
+    }
+
+    var res, text;
+    try {
+      res = await fetch(CFG.gatewayBase + '/v1/parent/bind', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-r5-parent': s },
+        body: JSON.stringify({ family_id: CFG.familyId, device: token, label: String(label || '孩子的学习设备') }),
+      });
+      text = await res.text();
+    } catch (e) {
+      /* 结果未知：保留 pending 令牌，下次重试沿用同一个设备，避免孤儿记录。 */
+      throw gatewayError('R5_NETWORK', 0);
+    }
+    var json = null;
+    try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+    if (!res.ok) {
+      if (res.status >= 400 && res.status < 500) {
+        try { localStorage.removeItem(CFG.devicePendingKey); } catch (e2) { /* ignore */ }
+      }
+      throw gatewayError((json && (json.error || json.code)) || ('HTTP_' + res.status), res.status);
+    }
+    if (!json || (json.ok !== true && !json.device_uid)) {
+      throw gatewayError((json && (json.error || json.code)) || 'R5_BIND_REJECTED', res.status);
+    }
+    try {
+      localStorage.setItem(CFG.deviceTokenKey, token);
+      localStorage.removeItem(CFG.devicePendingKey);
+    } catch (e) { throw gatewayError('R5_STORAGE_DENIED', 0); }
+    /* 立刻用同一令牌读一次，确认真的可用（读不到就回滚本地令牌，避免假授权）。 */
+    try {
+      var read = await gatewayReadDay();
+      return { bound: true, token_tail: token.slice(-6), day: read.today, subjects: read.subjects };
+    } catch (e2) {
+      try {
+        localStorage.removeItem(CFG.deviceTokenKey);
+        localStorage.setItem(CFG.devicePendingKey, token);   // 保留候选，重试不产生新设备
+      } catch (e3) { /* ignore */ }
+      throw gatewayError(e2 && (e2.code || e2.message) || 'R5_BIND_UNVERIFIED', 0);
+    }
+  }
+
+  /* 与赛车页共用同一份设备令牌（同源 localStorage）。只读，不新建绑定。 */
+  function deviceToken() {
+    try {
+      var t = localStorage.getItem(CFG.deviceTokenKey);
+      return t && /^[A-Za-z0-9_-]{8,80}$/.test(t) ? t : '';
+    } catch (e) { return ''; }
+  }
+
+  function gatewayError(code, status) {
+    var e = new Error(code || 'R5_GATEWAY_ERROR');
+    e.code = code || 'R5_GATEWAY_ERROR';
+    e.status = status || 0;
+    return e;
+  }
+
+  /**
+   * 用设备身份向 R5 网关只读查询当前学习日。
+   * 不需要家长会话；未绑定 / 已撤销 / 跨家庭由网关侧的设备校验直接拒绝。
+   * 只读取学习日与课程，不写任何学习记录、不改云端学习日。
+   */
+  async function gatewayReadDay() {
+    var token = deviceToken();
+    if (!token) throw gatewayError('R5_DEVICE_REQUIRED', 0);
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) { /* ignore */ } }, 12000) : null;
+    var res, text;
+    try {
+      res = await fetch(CFG.gatewayBase + '/v1/child/entry', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-r5-device': token },
+        body: JSON.stringify({ family_id: CFG.familyId }),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      text = await res.text();
+    } catch (e) {
+      var aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message)));
+      throw gatewayError(aborted ? 'R5_TIMEOUT' : 'R5_NETWORK', 0);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    var json = null;
+    try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+    if (!json) throw gatewayError('R5_BAD_RESPONSE', res.status);
+    /* 网关在部分拒绝场景下仍返回 HTTP 200 + error 字段，必须先看 error。 */
+    if (json.error) throw gatewayError(String(json.error), res.status);
+    if (!res.ok) throw gatewayError('HTTP_' + res.status, res.status);
+    if (json.allowed === undefined && json.authoritative_day === undefined) {
+      throw gatewayError('R5_BAD_RESPONSE', res.status);
+    }
+    var ds = readDayState(json);
+    return {
+      ok: true,
+      source: 'device',
+      authoritative_day: ds.authoritative_day,
+      plan_day: ds.plan_day,
+      today: ds.today,
+      published: ds.published,
+      advanced: ds.advanced,
+      study_passed: typeof json.study_passed === 'boolean' ? json.study_passed : null,
+      allowed: typeof json.allowed === 'boolean' ? json.allowed : null,
+      reason: json.reason || null,
+      subjects: (json.modules || []).map(function (m) { return m.subject; }),
+      modules: json.modules || [],
+      remaining_seconds: json.remaining_seconds == null ? null : Number(json.remaining_seconds),
+      fetched_at: new Date().toISOString(),
+      raw: json,
+    };
+  }
+
+  /* 最近一次云端读取结果（带核对时间），用于「实时失败时不冒充当前状态」。 */
+  function saveCloudCache(data) {
+    try {
+      localStorage.setItem(CFG.cloudCacheKey, JSON.stringify({
+        authoritative_day: data.authoritative_day,
+        plan_day: data.plan_day,
+        today: data.today,
+        published: data.published === true,
+        subjects: data.subjects || [],
+        study_passed: typeof data.study_passed === 'boolean' ? data.study_passed : null,
+        allowed: typeof data.allowed === 'boolean' ? data.allowed : null,
+        reason: data.reason || null,
+        source: data.source || 'unknown',
+        fetched_at: data.fetched_at || new Date().toISOString(),
+      }));
+    } catch (e) { /* 缓存失败不影响主流程 */ }
+  }
+
+  function readCloudCache() {
+    var c = readJson(CFG.cloudCacheKey);
+    if (!c || !Number.isInteger(Number(c.authoritative_day))) return null;
+    c.authoritative_day = Number(c.authoritative_day);
+    c.plan_day = c.plan_day == null ? null : Number(c.plan_day);
+    c.today = c.today == null ? null : Number(c.today);
+    c.age_ms = Date.now() - new Date(c.fetched_at).getTime();
+    c.stale = !(c.age_ms >= 0 && c.age_ms < 12 * 3600 * 1000);
+    return c;
+  }
+
 
   /* -------------------------------------------------------------- 云端调用 */
 
@@ -948,7 +1129,82 @@
     saveStatus({ state: 'running', build: BRIDGE_BUILD });
     var rows;
     try {
-      var who = await identity();
+      /* ================= 阶段 A：设备身份只读跟随学习日 =================
+       * 孩子设备已由家长绑定，凭 x-r5-device 就能向 R5 网关只读查询云端
+       * 当前学习日，不需要家长会话。未绑定 / 已撤销 / 跨家庭由网关拒绝。
+       * 本阶段只写本机 cloudAlignedDay，不碰任何历史答题与课次。 */
+      var deviceRead = null, deviceError = null, dayFollowedByDevice = null;
+      try {
+        deviceRead = await gatewayReadDay();
+        saveCloudCache(deviceRead);
+        dayFollowedByDevice = followCloudDay(deviceRead.today, courseDay(),
+          { allowGap: true, source: 'device_entry_readonly' });
+      } catch (deviceFail) {
+        deviceError = String(deviceFail && (deviceFail.code || deviceFail.message) || 'UNKNOWN');
+        log('设备身份只读查询失败', deviceError);
+      }
+
+      /* ================= 阶段 B：家长身份上传成绩 =================
+       * 上传需要家长会话；会话过期只影响「上传」，不再顺带把学习日锁死。 */
+      var who = null, authError = null;
+      try { who = await identity(); } catch (authFail) {
+        authError = String(authFail && (authFail.code || authFail.message) || 'NO_SESSION');
+      }
+      if (!who) {
+        var cache = readCloudCache();
+        /* 实时失败时，缓存只能作为「上次核对到第几日」的提示，
+         * 不能写进 cloud_day 冒充当前学习日。 */
+        var devDay = deviceRead ? deviceRead.today : null;
+        return saveStatus({
+          state: deviceRead ? 'device_day_synced' : 'device_day_unavailable',
+          auth_required: true,
+          upload_blocked_by_auth: true,
+          cloud_settled_by_server: true,
+          local_day: courseDay(),
+          cloud_day: devDay,
+          authoritative_day: deviceRead ? deviceRead.authoritative_day : null,
+          cloud_subjects: deviceRead ? deviceRead.subjects : null,
+          schedule_published: deviceRead ? deviceRead.published : null,
+          cached_authoritative_day: (!deviceRead && cache) ? cache.authoritative_day : null,
+          cached_cloud_day: (!deviceRead && cache) ? cache.today : null,
+          cached_study_passed: (!deviceRead && cache) ? cache.study_passed : null,
+          study_passed: deviceRead ? deviceRead.study_passed : null,
+          racing_allowed: deviceRead ? deviceRead.allowed : null,
+          subjects: deviceRead
+            ? (deviceRead.modules || []).map(function (m) {
+                return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%')
+                  + (m.passed ? ' ✓' : ' ✗');
+              })
+            : null,
+          reason: deviceRead ? deviceRead.reason : null,
+          remaining_seconds: deviceRead ? deviceRead.remaining_seconds : null,
+          followed_cloud_day: dayFollowedByDevice,
+          day_source: deviceRead ? 'device' : 'none',
+          day_fetched_at: deviceRead ? deviceRead.fetched_at : null,
+          cache_checked_at: (!deviceRead && cache) ? cache.fetched_at : null,
+          device_day_error: deviceError,
+          cache_stale: cache ? cache.stale : null,
+          cloud_verified: false,
+          cloud_verified_reason: deviceRead ? 'DEVICE_READ_ONLY' : 'DEVICE_READ_FAILED',
+          message: deviceRead
+            ? '已按本机设备身份核对：云端现在是第 ' + deviceRead.today + ' 日'
+              + (deviceRead.subjects && deviceRead.subjects.length ? '（' + deviceRead.subjects.join('＋') + '）' : '')
+              + '，首页与课程已对齐。这台设备没有家长登录凭证，本机成绩仍安全保存在本机，家长登录后会自动上传；'
+              + '云端每日结算由服务器独立完成。'
+            : (deviceError === 'R5_DEVICE_REQUIRED'
+              ? '这台设备还没有绑定，因此暂时读不到云端学习日。'
+                + '请家长用赛车页的「家长授权这台手机」完成一次绑定；绑定后孩子每天打开学习页会自动跟到云端学习日，不需要家长每天登录。'
+                + '本机成绩与学习日都未被改动，云端结算不受影响。'
+              : /R5_MEMBER_DENIED|R5_AUTH_REQUIRED/.test(deviceError || '')
+                ? '这台设备的授权已被撤销或不属于这个家庭，所以读不到云端学习日。'
+                  + '请家长重新授权这台设备；本机成绩与学习日都未被改动。'
+                : '这台设备没有家长登录凭证，设备身份只读查询也没成功（' + deviceError + '）。'
+                  + '本机成绩与学习日均未被改动，云端结算不受影响。'),
+          pending: null, pending_known: false,
+          build: BRIDGE_BUILD,
+          checked_at: new Date().toISOString(),
+        });
+      }
       var todayStr = today();
 
       // On the first authorized check after Shanghai midnight, ask the server
@@ -1011,6 +1267,19 @@
       }
       var st = await cloudStatus(who);
       var ds = readDayState(st);
+      var parentFetchedAt = new Date().toISOString();
+      saveCloudCache({
+        authoritative_day: ds.authoritative_day,
+        plan_day: ds.plan_day,
+        today: ds.today,
+        published: ds.published,
+        subjects: (st && st.modules || []).map(function (m) { return m.subject; }),
+        study_passed: st && st.study_passed,
+        allowed: st && st.allowed,
+        reason: st && st.reason,
+        source: 'parent',
+        fetched_at: parentFetchedAt,
+      });
       var localDay = courseDay();
       /* 云端已经跨日、本机恰好落后一天：跟上，避免孩子每天都在旧课次上打转。 */
       var followed = null;
@@ -1218,8 +1487,10 @@
         authoritative_day: ds.authoritative_day,
         next_day: (adv && adv.authoritative_day) || ds.authoritative_day,
         local_day: localDay,
-        followed_cloud_day: followed || null,
+        followed_cloud_day: followed || dayFollowedByDevice || null,
         day_source: ds.source,
+        day_fetched_at: parentFetchedAt,
+        device_day_error: deviceError,
         subjects: (st && st.modules || []).map(function (m) {
           return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%')
             + (m.passed ? ' ✓' : ' ✗');
@@ -1443,13 +1714,128 @@
       };
     },
     /**
+     * 设备身份只读学习日：不需要家长会话，凭已绑定设备令牌向 R5 网关查询。
+     * 只读，不写学习记录，不改云端学习日。
+     */
+    inspectCloudDevice: async function () {
+      var d = await gatewayReadDay();
+      d.local_day = courseDay();
+      return d;
+    },
+    /** 本机一次性授权（家长口令只用于这一次请求，不保存） */
+    bindThisDevice: bindThisDevice,
+    /** 上次成功读取的云端学习日缓存（含核对时间），只用于展示，不等于当前状态 */
+    cachedCloud: readCloudCache,
+    /**
+     * 统一云端视图：家长实时 → 设备实时 → 上次缓存（标记 stale）。
+     * 缓存只用于告知「上次核对到第几日」，绝不把旧达标结论当作当前结论。
+     */
+    cloudView: async function () {
+      var attempts = [];
+      var norm = function (mods) {
+        return (Array.isArray(mods) ? mods : []).map(function (m) {
+          return {
+            subject: m.subject, completed: m.completed === true,
+            total: Number.isFinite(Number(m.total)) ? Number(m.total) : null,
+            correct: Number.isFinite(Number(m.correct)) ? Number(m.correct) : null,
+            accuracy_pct: Number.isFinite(Number(m.accuracy_pct)) ? Number(m.accuracy_pct) : null,
+            passed: m.passed === true ? true : m.passed === false ? false : null,
+            evidence: m.evidence || null,
+            credential_status: m.credential_status || null,
+            pending_score_sync: m.pending_score_sync === true,
+            pending_reasons: m.pending_reasons || null,
+            graded_day: m.graded_day == null ? null : m.graded_day,
+          };
+        });
+      };
+      try {
+        var st = await cloudStatus(await identity());
+        var ds = readDayState(st);
+        var at = new Date().toISOString();
+        var view = {
+          ok: true, source: 'parent', source_label: '家长会话实时',
+          fetched_at: at, stale: false,
+          authoritative_day: ds.authoritative_day,
+          today_day: ds.today, cloud_day: ds.plan_day,
+          cloud_subjects: (st && st.modules || []).map(function (m) { return m.subject; }),
+          modules: norm(st && st.modules),
+          study_passed: st && typeof st.study_passed === 'boolean' ? st.study_passed : null,
+          racing_allowed: st && typeof st.allowed === 'boolean' ? st.allowed : null,
+          schedule_published: !!(st && st.schedule_published),
+          reason: st && st.reason,
+          local_day: courseDay(),
+          attempts: attempts,
+        };
+        saveCloudCache({
+          authoritative_day: ds.authoritative_day, plan_day: ds.plan_day, today: ds.today,
+          published: ds.published, subjects: view.cloud_subjects,
+          study_passed: view.study_passed, allowed: view.racing_allowed,
+          reason: view.reason, source: 'parent', fetched_at: at,
+        });
+        return view;
+      } catch (e) {
+        attempts.push({ source: 'parent', error: String(e && (e.code || e.message) || 'UNKNOWN') });
+      }
+      try {
+        var dev = await gatewayReadDay();
+        saveCloudCache(dev);
+        attempts.push({ source: 'device', error: null });
+        return {
+          ok: true, source: 'device', source_label: '设备身份实时（无需家长登录）',
+          fetched_at: dev.fetched_at, stale: false,
+          authoritative_day: dev.authoritative_day,
+          today_day: dev.today, cloud_day: dev.plan_day,
+          cloud_subjects: dev.subjects,
+          modules: norm(dev.modules),
+          study_passed: dev.study_passed,
+          racing_allowed: dev.allowed,
+          schedule_published: dev.published,
+          reason: dev.reason,
+          remaining_seconds: dev.remaining_seconds,
+          local_day: courseDay(),
+          attempts: attempts,
+        };
+      } catch (e2) {
+        attempts.push({ source: 'device', error: String(e2 && (e2.code || e2.message) || 'UNKNOWN') });
+      }
+      var c = readCloudCache();
+      return {
+        ok: false, source: c ? 'cache' : 'none',
+        source_label: c ? '上次核对结果（缓存）' : '没有可用数据',
+        fetched_at: c ? c.fetched_at : null,
+        stale: true,
+        authoritative_day: c ? c.authoritative_day : null,
+        today_day: c ? c.today : null,
+        cloud_day: c ? c.plan_day : null,
+        cloud_subjects: c ? (c.subjects || []) : [],
+        modules: [],
+        /* 缓存里的达标结论只能作为历史参考，绝不冒充当前状态 */
+        study_passed: null,
+        cached_study_passed: c ? c.study_passed : null,
+        racing_allowed: null,
+        cached_racing_allowed: c ? c.allowed : null,
+        schedule_published: c ? c.published : null,
+        reason: null,
+        local_day: courseDay(),
+        attempts: attempts,
+      };
+    },
+    /**
      * 权威学习日对照：本机 vs 云端。
-     * 家长入口/自检页只读调用，不会触发任何写入。
+     * 家长会话优先；会话过期时退回设备身份只读，仍然给出权威学习日。
      */
     dayInfo: async function () {
-      var st = await cloudStatus(await identity());
-      var ds = readDayState(st);
       var localDay = courseDay();
+      var ds, source;
+      try {
+        var st = await cloudStatus(await identity());
+        ds = readDayState(st);
+        source = 'parent';
+      } catch (e) {
+        var dev = await gatewayReadDay();
+        ds = readDayState(dev.raw);
+        source = 'device';
+      }
       return {
         local_day: localDay,
         cloud_day: ds.plan_day,
@@ -1458,7 +1844,7 @@
         aligned: ds.today === localDay,
         stale_device_day: ds.today !== null && ds.today > localDay,
         device_ahead: ds.today !== null && ds.today < localDay,
-        day_source: ds.source,
+        day_source: source,
         build: BRIDGE_BUILD,
       };
     },

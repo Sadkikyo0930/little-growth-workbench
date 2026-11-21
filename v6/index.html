@@ -425,6 +425,19 @@ function v6AlignToCloudDay(cloudDay,source){
  return {ok:true,from:current,to:target};
 }
 window.v6AlignToCloudDay=v6AlignToCloudDay;
+/* 设备身份只读核对到更新的学习日时，由桥接调用本钩子：只抬高对齐日并重绘，
+   不清空 completedDays、不改任何历史答题。 */
+window.v6OnCloudDayChanged=function(day){
+ const t=Number(day);
+ if(!Number.isInteger(t)||t<1||t>30)return false;
+ const c=v6CourseRecord();
+ const prev=Number(c.cloudAlignedDay)||0;
+ if(t>prev){c.cloudAlignedDay=t;c.cloudAlignedAt=new Date().toISOString();c.cloudAlignedSource='device_entry_readonly';save();}
+ if(typeof novSelected==='number'&&novSelected<t)novSelected=t;
+ try{novRender()}catch(e){}
+ try{refreshHomeMode()}catch(e){}
+ return true;
+};
 function v6EnglishMonthlyUnlocked(){return v6CourseStarted()&&v6SubjectDone(29,'英语')}
 function v6EnglishMonthlyRecord(){const exam=v6CourseRecord().englishMonthlyExam;return exam&&typeof exam==='object'?exam:null}
 function openOfficialEnglishMonthly(){const {weekly,monthly}=assessmentAccess();if(!weekly&&!monthly){refreshAssessmentAccess();return;}if(!v6EnglishMonthlyUnlocked()){alert('请先完成第29天的英语第17课，再参加月末测评。');return}openScreen('englishMonthlyExam');$('englishMonthlyFrame').src='./english-monthly-assessment.html?official=1&v=20261105-official-monthly1'}
@@ -689,4 +702,4 @@ $('englishBack').onclick=()=>{$('englishLessonFrame').src='about:blank';if(engli
  setTimeout(()=>URL.revokeObjectURL(url),30000);
 };
 $('reset').onclick=()=>{if(confirm('清空 V6 摸底记录？')){state={records:[],finished:{},sessions:{},started:null};save();home()}};refreshHomeMode();document.querySelectorAll('.illustrated-screen').forEach(el=>{let img=new Image();img.onload=()=>{};img.onerror=()=>el.classList.add('asset-missing');img.src=getComputedStyle(el).backgroundImage.slice(5,-2)});openScreen('home');
-</script><script src="./weekly-exam.js?v=20261105-weekday-baseline7"></script><script src="./clean-art.js?v=20261109-no-overlays-daily-v1"></script><script src="./chinese-classroom.js?v=20261109-daily-target1"></script><script src="./pwa.js?v=20261105-1"></script><script src="./family-auto-sync.js?v=20261106-auth-help"></script><script src="./r5-bridge.js?v=20261121-daily-settle-d1"></script><!-- r5-bridge --><aside id="assessmentHoursNotice" hidden role="status" style="position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(90vw,420px);z-index:2147483647;padding:16px;border:2px solid #82bdec;border-radius:16px;background:#fff;color:#153957;text-align:center;box-shadow:0 6px 26px #173b5c44">🔒 今天是学习日，测评在周日或月末开放。<br><button type="button" id="dismissAssessmentHours" style="margin-top:8px">知道了</button></aside><script>document.getElementById('dismissAssessmentHours').onclick=()=>{document.getElementById('assessmentHoursNotice').hidden=true;};document.querySelectorAll('#goAssessment,[data-tab="assessment"],[data-art-tab="assessment"]').forEach(button=>{button.onclick=openScheduledAssessment;});refreshAssessmentAccess();window.addEventListener('pageshow',refreshAssessmentAccess);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAssessmentAccess();});</script><script>document.getElementById("v6ParentNextDay").onclick = function () { v6FinishDay(v6CourseDay()); };</script></body></html>
+</script><script src="./weekly-exam.js?v=20261105-weekday-baseline7"></script><script src="./clean-art.js?v=20261109-no-overlays-daily-v1"></script><script src="./chinese-classroom.js?v=20261109-daily-target1"></script><script src="./pwa.js?v=20261105-1"></script><script src="./family-auto-sync.js?v=20261106-auth-help"></script><script src="./r5-bridge.js?v=20261121-device-day-d2"></script><!-- r5-bridge --><aside id="assessmentHoursNotice" hidden role="status" style="position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(90vw,420px);z-index:2147483647;padding:16px;border:2px solid #82bdec;border-radius:16px;background:#fff;color:#153957;text-align:center;box-shadow:0 6px 26px #173b5c44">🔒 今天是学习日，测评在周日或月末开放。<br><button type="button" id="dismissAssessmentHours" style="margin-top:8px">知道了</button></aside><script>document.getElementById('dismissAssessmentHours').onclick=()=>{document.getElementById('assessmentHoursNotice').hidden=true;};document.querySelectorAll('#goAssessment,[data-tab="assessment"],[data-art-tab="assessment"]').forEach(button=>{button.onclick=openScheduledAssessment;});refreshAssessmentAccess();window.addEventListener('pageshow',refreshAssessmentAccess);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAssessmentAccess();});</script><script>document.getElementById("v6ParentNextDay").onclick = function () { v6FinishDay(v6CourseDay()); };</script></body></html>
