@@ -11,7 +11,9 @@ const VERIFIED_COURSE_DAY = 'v6-r5-confirmed-course-day';
 const FAMILY_ID = 'little-growth-family-001';
 const VALID_DAY_STATES = new Set([
   'stale_device_day', 'device_ahead', 'ok', 'partial',
-  'unverified', 'no_local_records'
+  'unverified', 'no_local_records',
+  // rc5 设备身份只读通道写入的状态：云端已核实今日计划，cloud_day 可信。
+  'device_day_synced'
 ]);
 const validCourseDay = v => Number.isInteger(v) && v >= 1 && v <= 30;
 const todayShanghai = () => new Date(Date.now() + 8 * 3600000).toISOString().slice(0,10);
@@ -47,7 +49,10 @@ if (localCourseDay) {
   window.v6CourseDay = function() {
     // Cloud value changes the currently selected lesson only. It does not
     // backfill completedDays or silently advance the server's plan.
-    return confirmedCloudDay() || localCourseDay();
+    // 只抬高、不降低：状态缓存落后一天时，旧写法会把页面按回旧课次。
+    const cloudDay = confirmedCloudDay();
+    const aligned = Number(localCourseDay()) || 1;
+    return (cloudDay && cloudDay > aligned) ? cloudDay : aligned;
   };
   let seenDay = null;
   function refreshDayView() {

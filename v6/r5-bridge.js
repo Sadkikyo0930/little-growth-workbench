@@ -20,7 +20,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-21.rc5-device-round-v3';
+  var BRIDGE_BUILD = '2026-11-21.rc5-device-round-v4-dayfix';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -1521,8 +1521,18 @@
       try {
         deviceRead = await gatewayReadDay();
         saveCloudCache(deviceRead);
-        dayFollowedByDevice = followCloudDay(deviceRead.today, courseDay(),
+        /* 比较基准必须是「档案里已保存的对齐日」，不能用 courseDay()：
+           pwa.js 把 v6CourseDay 改写成了「云端确认日优先」，诊断页读到的 7 就来自它，
+           followCloudDay(7, 7) 会认为不必跟随，cloudAlignedDay 便永远停在 6。 */
+        dayFollowedByDevice = followCloudDay(deviceRead.today,
+          alignedDayOf(readLiveState()) || 1,
           { allowGap: true, source: 'device_entry_readonly' });
+        /* 数据与渲染解耦：读到的云端学习日无论如何都通知页面重绘一次。 */
+        try {
+          if (typeof window.v6OnCloudDayChanged === 'function') {
+            window.v6OnCloudDayChanged(Number(deviceRead.today));
+          }
+        } catch (notifyError) { /* 页面没有钩子时忽略 */ }
       } catch (deviceFail) {
         deviceError = String(deviceFail && (deviceFail.code || deviceFail.message) || 'UNKNOWN');
         log('设备身份只读查询失败', deviceError);

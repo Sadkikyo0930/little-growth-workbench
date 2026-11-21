@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261121-r5-rc5-prod';
+const VERSION='20261121-r5-rc5-dayfix';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -90,6 +90,7 @@ self.addEventListener('fetch',event=>{
  // 用旧规则把新的高分挡在外面。
  const freshSync = url.pathname.endsWith('/family-auto-sync.js')
    || url.pathname.endsWith('/r5-bridge.js')
+   || url.pathname.endsWith('/pwa.js')
    || url.pathname.endsWith('/r5-parent-check.html')
    || /\/r5\/(attempt-upload-policy|attempt-recovery|sync-health)\.mjs$/.test(url.pathname);
  if(freshLesson || freshSync){
