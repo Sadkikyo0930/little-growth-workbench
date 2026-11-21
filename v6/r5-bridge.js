@@ -20,7 +20,7 @@
   'use strict';
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-15.auto-next-day-c01.7';
+  var BRIDGE_BUILD = '2026-11-21.daily-settle-d1.1';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -142,14 +142,51 @@
 
   /* ------------------------------------------------------------ 课程日与学科 */
 
+  /* 家长/桥接确认过的「云端对齐日」。与 index.html 的 v6AlignedDay() 同一条规则：
+   * 只存在 state.v6Course.cloudAlignedDay，只抬高本机课次，不改任何历史记录。 */
+  function alignedDayOf(s) {
+    var a = Number(s && s.v6Course && s.v6Course.cloudAlignedDay);
+    return Number.isInteger(a) && a >= 1 && a <= CFG.maxDay ? a : 0;
+  }
+
+  /* 本机课次。必须与首页 v6CourseDay() 完全同口径，否则会出现
+   * 「首页第 6 日、同步诊断第 3 日」这种自相矛盾的读数：
+   *   自然课次 = 第一个还没标记完成的学习日
+   *   对齐课次 = cloudAlignedDay
+   *   取两者较大者。 */
+  function naturalCourseDay(s) {
+    var done = (s && s.v6Course && s.v6Course.completedDays) || {};
+    for (var d = 1; d <= CFG.maxDay; d++) if (!done[d]) return d;
+    return CFG.maxDay;
+  }
+
   function courseDay() {
     try {
       if (typeof v6CourseDay === 'function') return Number(v6CourseDay()) || 1;
     } catch (e) { /* fall through */ }
     var s = readState();
-    var done = (s && s.v6Course && s.v6Course.completedDays) || {};
-    for (var d = 1; d <= CFG.maxDay; d++) if (!done[d]) return d;
-    return CFG.maxDay;
+    var natural = naturalCourseDay(s);
+    var aligned = alignedDayOf(s);
+    return aligned > natural ? aligned : natural;
+  }
+
+  /* 云端刚跨日（权威日 = 本机 + 1）时让本机跟上。
+   * 只写对齐标记：不清空记录、不改历史学习日、不动云端。
+   * 只在「恰好落后一天」时自动跟随——这正是正常跨日的形态；
+   * 落后更多（换设备/清过档）不自动跳，留给家长一键对齐，避免孩子跳过课程。 */
+  function followCloudDay(cloudDay, localDay) {
+    if (!Number.isInteger(cloudDay) || !Number.isInteger(localDay)) return null;
+    if (cloudDay !== localDay + 1 || cloudDay > CFG.maxDay) return null;
+    var live = readLiveState();
+    if (!live || typeof live !== 'object') return null;
+    if (!live.v6Course || typeof live.v6Course !== 'object') live.v6Course = {};
+    var prev = Number(live.v6Course.cloudAlignedDay) || 0;
+    if (prev >= cloudDay) return null;
+    live.v6Course.cloudAlignedDay = cloudDay;
+    if (typeof save === 'function') { try { save(); } catch (e) { /* ignore */ } }
+    try { localStorage.setItem(CFG.stateKey, JSON.stringify(live)); } catch (e) { /* ignore */ }
+    log('本机课次跟随云端跨日', localDay, '→', cloudDay);
+    return { from: localDay, to: cloudDay };
   }
 
   function subjectDays() {
@@ -648,6 +685,29 @@
 
   /* ------------------------------------------------------------------ 上传 */
 
+  /* 云端这个家庭真实保存了多少条记录（不含 sync-test 自检行）。
+   * 只取 1 行 + count=exact，读的是 Content-Range 的总数，不拉数据。
+   * 「本批确认条数」和「云端总数」是两件事，页面上必须分开显示，
+   * 否则「云端只存了 27 条」这种误读会让人以为成绩丢了。 */
+  async function cloudTotal(who) {
+    try {
+      var url = CFG.restBase + '/growth_learning_records?select=record_id'
+        + '&family_id=eq.' + encodeURIComponent(CFG.familyId)
+        + '&record_type=neq.sync-test&limit=1';
+      var res = await fetch(url, {
+        headers: {
+          authorization: 'Bearer ' + who.token,
+          accept: 'application/json',
+          prefer: 'count=exact',
+        },
+      });
+      if (!res.ok) return null;
+      var cr = res.headers.get('content-range') || '';
+      var m = /\/(\d+)\s*$/.exec(cr);
+      return m ? Number(m[1]) : null;
+    } catch (e) { return null; }
+  }
+
   async function existingIds(who) {
     var url = CFG.restBase + '/growth_learning_records?select=record_id'
       + '&family_id=eq.' + encodeURIComponent(CFG.familyId)
@@ -952,6 +1012,12 @@
       var st = await cloudStatus(who);
       var ds = readDayState(st);
       var localDay = courseDay();
+      /* 云端已经跨日、本机恰好落后一天：跟上，避免孩子每天都在旧课次上打转。 */
+      var followed = null;
+      if (ds.today !== null && ds.today > localDay) {
+        followed = followCloudDay(ds.today, localDay);
+        if (followed) localDay = followed.to;
+      }
       /* 本机恰好超前一天（当天两科已学完并点了「进入下一学习日」）时，
        * 仍然要把「当天」的真实记录传上去，否则孩子做完的数学英语永远进不了
        * 云端。只放宽上传：不发布、不推进、不改写 learning_day。 */
@@ -1142,6 +1208,8 @@
       /* 当天两科都通过后「不解锁下一天」，只解锁赛车。
        * 权威学习日的推进只发生在家长发布下一学习日的计划那一刻（见文件头注释）。 */
       var adv = null;
+      var cloudTotalRows = await cloudTotal(who);
+      var batchConfirmed = vf.known ? rows.length - vf.missing.length : null;
 
       saveStatus({
         state: stateName,
@@ -1150,6 +1218,7 @@
         authoritative_day: ds.authoritative_day,
         next_day: (adv && adv.authoritative_day) || ds.authoritative_day,
         local_day: localDay,
+        followed_cloud_day: followed || null,
         day_source: ds.source,
         subjects: (st && st.modules || []).map(function (m) {
           return m.subject + (m.accuracy_pct == null ? '（无成绩）' : ' ' + m.accuracy_pct + '%')
@@ -1166,7 +1235,10 @@
         uploaded: up.uploaded,
         skipped_duplicates: up.already + up.duplicates,
         reclaimed: up.reclaimed,
-        synced_total: vf.known ? rows.length - vf.missing.length : null,
+        synced_total: batchConfirmed,
+        batch_total: rows.length,
+        batch_confirmed: batchConfirmed,
+        cloud_total: cloudTotalRows,
         cloud_verified: allThere,
         cloud_verified_reason: noRows ? 'NO_LOCAL_ROWS'
           : (!vf.known ? 'VERIFY_UNAVAILABLE' : (vf.missing.length ? 'MISSING_RECORDS' : 'ALL_RECORDS_PRESENT')),
@@ -1186,11 +1258,19 @@
       return readStatus();
     } catch (e) {
       var code = (e && (e.code || e.message)) || 'UNKNOWN';
-      var hint = code === 'NO_SESSION' || code === 'NO_TOKEN'
-        ? '这台设备还没有家长登录云端的凭证：请在「家庭同步」页登录一次（成绩仍安全保存在本机）。'
+      var noSession = code === 'NO_SESSION' || code === 'NO_TOKEN';
+      /* 本机没有家长登录凭证，只影响「本机成绩上传」这一件事。
+       * 每日结算由服务端定时任务独立完成，不依赖任何浏览器登录；
+       * 文案必须说清这一点，否则家长会以为整个学习链条断了。 */
+      var hint = noSession
+        ? '这台设备还没有家长登录云端的凭证，所以本机成绩暂时无法上传（成绩仍安全保存在本机）。'
+          + '云端学习日的每日结算由服务器独立完成，不受本机是否登录影响；'
+          + '在「家庭同步」页登录一次即可恢复上传，并自动对齐到云端学习日。'
         : String(code);
       saveStatus({
         state: 'error', error: code,
+        auth_required: noSession,
+        cloud_settled_by_server: true,
         message: hint + ' 本机成绩已保留，下次同步会自动重试。',
         pending: (typeof rows !== 'undefined' && rows) ? rows.length : null,
         pending_known: false,

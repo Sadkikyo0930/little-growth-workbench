@@ -44,7 +44,7 @@
 <div class="card"><h2>第四日两科云端达标核验（只读）</h2><pre id="cloudVerdict">正在读取云端科目成绩…</pre><p class="sub">服务器达标与赛车时间额度独立判断。未取得云端成绩时不将本机正确率当作最终达标。</p></div>
 <details class="card"><summary>技术排查：查看原始错误和接口字段</summary><pre id="rawTechnical">暂无原始数据</pre></details>
 <script>const V6_SUBJECT_DAYS=[['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学'],['数学','英语'],['语文','英语'],['数学','科学'],['语文','数学'],['语文','英语'],['英语','科学'],['语文','数学']];</script>
-<script src="./r5-bridge.js?v=20261115-auto-next-day-c01-7" data-parent-check></script>
+<script src="./r5-bridge.js?v=20261121-daily-settle-d1" data-parent-check></script>
 <script>
   document.getElementById('windowType').textContent =
     (navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? '当前窗口：桌面全屏应用' : '当前窗口：普通浏览器';
@@ -90,7 +90,10 @@
     math:'数学',science:'科学',english:'英语',
     state:'同步状态',message:'说明',error:'接口错误代码',at:'最近同步时间',
     build:'桥接程序版本',uploaded:'本次新增数',already:'已存在数',
-    skipped_duplicates:'已存在跳过数',synced_total:'云端已保存记录数',
+    skipped_duplicates:'已存在跳过数',synced_total:'本批已确认条数',cloud_total:'云端记录总数',
+    batch_total:'本批应确认条数',batch_confirmed:'本批已确认条数',
+    followed_cloud_day:'本机课次自动跟随云端跨日',
+    auth_required:'需要家长登录云端',cloud_settled_by_server:'云端每日结算由服务器独立完成',
     pending:'待云端确认数',pending_known:'已确定待同步数量',
     cloud_verified:'云端已复核',read_only_cloud_verified:'云端今日计划只读核实',read_only_error:'只读查询错误',cloud_verified_reason:'云端核实状态说明',
     cloud_day:'云端计划学习日',local_day:'本机学习日',
@@ -204,7 +207,9 @@
     var c = d && d.cloud;
     document.getElementById('counters').textContent = c ? [
       '状态        : ' + chineseValue(c.state || '暂无'),
-      '云端已持久化: ' + (c.synced_total == null ? '（尚未取得）' : c.synced_total + ' 条'),
+      '云端记录总数: ' + (c.cloud_total == null ? '（尚未取得）' : c.cloud_total + ' 条'),
+      '本批已确认  : ' + (c.batch_confirmed == null ? '（尚未取得）'
+        : c.batch_confirmed + ' / ' + (c.batch_total == null ? '?' : c.batch_total) + ' 条'),
       '本次新增    : ' + (c.uploaded == null ? '–' : c.uploaded + ' 条'),
       '已有跳过    : ' + (c.skipped_duplicates == null ? '（尚未取得）' : c.skipped_duplicates + ' 条'),
       '待云端确认  : ' + (c.pending == null ? '未知' : c.pending + ' 条'),
@@ -214,7 +219,7 @@
     ].join('\n') : '还没有同步过';
     document.getElementById('diag').textContent = d ? [
       '当前日期：'+d.today,
-      '本机学习日：第 '+d.localDay+' 日',
+      '本机学习日：第 '+d.localDay+' 日（与首页同一口径：自然课次与云端对齐日取较大者）',
       '本机课程：'+(d.subjects||[]).join('＋'),
       '本机有学习档案：'+(d.hasState?'是':'否'),
       '本机学习记录：'+d.records+' 条',
