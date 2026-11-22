@@ -136,7 +136,7 @@ sc:[
 ]};
 
 const ids=['cn','ma','en','sc'];
-let practice=false,current=null;
+let practice=false,current=null,viewAttempt=null;
 const FIRST_SUNDAY='2026-11-15',SECOND_SUNDAY='2026-11-22',THIRD_SUNDAY='2026-11-29';
 function shToday(){try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date())}catch(e){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}}
 function dayString(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
@@ -156,6 +156,67 @@ function officialPaperWeek(){
 }
 function store(){return state.weeklyExams||(state.weeklyExams={})}
 function saveExam(){if(!practice){store()[current.week]=current;save()}}
+
+/* ---- 2026-11-22：正式周测支持同一周内多次挑战（每轮独立 attempt_id，成绩取四科最佳） ---- */
+// 本机保留已交卷轮次，避免“再挑战”覆盖上一次的 21/24 与四科明细；云端另有完整历史。
+const WEEKLY_LOCAL_HISTORY_MAX=24;
+function weeklyHistory(){return state.weeklyAttempts||(state.weeklyAttempts={})}
+function archiveWeeklyAttempt(exam){
+ if(practice||!exam||!exam.attemptId||!exam.finishedAt)return;
+ const h=weeklyHistory(),list=h[exam.week]||(h[exam.week]=[]);
+ if(list.some(x=>x.attemptId===exam.attemptId))return;
+ list.push({week:exam.week,attemptId:exam.attemptId,examDate:exam.examDate||shToday(),
+  createdAt:exam.createdAt||null,finishedAt:exam.finishedAt,
+  questions:(exam.questions||[]).map(q=>({id:q.id,idx:q.idx,bank:q.bank||''})),
+  answers:exam.answers||{}});
+ while(list.length>WEEKLY_LOCAL_HISTORY_MAX)list.shift();
+}
+function weeklyAttemptsOf(week){
+ const list=(weeklyHistory()[week]||[]).slice();
+ if(!practice&&current&&current.week===week&&current.finishedAt&&!list.some(x=>x.attemptId===current.attemptId))list.push(current);
+ return list;
+}
+function weeklyBestLocal(week){
+ const list=weeklyAttemptsOf(week),best={};ids.forEach(id=>{best[id]=0});
+ list.forEach(a=>ids.forEach(id=>{
+  const c=Object.values(a.answers||{}).filter(x=>x.subject===id&&x.correct).length;
+  if(c>best[id])best[id]=c;
+ }));
+ return {best,count:list.length,total:ids.reduce((s,id)=>s+best[id],0),passed:ids.every(id=>best[id]>=5)};
+}
+// 本机历史 + 云端历史合并：换设备或清缓存后，仍按云端四科最佳展示。
+function weeklyBestView(week,examDate){
+ const local=weeklyBestLocal(week);
+ const best={},count=local.count;
+ ids.forEach(id=>{best[id]=local.best[id]||0});
+ let cloud=false;
+ const st=(weeklyMeta(week)||{}).status;
+ if(st&&Array.isArray(st.subjects)&&st.subjects.length===4&&(!examDate||!st.exam_date||st.exam_date===examDate)){
+  st.subjects.forEach(s=>{const id=ids.find(x=>SUBJECTS[x]===s.subject);if(id)best[id]=Math.max(best[id],Number(s.correct)||0)});
+  cloud=true;
+ }
+ const total=ids.reduce((s,id)=>s+best[id],0);
+ return {best,count:Math.max(count,Number(st&&st.round_count)||0),total,cloud,
+  passed:ids.every(id=>best[id]>=5)};
+}
+function bestLineText(v){return '本周最佳（四科分别取最佳）：'+v.total+' / 24 · '+ids.map(id=>SUBJECTS[id]+' '+v.best[id]+'/6').join(' · ')+(v.cloud?' · 含云端历史':'')}
+function bestNoteText(v){return v.passed?'✅ 本周四科测评已达标（再挑战不会降低该结果）':'⏳ 还有学科未达到每科 80%，可以当天继续挑战。'}
+function retryWeekly(){
+ if(practice||!current||!officialAllowed())return;
+ archiveWeeklyAttempt(current);
+ const week=current.week,fresh=build(week);
+ fresh.examDate=shToday();
+ store()[week]=fresh;
+ current=fresh;practice=false;viewAttempt=null;
+ saveExam();save();
+ // 新一轮必须使用全新 attempt_id，不能复用上一轮云端状态。
+ const prev=weeklyMeta(week)||{};
+ saveWeeklyMeta(week,{seq:Number(prev.seq)||0,attemptId:fresh.attemptId,examDate:fresh.examDate,
+  paperWeek:week,state:'LOCAL_PENDING',previousAttempt:prev.attemptId||null});
+ $('weeklyResult').hidden=true;$('weeklyPlay').hidden=false;
+ render();
+ try{$('weeklyPlay').scrollIntoView({block:'start',inline:'nearest'})}catch(e){}
+}
 
 /* ---- 2026-11-22：正式周测云端闭环（题库日期 week ≠ 实际考试日期 examDate） ---- */
 const WEEKLY_DEFAULT_GATEWAY='https://normal-goose-d5g4qyzr8bb389a4a.service.tcloudbase.com/r5';
@@ -246,6 +307,12 @@ function refreshWeeklySyncUi(){
   :meta.state==='SYNC_FAILED'?'上传失败，本机成绩已保留，可安全重试'
   :meta.state==='SYNCING'?'正在上传云端…':'正在查询云端状态…';
  box.textContent=(meta.error?'（'+meta.error+'）':'')+reason+(meta.syncedAt?' · 最近同步：'+new Date(meta.syncedAt).toLocaleString('zh-CN'):'');
+ const bl=$('weeklyBestLine'),bn=$('weeklyBestNote');
+ if(bl&&!viewAttempt&&!practice){
+  const v=weeklyBestView(current.week,current.examDate);
+  bl.textContent=bestLineText(v);
+  if(bn){bn.textContent=bestNoteText(v);bn.style.color=v.passed?'#0b6b3a':'#a8560b'}
+ }
 }
 
 function build(week){
@@ -275,7 +342,7 @@ function open(){
 }
 function enter(preview,requestedWeek){
  if(!preview&&!officialAllowed()){open();return}
- practice=preview;const week=preview?(requestedWeek||THIRD_SUNDAY):officialPaperWeek();
+ practice=preview;viewAttempt=null;const week=preview?(requestedWeek||THIRD_SUNDAY):officialPaperWeek();
  current=preview?build(week):(store()[week]||build(week));
  if(!practice&&current){
   if(!current.examDate)current.examDate=shToday();
@@ -355,23 +422,69 @@ function answerQuestion(index,choice){if(current.answers[index])return;const {re
  $('weeklyNext').hidden=false;$('weeklyNext').textContent=index+1===24?'查看四科成绩':'下一题 →';revealWeeklyNext();
 }
 function finish(){if(current.finishedAt){renderResult();return}current.finishedAt=new Date().toISOString();saveExam();renderResult();if(!practice&&current&&current.attemptId)Promise.resolve(uploadWeeklyExam(current)).catch(()=>{})}
-function renderResult(){const ans=Object.values(current.answers),score=ans.filter(a=>a.correct).length;
+function renderResult(target){const exam=target||current;if(!exam)return;const live=exam===current;
+ const ans=Object.values(exam.answers||{}),score=ans.filter(a=>a.correct).length;
  $('weeklyActions').hidden=true;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=false;
  const el=$('weeklyResult');el.replaceChildren();
- const h=document.createElement('h2');h.textContent='🏆 '+current.week+' · '+(practice?'家长试做结果':'本周四科测评报告');el.appendChild(h);
- const p=document.createElement('p');p.style.fontSize='23px';p.style.fontWeight='900';p.textContent='总成绩：'+score+' / 24（'+Math.round(score/24*100)+'分）';el.appendChild(p);
- const sync=document.createElement('div');sync.id='weeklySync';sync.style.cssText='padding:10px 12px;margin:8px 0 14px;border-radius:12px;background:#f4f9ff;color:#315b82;font-size:14px;line-height:1.6';sync.textContent='正在查询云端状态…';el.appendChild(sync);
- if(!practice&&current&&current.attemptId){
+ const h=document.createElement('h2');h.textContent='🏆 '+exam.week+' · '+(practice?'家长试做结果':'本周四科测评报告');el.appendChild(h);
+ const p=document.createElement('p');p.style.fontSize='23px';p.style.fontWeight='900';p.textContent='本轮成绩：'+score+' / 24（'+Math.round(score/24*100)+'分）';el.appendChild(p);
+ const info=document.createElement('p');info.style.cssText='margin:0 0 10px;color:#5b7891;font-size:14px;line-height:1.6';
+ const nth=weeklyAttemptsOf(exam.week).findIndex(a=>a.attemptId===exam.attemptId)+1;
+ info.textContent=(nth>0?'第 '+nth+' 次挑战 · ':'')+'交卷时间：'+(exam.finishedAt?new Date(exam.finishedAt).toLocaleString('zh-CN'):'—')+(live?'':' · 历史成绩查看');
+ el.appendChild(info);
+ if(!live){const back=document.createElement('button');back.type='button';back.textContent='← 返回本轮成绩';
+  back.style.cssText='margin:0 0 12px;padding:8px 14px;border:1px solid #9bc9e4;border-radius:12px;background:#fff;color:#174d78;font-weight:800';
+  back.onclick=()=>{viewAttempt=null;renderResult(current)};el.appendChild(back);}
+ if(live){
+  const sync=document.createElement('div');sync.id='weeklySync';sync.style.cssText='padding:10px 12px;margin:8px 0 10px;border-radius:12px;background:#f4f9ff;color:#315b82;font-size:14px;line-height:1.6';sync.textContent='正在查询云端状态…';el.appendChild(sync);
+ }
+ if(live&&!practice&&current&&current.attemptId){
   const retry=document.createElement('button');retry.type='button';retry.textContent='↻ 重新同步成绩（可安全重试）';
-  retry.style.cssText='margin:4px 0 14px;padding:10px 14px;border:1px solid #9bc9e4;border-radius:12px;background:#fff;color:#174d78;font-weight:800';
+  retry.style.cssText='margin:0 0 12px;padding:9px 14px;border:1px solid #9bc9e4;border-radius:12px;background:#fff;color:#174d78;font-weight:800';
   retry.onclick=()=>{Promise.resolve(uploadWeeklyExam(current)).catch(()=>{})};el.appendChild(retry);
+ }
+ if(!practice){
+  const best=weeklyBestView(exam.week,exam.examDate);
+  if(best.count>=1){
+   const bl=document.createElement('p');bl.id='weeklyBestLine';bl.style.cssText='margin:8px 0 4px;padding:10px 12px;border-radius:12px;background:#eef9f1;color:#0b6b3a;font-size:15px;font-weight:800;line-height:1.7';
+   bl.textContent=bestLineText(best);
+   el.appendChild(bl);
+   const st=document.createElement('p');st.id='weeklyBestNote';st.style.cssText='margin:0 0 12px;font-size:14px;font-weight:800;color:'+(best.passed?'#0b6b3a':'#a8560b');
+   st.textContent=bestNoteText(best);
+   el.appendChild(st);
+  }
+ }
+ if(live&&!practice&&officialAllowed()){
+  const again=document.createElement('button');again.type='button';again.id='weeklyRetry';again.textContent='🔄 再挑战一次';
+  again.style.cssText='display:block;width:100%;margin:14px 0 8px;padding:16px;border:0;border-radius:16px;background:linear-gradient(#ffdb64,#ff9c28);box-shadow:0 5px 0 #c87920;color:#65380c;font-size:20px;font-weight:1000';
+  again.onclick=()=>retryWeekly();
+  el.appendChild(again);
+  const tip=document.createElement('p');tip.style.cssText='margin:0 0 16px;color:#5b7891;font-size:13px;line-height:1.6';
+  tip.textContent='重新开始本周 24 题，使用新的答卷编号；每次成绩都会保存，最终按四科最佳判定是否达标。';
+  el.appendChild(tip);
+ }
+ if(!practice){
+  const all=weeklyAttemptsOf(exam.week);
+  if(all.length>1){
+   const hs=document.createElement('h3');hs.textContent='📋 本周挑战记录（'+all.length+' 次）';el.appendChild(hs);
+   all.forEach((a,i)=>{
+    const c=Object.values(a.answers||{}).filter(x=>x.correct).length;
+    const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #e3f0f9';
+    const lab=document.createElement('div');lab.style.cssText='flex:1;min-width:0;font-size:14px;color:#315b82;line-height:1.5';
+    lab.textContent='第 '+(i+1)+' 次 · '+(a.finishedAt?new Date(a.finishedAt).toLocaleString('zh-CN'):'')+' · '+c+'/24';
+    row.appendChild(lab);
+    if(a.attemptId===exam.attemptId){const now=document.createElement('span');now.textContent='当前查看';now.style.cssText='color:#0b6b3a;font-size:13px;font-weight:800';row.appendChild(now)}
+    else{const btn=document.createElement('button');btn.type='button';btn.textContent='查看';btn.style.cssText='padding:6px 12px;border:1px solid #9bc9e4;border-radius:10px;background:#fff;color:#174d78;font-weight:800';btn.onclick=()=>{viewAttempt=a;renderResult(a)};row.appendChild(btn)}
+    el.appendChild(row);
+   });
+  }
  }
  ids.forEach(id=>{const a=ans.filter(x=>x.subject===id),c=a.filter(x=>x.correct).length;const line=document.createElement('p');line.textContent=SUBJECTS[id]+'：'+c+' / 6 · '+Math.round(c/6*100)+'%';el.appendChild(line)});
  const wrong=ans.filter(x=>!x.correct);const sub=document.createElement('h3');sub.textContent='错题回顾（'+wrong.length+'题）';el.appendChild(sub);
  if(!wrong.length){const p=document.createElement('p');p.textContent='全部答对！继续保持！';el.appendChild(p)}
  wrong.forEach((x,i)=>{const p=document.createElement('p');p.style.cssText='padding:12px;border-bottom:1px solid #d6eaf6;line-height:1.8';p.textContent=(i+1)+'. 【'+SUBJECTS[x.subject]+'】'+x.question+'  你选：'+x.chosen+'。正确：'+x.answer+'。'+x.explanation;el.appendChild(p)});
  const b=document.createElement('button');b.type='button';b.className='primary';b.textContent='返回学习台';b.onclick=()=>openScreen('home');el.appendChild(b);
- if(!practice&&current&&current.attemptId)Promise.resolve(refreshWeeklyStatus(current)).catch(()=>{});
+ if(live&&!practice&&current&&current.attemptId)Promise.resolve(refreshWeeklyStatus(current)).catch(()=>{});
 }
 const secondPreview=document.createElement('button');secondPreview.id='weeklyPreviewSecond';secondPreview.type='button';secondPreview.style.cssText='margin:8px;padding:10px 14px;border:1px solid #9bc9e4;border-radius:12px;background:white;color:#174d78;font-weight:800';
 $('weeklyPreview').insertAdjacentElement('afterend',secondPreview);
