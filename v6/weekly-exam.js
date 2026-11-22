@@ -138,16 +138,17 @@ sc:[
 const ids=['cn','ma','en','sc'];
 let practice=false,current=null;
 const FIRST_SUNDAY='2026-11-15',SECOND_SUNDAY='2026-11-22',THIRD_SUNDAY='2026-11-29';
+function shToday(){try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date())}catch(e){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}}
 function dayString(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-function sunday(){return new Date().getDay()===0}
-function key(){const d=new Date();d.setDate(d.getDate()-d.getDay());return dayString(d)}
+function sunday(){const t=Date.parse(shToday()+'T12:00:00Z');return Number.isFinite(t)&&new Date(t).getUTCDay()===0}
+function key(){const t=Date.parse(shToday()+'T12:00:00Z');const d=new Date(t);d.setUTCDate(d.getUTCDate()-d.getUTCDay());return dayString(new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())))}
 // 11/15 was missed because the old baseline entry intercepted the weekly exam.
 // The parent elected to defer the *first* official paper to Sunday 11/22.
 // There is no Monday makeup and later weekly papers shift by one Sunday.
 const OFFICIAL_FIRST_DATE='2026-11-22',OFFICIAL_SECOND_DATE='2026-11-29',OFFICIAL_THIRD_DATE='2026-12-06';
-function officialAllowed(){return sunday()&&dayString(new Date())>=OFFICIAL_FIRST_DATE}
+function officialAllowed(){return sunday()&&shToday()>=OFFICIAL_FIRST_DATE}
 function officialPaperWeek(){
- const now=dayString(new Date());
+ const now=shToday();
  if(now===OFFICIAL_FIRST_DATE)return FIRST_SUNDAY;
  if(now===OFFICIAL_SECOND_DATE)return SECOND_SUNDAY;
  if(now===OFFICIAL_THIRD_DATE)return THIRD_SUNDAY;
@@ -155,6 +156,98 @@ function officialPaperWeek(){
 }
 function store(){return state.weeklyExams||(state.weeklyExams={})}
 function saveExam(){if(!practice){store()[current.week]=current;save()}}
+
+/* ---- 2026-11-22：正式周测云端闭环（题库日期 week ≠ 实际考试日期 examDate） ---- */
+const WEEKLY_DEFAULT_GATEWAY='https://normal-goose-d5g4qyzr8bb389a4a.service.tcloudbase.com/r5';
+function weeklyCfg(){
+ const q=new URLSearchParams(location.search);
+ const test=window.__R5_WEEKLY_TEST_CONFIG__||null;
+ // 生产包禁止用 URL 切换家庭或网关；只有本机隔离试玩环境允许覆盖。
+ const isolated=/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&!!(test||window.__R5_WEEKLY_ISOLATION__);
+ return {
+  base:(test&&test.base)||(isolated?q.get('r5base'):null)||WEEKLY_DEFAULT_GATEWAY,
+  family:(test&&test.family)||(isolated?q.get('r5family'):null)||'little-growth-family-001',
+  device:(test&&test.device)||localStorage.getItem('r5_device')||''
+ };
+}
+function weeklyMetaKey(week){return 'v6-weekly-upload-v1:'+week}
+function weeklyMeta(week){try{return JSON.parse(localStorage.getItem(weeklyMetaKey(week))||'null')}catch(e){return null}}
+function saveWeeklyMeta(week,meta){try{localStorage.setItem(weeklyMetaKey(week),JSON.stringify(meta))}catch(e){}}
+function newAttemptId(){
+ try{if(crypto&&crypto.randomUUID)return crypto.randomUUID()}catch(e){}
+ return 'wk-'+Date.now()+'-'+Math.random().toString(36).slice(2,10);
+}
+function weeklyRounds(exam){
+ const counts={cn:0,ma:0,en:0,sc:0};
+ const rounds={cn:[],ma:[],en:[],sc:[]};
+ for(let i=0;i<exam.questions.length;i++){
+  const ref=exam.questions[i],ans=exam.answers[i];
+  if(!ref||!ans)continue;
+  const pool=ref.bank==='week3'?WEEK3_QUESTIONS:ref.bank==='week2'?WEEK2_QUESTIONS:QUESTIONS;
+  const row=pool[ref.id][ref.idx];
+  const idx=counts[ref.id]++;
+  const chosenText=ans.chosen!==undefined?ans.chosen:ans.selected;
+  const selected=Number.isInteger(ans.selected)?ans.selected:row[1].indexOf(chosenText);
+  // correct/answer/chosen 仅作本机展示；服务端按 selected + 可信题库重新判题。
+  rounds[ref.id].push({index:idx,selected,correct:!!ans.correct,chosen:chosenText,answer:row[1][row[2]],question:row[0]});
+ }
+ return ids.map(id=>({subject:{cn:'语文',ma:'数学',en:'英语',sc:'科学'}[id],answers:rounds[id]}));
+}
+async function weeklyPost(path,body){
+ const cfg=weeklyCfg();
+ const res=await fetch(String(cfg.base).replace(/\/$/,'')+path,{
+  method:'POST',headers:{'content-type':'application/json','x-r5-device':cfg.device},
+  body:JSON.stringify({family_id:cfg.family,...body}),cache:'no-store'});
+ const text=await res.text();
+ let json=null;try{json=JSON.parse(text)}catch(e){}
+ if(!res.ok||!json||json.error)throw new Error((json&&json.error)||('HTTP_'+res.status));
+ return json;
+}
+async function uploadWeeklyExam(exam){
+ if(practice||!exam||!exam.finishedAt||!exam.attemptId)return;
+ const cfg=weeklyCfg();if(!cfg.device)return;
+ const meta=weeklyMeta(exam.week)||{};
+ meta.seq=(Number(meta.seq)||0)+1;
+ meta.attemptId=exam.attemptId;meta.examDate=exam.examDate||shToday();meta.paperWeek=exam.week;meta.state='SYNCING';
+ saveWeeklyMeta(exam.week,meta);
+ try{
+  const out=await weeklyPost('/v1/child/weekly-assessment-upload',{
+   attempt_id:exam.attemptId,exam_date:meta.examDate,paper_week:exam.week,
+   at:exam.finishedAt,device_id:cfg.device,rounds:weeklyRounds(exam)});
+  meta.state='SYNCED';meta.status=out.status;meta.syncedAt=new Date().toISOString();meta.duplicate=!!out.duplicate;
+  saveWeeklyMeta(exam.week,meta);
+  await refreshWeeklyStatus(exam);
+ }catch(e){
+  meta.state='SYNC_FAILED';meta.error=String(e&&e.message||e);saveWeeklyMeta(exam.week,meta);
+ }
+ refreshWeeklySyncUi();
+}
+async function refreshWeeklyStatus(exam){
+ if(practice||!exam||!exam.attemptId)return;
+ const meta=weeklyMeta(exam.week)||{};
+ if(meta.state==='SYNCING')return;
+ const seq=Number(meta.seq)||0;
+ try{
+  const out=await weeklyPost('/v1/child/weekly-assessment',{exam_date:meta.examDate||exam.examDate||shToday()});
+  const latest=weeklyMeta(exam.week)||{};
+  if((Number(latest.seq)||0)!==seq)return;
+  latest.status=out;latest.lastCheckedAt=new Date().toISOString();
+  if(out.state==='NOT_STARTED'&&latest.state==='SYNCED')latest.state='SYNC_PENDING';
+  saveWeeklyMeta(exam.week,latest);
+ }catch(e){}
+ refreshWeeklySyncUi();
+}
+function refreshWeeklySyncUi(){
+ const box=$('weeklySync');if(!box||!current)return;
+ const meta=weeklyMeta(current.week)||{};const st=meta.status;
+ const reason=st&&st.state==='NOT_STARTED'?'本机已交卷，但云端还没有记录（未同步）'
+  :st&&st.state==='BELOW_THRESHOLD'?'云端已记录：有学科未达到每科 80%'
+  :st&&st.state==='PASSED'?'云端已确认本周测评通过 ✅'
+  :meta.state==='SYNC_FAILED'?'上传失败，本机成绩已保留，可安全重试'
+  :meta.state==='SYNCING'?'正在上传云端…':'正在查询云端状态…';
+ box.textContent=(meta.error?'（'+meta.error+'）':'')+reason+(meta.syncedAt?' · 最近同步：'+new Date(meta.syncedAt).toLocaleString('zh-CN'):'');
+}
+
 function build(week){
  const isSecond=week===SECOND_SUNDAY,isThird=week===THIRD_SUNDAY,picked={};
  if(isThird){ids.forEach(id=>{picked[id]=WEEK3_QUESTIONS[id].map((_,i)=>({id,idx:i,bank:'week3'}))});}
@@ -165,14 +258,14 @@ function build(week){
   ids.forEach((id,index)=>{const pool=QUESTIONS[id];const start=(weekSeed+index*3)%pool.length;picked[id]=Array.from({length:6},(_,i)=>({id,idx:(start+i*2)%pool.length}))});
  }
  const ordered=[];for(let r=0;r<6;r++)ids.forEach(id=>ordered.push(picked[id][r]));
- return {week,createdAt:new Date().toISOString(),questions:ordered,answers:{},finishedAt:null};
+ return {week,examDate:shToday(),attemptId:newAttemptId(),createdAt:new Date().toISOString(),questions:ordered,answers:{},finishedAt:null};
 }
 function open(){
  if(!officialAllowed()){home();return}
  openScreen('weeklyExam');
  const week=officialPaperWeek(),completed=store()[week],canStart=officialAllowed();
  $('weeklyActions').hidden=false;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=true;
- $('weeklyIntro').textContent=canStart?(dayString(new Date())===OFFICIAL_FIRST_DATE?'第一周四科综合测评 · 11月22日补测（24题，每科6题）。':'今天是正式周测日，四科各6题，共24题。'):'正式测评从11月22日起每周日开放。';
+ $('weeklyIntro').textContent=canStart?(shToday()===OFFICIAL_FIRST_DATE?'第一周四科综合测评 · 11月22日补测（24题，每科6题）。':'今天是正式周测日，四科各6题，共24题。'):'正式测评从11月22日起每周日开放。';
  $('weeklyStart').hidden=!canStart;
  $('weeklyStart').textContent=completed?(completed.finishedAt?'查看本周成绩':'继续本周测评'):'开始本周测评';
  $('weeklyPreview').textContent='🔎 试做 11月15日（第一周）';
@@ -184,6 +277,10 @@ function enter(preview,requestedWeek){
  if(!preview&&!officialAllowed()){open();return}
  practice=preview;const week=preview?(requestedWeek||THIRD_SUNDAY):officialPaperWeek();
  current=preview?build(week):(store()[week]||build(week));
+ if(!practice&&current){
+  if(!current.examDate)current.examDate=shToday();
+  if(!current.attemptId)current.attemptId=newAttemptId();
+ }
  saveExam();$('weeklyActions').hidden=true;
  current.finishedAt?renderResult():render();
 }
@@ -249,17 +346,24 @@ function answerQuestion(index,choice){if(current.answers[index])return;const {re
  speakOption(ok?'恭喜你回答正确':'哦哦，正确答案是：'+row[1][row[2]],ref.id);
  $('weeklyNext').hidden=false;$('weeklyNext').textContent=index+1===24?'查看四科成绩':'下一题 →';
 }
-function finish(){current.finishedAt=current.finishedAt||new Date().toISOString();saveExam();renderResult()}
+function finish(){if(current.finishedAt){renderResult();return}current.finishedAt=new Date().toISOString();saveExam();renderResult();if(!practice&&current&&current.attemptId)Promise.resolve(uploadWeeklyExam(current)).catch(()=>{})}
 function renderResult(){const ans=Object.values(current.answers),score=ans.filter(a=>a.correct).length;
  $('weeklyActions').hidden=true;$('weeklyPlay').hidden=true;$('weeklyResult').hidden=false;
  const el=$('weeklyResult');el.replaceChildren();
  const h=document.createElement('h2');h.textContent='🏆 '+current.week+' · '+(practice?'家长试做结果':'本周四科测评报告');el.appendChild(h);
  const p=document.createElement('p');p.style.fontSize='23px';p.style.fontWeight='900';p.textContent='总成绩：'+score+' / 24（'+Math.round(score/24*100)+'分）';el.appendChild(p);
+ const sync=document.createElement('div');sync.id='weeklySync';sync.style.cssText='padding:10px 12px;margin:8px 0 14px;border-radius:12px;background:#f4f9ff;color:#315b82;font-size:14px;line-height:1.6';sync.textContent='正在查询云端状态…';el.appendChild(sync);
+ if(!practice&&current&&current.attemptId){
+  const retry=document.createElement('button');retry.type='button';retry.textContent='↻ 重新同步成绩（可安全重试）';
+  retry.style.cssText='margin:4px 0 14px;padding:10px 14px;border:1px solid #9bc9e4;border-radius:12px;background:#fff;color:#174d78;font-weight:800';
+  retry.onclick=()=>{Promise.resolve(uploadWeeklyExam(current)).catch(()=>{})};el.appendChild(retry);
+ }
  ids.forEach(id=>{const a=ans.filter(x=>x.subject===id),c=a.filter(x=>x.correct).length;const line=document.createElement('p');line.textContent=SUBJECTS[id]+'：'+c+' / 6 · '+Math.round(c/6*100)+'%';el.appendChild(line)});
  const wrong=ans.filter(x=>!x.correct);const sub=document.createElement('h3');sub.textContent='错题回顾（'+wrong.length+'题）';el.appendChild(sub);
  if(!wrong.length){const p=document.createElement('p');p.textContent='全部答对！继续保持！';el.appendChild(p)}
  wrong.forEach((x,i)=>{const p=document.createElement('p');p.style.cssText='padding:12px;border-bottom:1px solid #d6eaf6;line-height:1.8';p.textContent=(i+1)+'. 【'+SUBJECTS[x.subject]+'】'+x.question+'  你选：'+x.chosen+'。正确：'+x.answer+'。'+x.explanation;el.appendChild(p)});
  const b=document.createElement('button');b.type='button';b.className='primary';b.textContent='返回学习台';b.onclick=()=>openScreen('home');el.appendChild(b);
+ if(!practice&&current&&current.attemptId)Promise.resolve(refreshWeeklyStatus(current)).catch(()=>{});
 }
 const secondPreview=document.createElement('button');secondPreview.id='weeklyPreviewSecond';secondPreview.type='button';secondPreview.style.cssText='margin:8px;padding:10px 14px;border:1px solid #9bc9e4;border-radius:12px;background:white;color:#174d78;font-weight:800';
 $('weeklyPreview').insertAdjacentElement('afterend',secondPreview);

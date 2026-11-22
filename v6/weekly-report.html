@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>周测查看 · 家长用</title>
+<style>
+body{margin:0;padding:18px;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f3f7fc;color:#12243d}
+h1{font-size:19px;margin:0 0 4px}.sub{color:#5b7290;font-size:13px;line-height:1.6;margin:0 0 16px}
+.card{background:#fff;border:1px solid #dbe6f3;border-radius:16px;padding:14px 16px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 10px;color:#2f6fd0}
+label{display:block;font-size:13px;margin:8px 0 4px}select,input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #b9ccdf;border-radius:10px;font-size:15px}
+button{border:0;border-radius:12px;padding:13px 18px;font-size:15px;font-weight:700;background:#e23b2e;color:#fff;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #e6eef7;padding:8px 4px;text-align:left}
+.ok{color:#2fae6a;font-weight:700}.bad{color:#e23b2e;font-weight:700}.muted{color:#5b7290;font-size:12px}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<h1>🏆 本周四科综合测评 · 家长查看</h1>
+<p class="sub">妈妈 / 爸爸 / 外婆均可查看同一正式家庭；只读取云端，不写成绩、不改学习日。考试日期与题库日期分别显示。</p>
+<div class="card">
+ <label>家长账号<select id="account"><option value="growth_mom">妈妈</option><option value="growth_dad">爸爸</option><option value="growth_grandma">外婆</option></select></label>
+ <label>登录密码<input id="password" type="password" maxlength="200" autocomplete="off"></label>
+ <label>测评日期（北京时间）<input id="examDate" type="date"></label>
+ <button id="load">查询云端周测</button>
+ <p id="status" class="muted"></p>
+</div>
+<div class="card" id="result" hidden><h2>测评结果</h2><div id="summary"></div><div id="subjects"></div></div>
+<div class="card" id="roundsCard" hidden><h2>完整交卷记录</h2><pre id="rounds"></pre></div>
+<script>
+(function(){
+'use strict';
+const q=new URLSearchParams(location.search);
+// 生产站禁止通过 URL 切换家庭或网关；隔离试玩仅允许本机 localhost/127.0.0.1。
+const ISOLATED=/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const base=ISOLATED?(q.get('base')||'https://normal-goose-d5g4qyzr8bb389a4a.service.tcloudbase.com/r5'):'https://normal-goose-d5g4qyzr8bb389a4a.service.tcloudbase.com/r5';
+const family=ISOLATED?(q.get('family')||'little-growth-family-001'):'little-growth-family-001';
+function shToday(){try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date())}catch(e){return new Date().toISOString().slice(0,10)}}
+document.getElementById('examDate').value=shToday();
+const pct=v=>v==null?'—':String(v).replace(/\.0$/,'')+'%';
+const LABEL={cn:'语文',ma:'数学',en:'英语',sc:'科学'};
+document.getElementById('load').onclick=async()=>{
+ const status=document.getElementById('status');status.textContent='正在查询…';
+ const password=document.getElementById('password').value;
+ try{
+  const res=await fetch(base.replace(/\/$/,'')+'/v1/parent/weekly-assessment',{
+   method:'POST',headers:{'content-type':'application/json'},cache:'no-store',
+   body:JSON.stringify({family_id:family,account:document.getElementById('account').value,password:document.getElementById('password').value,exam_date:document.getElementById('examDate').value})});
+  const out=await res.json().catch(()=>({}));
+  if(!res.ok||out.error){status.textContent='查询失败：'+(out.error||('HTTP_'+res.status));return}
+  status.textContent='已读取云端：'+family;
+  document.getElementById('result').hidden=false;document.getElementById('roundsCard').hidden=false;
+  document.getElementById('summary').innerHTML=
+   '<p>测评日期：<b>'+(out.exam_date||'—')+'</b> · 云端状态：<b class="'+(out.passed?'ok':'bad')+'">'+(out.passed?'达标':'未达标')+'</b></p>'+
+   '<p>综合成绩：<b>'+(out.correct||0)+' / '+(out.total||24)+'（'+pct(out.overall_accuracy_pct)+'）</b> · 交卷轮次：<b>'+(out.round_count||0)+'</b></p>'+
+   '<p class="muted">最近同步时间：'+(out.rounds&&out.rounds.length?out.rounds[out.rounds.length-1].submitted_at:'—')+'</p>';
+  document.getElementById('subjects').innerHTML='<table><tr><th>学科</th><th>答对</th><th>答错</th><th>正确率</th><th>达标</th></tr>'+
+   (out.subjects||[]).map(s=>'<tr><td>'+(LABEL[s.subject_code]||s.subject)+'</td><td>'+s.correct+'</td><td>'+(s.total-s.correct)+'</td><td>'+pct(s.accuracy_pct)+'</td><td class="'+(s.passed?'ok':'bad')+'">'+(s.passed?'是':'否')+'</td></tr>').join('')+'</table>';
+  document.getElementById('rounds').textContent=JSON.stringify(out.rounds||[],null,2);
+ }catch(e){status.textContent='网络异常，未改动任何数据：'+e.message}
+ finally{document.getElementById('password').value='';}
+};
+})();
+</script>
+</body>
+</html>

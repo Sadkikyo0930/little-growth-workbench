@@ -24,7 +24,7 @@ function build(s,b){
  var prefix=deviceId();
  var arr=[],subjectNames={cn:"语文",ma:"数学",en:"英语",sc:"科学"},map={"语文":"cn","数学":"ma","英语":"en","科学":"sc"};
  (s.records||[]).forEach(function(r,i){if(i<b.answerCount||!r||typeof r!=="object")return;
-  arr.push({record_id:"v6-"+prefix+"-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}})
+  arr.push({record_id:"v6-"+prefix+"-answer-"+String(i).padStart(9,"0"),record_type:"answer",subject:subjectNames[r.subject]||String(r.subject||"综合"),learning_day:Number.isInteger(Number(r.learningDay))?Number(r.learningDay):dayIndex(r.date),record_data:{version:1,source:"v6",index:i,answer:r}});
  });
  // Every completed attempt is uploaded, including scores below 80%.
  // IDs include a stable device ID and immutable attempt ID; retries never overwrite history.
