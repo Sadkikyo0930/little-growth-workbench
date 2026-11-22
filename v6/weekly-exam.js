@@ -286,6 +286,13 @@ function enter(preview,requestedWeek){
 }
 function question(i){const ref=current.questions[i],pool=ref.bank==='week3'?WEEK3_QUESTIONS:ref.bank==='week2'?WEEK2_QUESTIONS:QUESTIONS;return {ref,row:pool[ref.id][ref.idx]}}
 function answeredCount(){return Object.keys(current.answers).length}
+function revealWeeklyNext(){
+ const btn=$('weeklyNext');if(!btn||btn.hidden)return;
+ requestAnimationFrame(()=>{
+  try{btn.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'})}
+  catch(e){btn.scrollIntoView()}
+ });
+}
 function render(){const n=answeredCount();if(n>=current.questions.length){finish();return}
  const {ref,row}=question(n);$('weeklyPlay').hidden=false;$('weeklyResult').hidden=true;
  $('weeklyProgress').textContent=(current.week===THIRD_SUNDAY?'11月29日 · 第三周':current.week===SECOND_SUNDAY?'11月22日 · 第二周':'11月15日 · 第一周')+' · 第 '+(n+1)+' / '+current.questions.length+' 题'+(practice?' · 家长试做':' · 本周正式测评');
@@ -309,6 +316,7 @@ function render(){const n=answeredCount();if(n>=current.questions.length){finish
  if(!isPinyinRecognition)wrap.appendChild(voice);
  $('weeklyOptions').appendChild(wrap);
 });
+ if(n>0)requestAnimationFrame(()=>{try{$('weeklyPlay').scrollIntoView({block:'start',inline:'nearest',behavior:'smooth'})}catch(e){$('weeklyPlay').scrollIntoView()}});
 }
 // Play mixed Chinese/English prompts in language-specific utterances.
 // iOS Safari can make crackling/garbled sounds when the Mandarin voice reads English words.
@@ -344,7 +352,7 @@ function answerQuestion(index,choice){if(current.answers[index])return;const {re
  saveExam();$('weeklyOptions').querySelectorAll('.weekly-choice').forEach(b=>{b.disabled=true;if(Number(b.dataset.choice)===row[2])b.style.background='#e2f7e9';else if(Number(b.dataset.choice)===choice&&!ok)b.style.background='#fff0e9'});
  $('weeklyFeedback').textContent=(ok?'🌟 恭喜你回答正确！ ':'💡 这道题再记住：')+row[3];
  speakOption(ok?'恭喜你回答正确':'哦哦，正确答案是：'+row[1][row[2]],ref.id);
- $('weeklyNext').hidden=false;$('weeklyNext').textContent=index+1===24?'查看四科成绩':'下一题 →';
+ $('weeklyNext').hidden=false;$('weeklyNext').textContent=index+1===24?'查看四科成绩':'下一题 →';revealWeeklyNext();
 }
 function finish(){if(current.finishedAt){renderResult();return}current.finishedAt=new Date().toISOString();saveExam();renderResult();if(!practice&&current&&current.attemptId)Promise.resolve(uploadWeeklyExam(current)).catch(()=>{})}
 function renderResult(){const ans=Object.values(current.answers),score=ans.filter(a=>a.correct).length;
