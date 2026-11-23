@@ -19,6 +19,46 @@
 (function () {
   'use strict';
 
+  var R5_FRAGMENT_QUEUE_KEY = 'v6-fragment-pending-v2';
+  var r5RewardMod = null;
+  var r5WeeklyMod = null;
+  var r5FragmentsPromise = null;
+  var R5_FRAGMENT_RECORD = /^(?:v6c-[A-Za-z0-9_-]{3,80}-complete-(?:语文|数学|英语|科学|cn|ma|en|sc)-d(?:[1-9]|[1-5][0-9]|60)(?:-[0-9]{6,20})?|v6-[a-f0-9]{16}-course-(?:[1-9]|[12][0-9]|30)-(?:cn|ma|en|sc))$/;
+  function r5LoadFragmentModules() {
+    if (!r5FragmentsPromise) {
+      r5FragmentsPromise = Promise.all([
+        import('./r5/reward-hook.mjs').catch(function () { return null; }),
+        import('./r5/weekly-goal.mjs').catch(function () { return null; }),
+      ]).then(function (mods) {
+        r5RewardMod = mods[0] || null;
+        r5WeeklyMod = mods[1] || null;
+        if (r5RewardMod && r5RewardMod.bootstrap) r5RewardMod.bootstrap();
+        if (r5WeeklyMod && r5WeeklyMod.bootstrap) r5WeeklyMod.bootstrap();
+        return r5RewardMod;
+      });
+    }
+    return r5FragmentsPromise;
+  }
+  function r5SpoolFragmentRecord(recordId) {
+    var id = String(recordId || '');
+    if (!R5_FRAGMENT_RECORD.test(id)) return false;
+    try {
+      var seen = JSON.parse(localStorage.getItem('v6-fragment-claim-seen-v2') || '[]');
+      if (!Array.isArray(seen) || seen.indexOf(id) >= 0) return false;
+      var q = JSON.parse(localStorage.getItem(R5_FRAGMENT_QUEUE_KEY) || '[]');
+      if (!Array.isArray(q)) q = [];
+      if (q.indexOf(id) >= 0) return false;
+      q.push(id);
+      localStorage.setItem(R5_FRAGMENT_QUEUE_KEY, JSON.stringify(q.slice(-160)));
+      return true;
+    } catch (e) { return false; }
+  }
+  function r5KickFragmentRewards() {
+    return r5LoadFragmentModules().then(function (m) {
+      return m && m.resumeRewardQueue ? m.resumeRewardQueue() : { status: 'MODULE_UNAVAILABLE' };
+    }).catch(function () { return { status: 'MODULE_UNAVAILABLE' }; });
+  }
+
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
   var BRIDGE_BUILD = '2026-11-21.rc5-device-round-v4-dayfix';
 
@@ -1846,12 +1886,16 @@
       /* 完成态仍由服务端派生（家长会话也是家庭成员，可直接调用同一函数）。 */
       for (var ri = 0; ri < roundsForSession.length; ri++) {
         try {
-          await rpc('r5_child_complete_course', {
+          var comp = await rpc('r5_child_complete_course', {
             p_family_id: CFG.familyId,
             p_subject: roundsForSession[ri].subject,
             p_day: cloudDay,
             p_attempt_id: roundsForSession[ri].attempt_id,
           }, who);
+          if (comp && comp.ok && comp.completed && comp.record_id &&
+              r5SpoolFragmentRecord(comp.record_id)) {
+            r5KickFragmentRewards();
+          }
         } catch (compErr) {
           log('派生完成态未成立', roundsForSession[ri].subject,
             String(compErr && (compErr.code || compErr.message) || 'UNKNOWN'));
@@ -1880,12 +1924,16 @@
       var noRows = rows.length === 0;
       var allThere = vf.known && vf.missing.length === 0 && !noRows;
       if (allThere && up.uploaded > 0) {
-        rows.filter(function(x){return x.record_type === 'course-complete';})
-          .forEach(function(x){
-            import('./r5/reward-hook.mjs').then(function(m){
-              m.enqueueVerifiedCourse(x.record_id);return m.resumeRewardQueue();
-            }).catch(function(){});
+        r5LoadFragmentModules().then(function (m) {
+          if (!m) return null;
+          return m.reconcileToday().then(function (r) {
+            return m.resumeRewardQueue().then(function (s) { return { reconcile: r, resume: s }; });
           });
+        }).catch(function () {});
+        r5LoadFragmentModules().then(function () {
+          return r5WeeklyMod && r5WeeklyMod.resumeWeeklyGoal
+            ? r5WeeklyMod.resumeWeeklyGoal() : { status: 'MODULE_UNAVAILABLE' };
+        }).catch(function () {});
       }
       var stateName = !vf.known ? 'unverified' : (vf.missing.length ? 'partial' : 'ok');
       var pendingSync = pendingScoreSyncOf(st);
@@ -2365,6 +2413,9 @@
 
   if (diagnostic) return;
   // 打开页面 3 秒后跑一次，之后每 60 秒、回到前台、联网都再试
+  r5LoadFragmentModules().then(function (m) {
+    if (m && m.resumeRewardQueue) m.resumeRewardQueue().catch(function () {});
+  }).catch(function () {});
   setTimeout(function () { run(false); attachChineseCapture(); }, 3000);
   setInterval(function () { run(false); }, 60000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { run(false); attachChineseCapture(); } });

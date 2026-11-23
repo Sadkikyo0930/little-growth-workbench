@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261122-weekly-retry';
+const VERSION='20261123-v6frag-r2-cachebust';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -92,7 +92,8 @@ self.addEventListener('fetch',event=>{
    || url.pathname.endsWith('/r5-bridge.js')
    || url.pathname.endsWith('/pwa.js')
    || url.pathname.endsWith('/r5-parent-check.html')
-   || /\/r5\/(attempt-upload-policy|attempt-recovery|sync-health)\.mjs$/.test(url.pathname);
+   || /\/r5\/(attempt-upload-policy|attempt-recovery|sync-health)\.mjs$/.test(url.pathname)
+   || /\/r5\/(reward-hook|weekly-goal)\.mjs$/.test(url.pathname);
  if(freshLesson || freshSync){
   event.respondWith((async()=>{
    const key=new URL(url.pathname,ROOT.origin);

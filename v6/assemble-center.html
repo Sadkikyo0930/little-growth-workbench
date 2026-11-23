@@ -318,6 +318,8 @@ import { loadState, assembleVehicle, deviceToken, buildProgress, assembledList, 
 import { memberState, memberAssemble } from './r5/member-fragments.mjs';
 import { loginUrl } from './r5/identity.mjs';
 import { isDebug } from './r5/config.mjs';
+import { pendingList } from './r5/fragment-client.mjs';
+import { resumeWeeklyGoal } from './r5/weekly-goal.mjs';
 
 const $ = id => document.getElementById(id);
 const DEBUG = isDebug();
@@ -667,6 +669,27 @@ try {
 
 $('wrap').classList.add('loading');
 refresh();
+
+async function refreshWeeklyStatus() {
+  try {
+    const st = await pendingList();
+    if (String(st && st.status || '') !== 'OK' || !st.weekly) return;
+    const w = st.weekly;
+    const el = document.getElementById('weeklyStatus');
+    if (!el) return;
+    const days = Number(w.completed_days || 0);
+    const label = w.claimed ? '本周已领取'
+                : (w.eligible ? '本周已达标，可领取' : `本周 ${days}/5 天`);
+    el.textContent = `每周徽章：${label}（每天≥2科，每周最多1片）`;
+  } catch { /* 展示失败不影响余额 */ }
+}
+
+refreshWeeklyStatus();
+
+document.getElementById('claimWeeklyBtn')?.addEventListener('click', async () => {
+  const r = await resumeWeeklyGoal();
+  if (r.status === 'CLAIMED') refreshWeeklyStatus();
+});
 </script>
 </body>
 </html>

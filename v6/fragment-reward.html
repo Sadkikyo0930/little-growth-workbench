@@ -37,6 +37,8 @@
 
 <script type="module">
 import { showFragmentReward } from './r5/fragment-reward.mjs';
+import { reconcileToday, resumeRewardQueue } from './r5/reward-hook.mjs';
+import { resumeWeeklyGoal } from './r5/weekly-goal.mjs';
 
 const qs = new URLSearchParams(location.search);
 const record = qs.get('record') || '';
@@ -53,13 +55,24 @@ try {
 } catch { /* 忽略 */ }
 
 const title = document.getElementById('title');
-if (!record) {
-  title.textContent = '没有指定学习记录编号';
-} else {
-  showFragmentReward({ recordId: record }).then(r => {
+(async () => {
+  if (qs.get('reconcile') === '1') {
+    // 对账补领：服务端 pending_list 给出当天真实未领取记录，客户端只入队；
+    // 逐条结算由 reward-hook 完成，重复执行零写入。
+    const rec = await reconcileToday();
+    let settled = null;
+    if (String(rec.status) === 'OK' && rec.added > 0) settled = await resumeRewardQueue();
+    const weekly = await resumeWeeklyGoal();
+    title.textContent = `对账完成：新增 ${rec.added ?? 0} 条待领取；本周徽章 ${weekly.status || '未查询'}`;
+    return;
+  }
+  if (!record) {
+    title.textContent = '没有指定学习记录编号（可用 ?reconcile=1 对账补领）';
+  } else {
+    const r = await showFragmentReward({ recordId: record });
     title.textContent = r && r.status ? `结算状态：${r.status}` : '结算完成';
-  });
-}
+  }
+})();
 </script>
 </body>
 </html>

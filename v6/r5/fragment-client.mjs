@@ -172,3 +172,29 @@ export function assembledList(state) {
   }
   return out;
 }
+/**
+ * v6/r5/fragment-client.mjs —— 提案追加片段（最终收尾）
+ *
+ * 把下面两个函数追加到现有 fragment-client.mjs 末尾即可。
+ * 它们复用文件里已有的 post()/deviceToken()，仍走设备身份 + 网关 HMAC 断言，
+ * 服务端权威校验；客户端不接受自报的天数/学科/家庭。
+ */
+
+/**
+ * 设备身份每周徽章领取。达标规则由服务端 r5_fragment_weekly_claim_device 判定：
+ * 自然周 ≥5 天、每天 ≥2 科真实 course-complete，每周唯一记录，最多 1 片稀有碎片。
+ * 返回 status: CLAIMED / ALREADY_CLAIMED / WEEKLY_GOAL_NOT_MET /
+ *             WEEKLY_RARE_DAY_LIMIT / REWARD_NOT_ACTIVE / FORBIDDEN_SCOPE
+ */
+export async function weeklyClaimDevice() {
+  return post('/v1/racing/fragment/weekly-claim', {});
+}
+
+/**
+ * 当天待处理对账（只读）：返回今天已落库、服务端确认的 course-complete 记录，
+ * 以及每条是否已领取、本周徽章达标/领取状态。
+ * 客户端只据此把 unclaimed 的 record_id 入队，绝不自行决定发放。
+ */
+export async function pendingList() {
+  return post('/v1/racing/fragment/pending-list', {});
+}
