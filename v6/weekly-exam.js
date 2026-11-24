@@ -388,6 +388,7 @@ function render(){const n=answeredCount();if(n>=current.questions.length){finish
 // Play mixed Chinese/English prompts in language-specific utterances.
 // iOS Safari can make crackling/garbled sounds when the Mandarin voice reads English words.
 function speakOption(message,id){
+ if(window.V6Voice){window.V6Voice.speakOption(message,id);return}
  if(!('speechSynthesis' in window))return;
  const synth=window.speechSynthesis;
  synth.cancel();

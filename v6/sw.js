@@ -1,5 +1,5 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261123-v6frag-r2-cachebust';
+const VERSION='20261124-v6chinese-voice-d1';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
@@ -84,7 +84,10 @@ self.addEventListener('fetch',event=>{
    || /\/chinese-day[\w-]*-preview\.html$/.test(url.pathname)
    || url.pathname.endsWith('/chinese-day2-day3-preview.html')
    || url.pathname.endsWith('/chinese-daily-questions.js')
-   || url.pathname.endsWith('/chinese-classroom.js');
+   || url.pathname.endsWith('/chinese-classroom.js')
+   || url.pathname.endsWith('/v6-voice.js')
+   || url.pathname.endsWith('/poem-audio.js')
+   || url.pathname.endsWith('/poem-speech-check.js');
  // Cloud sync code must not be stuck behind an old cache-first script.
  // 上传策略与补救模块同理：它们决定「这条成绩要不要传」，落后一个版本就会
  // 用旧规则把新的高分挡在外面。
