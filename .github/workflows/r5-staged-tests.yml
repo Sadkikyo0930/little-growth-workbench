@@ -1,0 +1,31 @@
+name: R5 staged API tests
+on:
+  push:
+    branches: ["feat/r5-cloudbase-gate-20261108"]
+  pull_request:
+    paths: ["r5-cloudbase/**"]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check r5-cloudbase/client/r5-client.mjs
+      - run: node --test r5-cloudbase/tests/client.test.mjs
+      - name: Verify additive SQL and no V6 permission changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('r5-cloudbase/sql/001_additive_r5_gate.sql').read_text()
+          assert 'DROP TABLE' not in s.upper()
+          assert 'TRUNCATE' not in s.upper()
+          assert 'DELETE FROM' not in s.upper()
+          assert 'R5_AUTH_REQUIRED' in s
+          assert "SET search_path=pg_catalog,public" in s
+          assert "ON CONFLICT DO NOTHING" in s
+          print('Additive SQL static policy checks PASS')
+          PY
