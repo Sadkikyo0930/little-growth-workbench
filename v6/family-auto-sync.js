@@ -186,9 +186,35 @@ async function run(){
    }
   }
   lastFingerprint=fp;
+  /* 家长会话链路：插入成功后再只读回读一次，用与网关同一套整轮核验逻辑确认。
+     只有核验通过的 attempt_id 才允许回写「云端已确认」；读不到就继续显示等待。 */
+  var verifiedCount=0;
+  if(count>0){
+   try{
+    var localAids=new Set(rows.filter(function(r){
+      if(!r||r.record_type!=="course-attempt"||!r.record_data||!r.record_data.attempt_id)return false;
+      var d=r.record_data;
+      return Number(d.total)>=5&&Number.isInteger(Number(d.correct))&&Number(d.correct)>=0&&Number(d.correct)<=Number(d.total);
+    }).map(function(r){return String(r.record_data.attempt_id)}));
+    if(localAids.size){
+      var reread=await db.from("growth_learning_records").select("record_id,family_id,record_type,subject,learning_day,record_data").eq("family_id",FAMILY);
+      if(!reread||reread.error)throw reread.error;
+      var scanned=policy.scanCloudRounds(reread.data||[]);
+      scanned.verified.forEach(function(v){if(!localAids.has(String(v.attempt_id)))return;
+        var subject=String(v.subject||"");
+        var api=subject==="语文"?window.V6ChineseAttempt:window.V6CourseAttempt;
+        if(!api||typeof api.markCloud!=="function")return;
+        if(api.markCloud(v.attempt_id,"cloud_confirmed",{source:"parent-session-readback",subject:subject,day:Number(v.day)||null,correct:Number(v.correct),total:Number(v.total)}))verifiedCount++;
+      });
+    }
+   }catch(e){saveStatus("成绩已保留本机；云端回读确认稍后重试："+error(e),{state:"warning"})}
+  }
   // 云端学习记录写入成功后，再询问服务器是否已完成本周目标。
   import("./r5/weekly-goal.mjs").then(function(m){return m.resumeWeeklyGoal()}).catch(function(){});
-  saveStatus("同步成功：云端已确认 "+ids.size+" 条，本次新增 "+count+" 条",Object.assign({state:"success",remote:ids.size,pending:0,syncedAt:new Date().toISOString()},diag));
+  saveStatus(count>0
+    ?("同步完成：本次新增 "+count+" 条"+(verifiedCount?"，服务端整轮核验通过 "+verifiedCount+" 轮":"，等待云端回读确认"))
+    :"云端已是最新，本次无需新增",
+    Object.assign({state:(count>0&&verifiedCount===0)?"warning":"success",remote:ids.size,verified:verifiedCount,pending:0,syncedAt:new Date().toISOString()},diag));
  }catch(e){
   // 身份类失败必须和「网络失败」分开：它既不代表孩子没达标，也不代表本机数据坏了，
   // 更不允许因此清空或重写本机档案。

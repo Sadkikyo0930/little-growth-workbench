@@ -52,7 +52,8 @@ function finish(){
   const legacy='v6-science-legacy-snapshot-v1-'+lesson;
   if(old[lesson]&&old[lesson].quizComplete&&!localStorage.getItem(legacy))localStorage.setItem(legacy,JSON.stringify(old[lesson]));
   const days=[1,5,8,12,15,19,22,26,29];
-  attempt=window.V6AttemptHistory?.record({subject:'科学',lesson,learningDay:days[lesson-1],correct:score,total:answers.length,at,source:'science-quiz'});
+  const trace=answers.map((a,i)=>({index:i,choice:(a&&a.selected!==undefined)?a.selected:null,correct:!!(a&&a.correct===true)}));
+  attempt=window.V6CourseAttempt?window.V6CourseAttempt.finish({subject:'科学',lesson,learningDay:days[lesson-1],score,total:answers.length,at,answers:trace,source:'science-quiz'}):null;
   old[lesson]={...(old[lesson]||{}),...payload};localStorage.setItem(key(),JSON.stringify(old));
  }catch(e){console.warn('科学成绩保存失败',e)}
  if(qs.get('cohort')==='20261109'&&window.parent!==window){

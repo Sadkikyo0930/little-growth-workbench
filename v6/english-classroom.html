@@ -34,8 +34,11 @@ const order=tokens.map((_,i)=>i).reverse();const submit=button('button','✅ 检
 order.forEach(i=>{const b=button('chip',tokens[i],()=>{if(locked||b.disabled)return;b.disabled=true;chosen.push(i);const c=button('chip selected',tokens[i],()=>{if(locked)return;const at=chosen.indexOf(i);if(at>=0)chosen.splice(at,1);c.remove();b.disabled=false;submit.disabled=chosen.length!==tokens.length});result.append(c);submit.disabled=chosen.length!==tokens.length});pool.append(b)});$('body').append(submit);
 }
 function finish(){const payload={score,total:6,answers,words,sceneAnswers,at:new Date().toISOString()};$('game').classList.add('hidden');$('finish').classList.remove('hidden');$('result').textContent='完成 6 关高频词'+(sceneAnswers.length?'，以及 3 关情境游戏（答对 '+sceneAnswers.filter(x=>x.correct).length+' 关）':'')+'，高频词答对 '+score+' / 6 题。今天学习：'+words.join('、')+'。';$('againListen').onclick=()=>speech(phrase);$('restart').onclick=()=>{stage=0;score=0;answers=[];sceneAnswers=[];$('finish').classList.add('hidden');$('game').classList.remove('hidden');render()};
+const days=[1,3,4,7,8,10,11,14,15,17,18,21,22,24,25,28,29];
+const trace=answers.map((a,i)=>({index:i,choice:(a&&a.selected!==undefined)?a.selected:null,correct:!!(a&&a.correct===true)}));
 try{const key=qs.get('cohort')==='20261109'?'v6_english_course_20261109_progress_v1':'v6_english_preview_progress_v1';const data=JSON.parse(localStorage.getItem(key)||'{}');data[lesson]=payload;localStorage.setItem(key,JSON.stringify(data))}catch(e){}
-if(qs.get('cohort')==='20261109'&&window.parent!==window)window.parent.postMessage({type:'v6-english-lesson-complete',cohort:'20261109',lesson,total:6,answers,score,sceneAnswers},location.origin);
+let attempt=null;try{if(window.V6CourseAttempt)attempt=window.V6CourseAttempt.finish({subject:'英语',lesson,learningDay:days[lesson-1],score,total:6,at:payload.at,answers:trace,source:'english-legacy-finish'})}catch(e){}
+if(qs.get('cohort')==='20261109'&&window.parent!==window)window.parent.postMessage({type:'v6-english-lesson-complete',cohort:'20261109',lesson,total:6,answers,score,sceneAnswers,correct:score,rate:Math.round(score/6*1000)/10,passed:score*5>=6*4,at:payload.at,attemptId:attempt?.entry.id||null},location.origin);
 speech('完成六关英语学习。今天我们学了四个高频词。','zh-CN')}
 })();
-</script><script src="./english-scenes.js?v=20261105-audio2"></script></body></html>
+</script><script src="./english-scenes.js?v=20261105-audio2"></script><script src="./course-attempt.js?v=20261127-four-score-v1"></script></body></html>

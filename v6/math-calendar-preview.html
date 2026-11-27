@@ -146,9 +146,9 @@ function finish(){
    // Legacy value is kept as a snapshot in the append-only history before replacement.
    const historyKey='v6-math-legacy-snapshot-v1-'+day;
    if(old[day]&&!localStorage.getItem(historyKey))localStorage.setItem(historyKey,JSON.stringify(old[day]));
-   attempt=window.V6AttemptHistory?.record({subject:'数学',lesson:day,
+   attempt=window.V6CourseAttempt?.finish({subject:'数学',lesson:day,
      learningDay:({1:2,2:3,3:5,4:6,5:9,6:10,7:12,8:13,9:16,10:17,11:19,12:20,13:23,14:24,15:26,16:27,17:30})[day],
-     correct,total,at,attemptId:attemptUid,
+     score:correct,total,at,attemptId:attemptUid,
      answers:fullTrace?answerTrace.slice():null,source:'math-finish'});
    old[day]=payload;
    localStorage.setItem(key,JSON.stringify(old));
@@ -165,4 +165,4 @@ function finish(){
 }
 const lessonParam=new URLSearchParams(window.location.search).get('lesson');if(lessonParam&&Number(lessonParam)>=1&&Number(lessonParam)<=17){day=Number(lessonParam);week=Math.floor((day-1)/7);document.body.classList.add('embeddedLesson')}renderCalendar();start();setMathBanner();
 })();
-</script></body></html>
+</script><script src="./course-attempt.js?v=20261127-four-score-v1"></script></body></html>

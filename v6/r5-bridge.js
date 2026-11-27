@@ -60,7 +60,7 @@
   }
 
   var diagnostic = document.currentScript && document.currentScript.hasAttribute('data-parent-check');
-  var BRIDGE_BUILD = '2026-11-21.rc5-device-round-v4-dayfix';
+  var BRIDGE_BUILD = '2026-11-27.rc8-cross-midnight-backfill-v1';
 
   var CFG = {
     familyId: 'little-growth-family-001',
@@ -600,44 +600,217 @@
     return out;
   }
 
+  /* 只有网关明确回 ok 的轮次才能把本机状态改成「云端已确认」。
+     回填失败不能影响上传本身；宁可继续显示「等待确认」，也不误报。 */
+  function apiForSubject(subject) {
+    return String(subject) === '语文' ? window.V6ChineseAttempt : window.V6CourseAttempt;
+  }
+
+  function markAttemptCloud(attemptId, state, detail) {
+    var api = apiForSubject(detail && detail.subject);
+    if (!api || typeof api.markCloud !== 'function') return false;
+    try { return api.markCloud(attemptId, state, detail); } catch (e) { return false; }
+  }
+
   /**
-   * 设备身份上传：家长会话过期也能把今天的成绩送到云端。
+   * 只有「服务端整轮核验明确 ok」的轮次才能把本机状态改成「云端已确认」。
+   * 三重条件缺一不可：
+   *   1) 整批响应顶层 ok === true（网关只有在数据库 r5_round_verify_v5 全部通过时才会这样返回）；
+   *   2) 返回项带 attempt_id，且必须是本次上传的某个 attempt_id（不按数组序号猜）；
+   *   3) 服务端重算的 correct / total 与本机这一轮的逐题证据完全一致。
+   * 任何一项不满足都保持「等待云端确认」，绝不用本机保存或模拟响应冒充成功。
+   */
+  function markCourseAttemptsCloud(payload, verified, rounds) {
+    if (!Array.isArray(payload) || !Array.isArray(verified)) return 0;
+    var sent = {};
+    payload.forEach(function (p) {
+      if (p && p.attempt_id) sent[String(p.attempt_id)] = true;
+    });
+    var roundByAid = {};
+    (rounds || []).forEach(function (rd) {
+      if (rd && rd.attempt_id) roundByAid[String(rd.attempt_id)] = rd;
+    });
+    var marked = 0;
+    verified.forEach(function (v) {
+      if (!v || v.ok !== true) return;
+      var aid = String(v.attempt_id || v.attemptId || '');
+      if (!aid || !sent[aid]) return;
+      var rd = roundByAid[aid];
+      if (!rd) return;
+      if (Number(v.correct) !== Number(rd.correct) || Number(v.total) !== Number(rd.total)) return;
+      var subject = String(rd.subject || v.subject || '');
+      if (!subject) return;
+      if (markAttemptCloud(aid, 'cloud_confirmed', {
+        subject: subject, source: 'device-round-upload', day: Number(rd.day) || Number(v.day) || null,
+        correct: Number(v.correct), total: Number(v.total)
+      })) marked++;
+    });
+    return marked;
+  }
+
+  /* 同一台设备已经确认过的「学习日|学科」成绩，只接受严格提高的后续轮次。
+     这是设备侧去重；跨设备仍由服务端 R5_SAFE_ROUND_V4 与家长会话策略把关。 */
+  function confirmedBestFromLedger() {
+    var best = {};
+    var keys = ['v6-chinese-attempt-status-v1', 'v6-course-attempt-status-v1'];
+    keys.forEach(function (key) {
+      try {
+        var data = JSON.parse(localStorage.getItem(key) || '{}') || {};
+        Object.keys(data).forEach(function (id) {
+          var s = data[id];
+          if (!s || s.state !== 'cloud_confirmed' || !s.detail) return;
+          var day = Number(s.detail.day);
+          var subject = String(s.detail.subject || (key.indexOf('chinese') >= 0 ? '语文' : ''));
+          if (!CFG.subjectName[subject] && subject !== '语文' && subject !== '数学' && subject !== '英语' && subject !== '科学') return;
+          var c = Number(s.detail.correct), t = Number(s.detail.total);
+          if (!Number.isInteger(day) || !Number.isInteger(c) || !Number.isInteger(t) || t < 5) return;
+          var k = day + '|' + subject;
+          var prev = best[k];
+          if (!prev || c * prev.total > prev.correct * t) best[k] = { correct: c, total: t };
+        });
+      } catch (e) { /* 读不到确认台账就只依赖服务端规则，不臆造成绩 */ }
+    });
+    return best;
+  }
+
+  function filterImprovedRounds(rounds) {
+    if (!Array.isArray(rounds) || !rounds.length) return { send: rounds, skipped: [] };
+    var best = confirmedBestFromLedger();
+    var send = [], skipped = [];
+    rounds.forEach(function (rd) {
+      if (!rd || !rd.subject) { send.push(rd); return; }
+      var key = Number(rd.day) + '|' + String(rd.subject);
+      var prev = best[key];
+      if (prev && Number(rd.correct) * prev.total <= prev.correct * Number(rd.total)) {
+        skipped.push(rd);
+        return;
+      }
+      send.push(rd);
+      best[key] = { correct: Number(rd.correct), total: Number(rd.total) };
+    });
+    return { send: send, skipped: skipped };
+  }
+
+  function markSkippedRounds(rounds) {
+    (rounds || []).forEach(function (rd) {
+      if (!rd || !rd.attempt_id) return;
+      markAttemptCloud(rd.attempt_id, 'skipped_not_higher', {
+        subject: String(rd.subject || '语文'), source: 'device-local-best', day: Number(rd.day) || null,
+        correct: Number(rd.correct), total: Number(rd.total)
+      });
+    });
+  }
+
+  /**
+   * 设备身份上传：家长会话过期也能把成绩送到云端。
    * 只传答题记录；「学完」由服务端按真实答题派生，客户端不能直接断言。
+   *
+   * rc8：除了「今天」的一轮，还会把本机已完整保存、尚未确认的往日轮次
+   * 按原日期 / 原学习日补传。补传单独成批，任何一轮失败都不影响今天。
    */
   async function deviceUpload(day) {
     var state = readState();
     if (!state) return null;
     var todayStr = today();
+    var todaySh = ymdSH(new Date());
     var rounds = collectRounds(state, day, todayStr);
+    var improved = filterImprovedRounds(rounds);
+    var uploadRounds = improved.send;
+
+    /* 往日待补传：只取未确认的完整轮次，去掉与今天通道重复的 attempt_id。 */
+    var backfillAll = pendingHistoryRounds(todayStr, todaySh);
+    var seenAid = {};
+    uploadRounds.forEach(function (rd) { if (rd && rd.attempt_id) seenAid[String(rd.attempt_id)] = true; });
+    var backfillOnly = backfillAll.filter(function (rd) {
+      return rd && rd.attempt_id && !seenAid[String(rd.attempt_id)];
+    });
+    var backfillImproved = filterImprovedRounds(backfillOnly);
+    var backfillRounds = backfillImproved.send;
+
     var out = {
       day: day, channel: 'round-v2',
-      rounds: rounds.length, uploaded: 0,
+      rounds: uploadRounds.length, skipped_not_higher: improved.skipped.length,
+      backfill_candidates: backfillOnly.length,
+      backfill_rounds: backfillRounds.length,
+      backfill_skipped_not_higher: backfillImproved.skipped.length,
+      backfill_uploaded: 0,
+      uploaded: 0,
       verified: [], rejected: [], errors: [], after: null, after_error: null,
     };
-    if (!rounds.length) return out;
+    markSkippedRounds(improved.skipped);
+    markSkippedRounds(backfillImproved.skipped);
 
-    var payload = roundPayload(rounds);
     /* 诊断：把这一轮到底准备交什么留下来（只读，不上传任何额外内容） */
     try {
       window.__r5LastUpload = {
-        at: new Date().toISOString(), day: day, todayStr: todayStr,
-        rounds: rounds.map(function (r) { return { subject: r.subject, code: r.code, total: r.total, answers: (r.answers || []).length }; }),
-        payload: payload.map(function (p) { return { subject: p.subject, day: p.day, date: p.date, n: p.answers.length }; }),
+        at: new Date().toISOString(), day: day, todayStr: todayStr, todaySh: todaySh,
+        rounds: uploadRounds.map(function (r) { return { subject: r.subject, code: r.code, total: r.total, answers: (r.answers || []).length }; }),
+        backfill: backfillRounds.map(function (r) { return { subject: r.subject, code: r.code, day: r.day, total: r.total, answers: (r.answers || []).length, attempt_id: r.attempt_id }; }),
       };
     } catch (e) { /* ignore */ }
-    if (!payload.length) return out;
 
-    try {
-      var r = await gatewayCall('/v1/child/round-upload', { rounds: payload });
-      (r && r.rounds ? r.rounds : []).forEach(function (v) {
-        if (v && v.ok === true) out.verified.push(v);
-        else out.rejected.push(v);
-      });
-      out.uploaded = out.verified.length;
-    } catch (e) {
-      out.errors.push('rounds:' + (e.code || e.message));
-      return out;
+    /* ---- 1) 今天：沿用原有单批上传；失败不阻断补传 ---- */
+    if (uploadRounds.length) {
+      var payload = roundPayload(uploadRounds);
+      if (payload.length) {
+        try {
+          var r = await gatewayCall('/v1/child/round-upload', { rounds: payload });
+          var rows = (r && r.ok === true && Array.isArray(r.rounds)) ? r.rounds : [];
+          if (!rows.length) {
+            out.errors.push('rounds:R5_UNVERIFIED_RESPONSE');
+          } else {
+            rows.forEach(function (v) {
+              if (v && v.ok === true) out.verified.push(v);
+              else out.rejected.push(v);
+            });
+            out.uploaded += rows.filter(function (v) { return v && v.ok === true; }).length;
+            markCourseAttemptsCloud(payload, rows, uploadRounds);
+          }
+        } catch (e) {
+          out.errors.push('rounds:' + (e.code || e.message));
+        }
+      }
     }
+
+    /* ---- 2) 往日补传：独立批次，原日期原学习日；不触发完成态/奖励 ---- */
+    if (backfillRounds.length) {
+      var bpayload = roundPayload(backfillRounds);
+      if (bpayload.length) {
+        var batchOk = false;
+        try {
+          var br = await gatewayCall('/v1/child/round-upload', { rounds: bpayload });
+          var brows = (br && br.ok === true && Array.isArray(br.rounds)) ? br.rounds : [];
+          if (brows.length) {
+            batchOk = true;
+            applyBackfillResult(out, bpayload, brows, backfillRounds);
+          } else {
+            out.errors.push('backfill:R5_UNVERIFIED_RESPONSE');
+          }
+        } catch (batchErr) {
+          /* 服务端整批回滚时（例如某天计划已变），逐轮重试，坏轮不拖累好轮。 */
+          log('往日补传整批失败，改为逐轮重试',
+            String(batchErr && (batchErr.code || batchErr.message) || 'UNKNOWN'));
+        }
+        if (!batchOk) {
+          for (var bi = 0; bi < backfillRounds.length; bi++) {
+            var one = [backfillRounds[bi]];
+            var p1 = roundPayload(one);
+            if (!p1.length) continue;
+            try {
+              var r1 = await gatewayCall('/v1/child/round-upload', { rounds: p1 });
+              var rows1 = (r1 && r1.ok === true && Array.isArray(r1.rounds)) ? r1.rounds : [];
+              if (rows1.length) applyBackfillResult(out, p1, rows1, one);
+              else out.errors.push('backfill:' + one[0].attempt_id + ':R5_UNVERIFIED_RESPONSE');
+            } catch (oneErr) {
+              out.errors.push('backfill:' + one[0].attempt_id + ':'
+                + String(oneErr && (oneErr.code || oneErr.message) || 'UNKNOWN'));
+            }
+          }
+        }
+      }
+    }
+
+    if (!out.uploaded && !out.backfill_uploaded && !out.errors.length && !out.rejected.length) return out;
 
     /* 上传后立刻用同一台设备回读闸门：只读，不推送学习日，也不改写任何成绩。
        读到的 study_passed / allowed 就是赛车页看到的那一份（同一个 r5_child_entry）。 */
@@ -645,6 +818,19 @@
     catch (e2) { out.after_error = String(e2 && (e2.code || e2.message) || 'UNKNOWN'); }
     return out;
   }
+
+  /** 往日补传的结果只按服务端逐轮核验回写状态；不写完成态、不发奖励。 */
+  function applyBackfillResult(out, payload, rows, rounds) {
+    rows.forEach(function (v) {
+      if (v && v.ok === true) out.verified.push(v);
+      else out.rejected.push(v);
+    });
+    var okCount = rows.filter(function (v) { return v && v.ok === true; }).length;
+    out.backfill_uploaded += okCount;
+    out.uploaded += okCount;
+    markCourseAttemptsCloud(payload, rows, rounds);
+  }
+
 
   /* 最近一次云端读取结果（带核对时间），用于「实时失败时不冒充当前状态」。 */
   function saveCloudCache(data) {
@@ -1079,8 +1265,103 @@
         });
         if (!strict) return;
         if (marks.filter(Boolean).length !== correct) return;   // 摘要与逐题不一致，不收
-        out.push({ subject: it.subject, marks: marks, at: String(it.at || '') });
+        /* 保留本机交卷自己的唯一 attempt_id：网关靠它做整轮校验与幂等重试。
+           旧的「按对错序列推算 id」只用于没有 id 的历史记录，不能覆盖新轮次。 */
+        var aid = typeof it.id === 'string' && /^[A-Za-z0-9-]{8,100}$/.test(it.id) ? it.id : '';
+        out.push({ subject: it.subject, marks: marks, at: String(it.at || ''), attemptId: aid });
       });
+    });
+    return out;
+  }
+
+  /* ==================================================================
+   * 跨零点补传（rc8）
+   *
+   * 现象：孩子 23:59 答完、断网，次日 00:10 恢复网络。旧实现所有采集器都按
+   * `ymdOf(at) === todayStr` 过滤，昨天的真实交卷在午夜后一概采不到，
+   * 于是「本机已完整保存、云端永远没有」。
+   *
+   * 修复边界（与服务端 r5_child_upload_rounds_v2 的实际规则对齐）：
+   *   · 只补「昨天及更早、最近 7 天」的轮次（服务端拒绝 7 天以前与未来日期）；
+   *   · 用轮次自己的 at 推出原始日期、用轮次自己的 learningDay 作学习日，
+   *     绝不改挂到今天，也绝不改写已有成绩；
+   *   · 只补本机尚未 cloud_confirmed / skipped_not_higher 的轮次；
+   *   · 每个「学习日 + 学科」只补一轮（正确率最高的那一轮），半轮不上传。
+   *   · 补传不调用 r5_child_complete_course，因此不会给往日补发碎片奖励，
+   *     也不会占用今天的每日奖励次数。
+   * ================================================================== */
+  var BACKFILL_MAX_DAYS = 7;
+  var ATTEMPT_STATUS_KEYS = ['v6-chinese-attempt-status-v1', 'v6-course-attempt-status-v1'];
+
+  function attemptStateOf(attemptId) {
+    if (!attemptId) return '';
+    for (var i = 0; i < ATTEMPT_STATUS_KEYS.length; i++) {
+      var data = readJson(ATTEMPT_STATUS_KEYS[i]);
+      var s = data && data[attemptId];
+      if (s && s.state) return String(s.state);
+    }
+    return '';
+  }
+
+  /** 'YYYY-MM-DD' 减 n 天（纯日期计算，不经过本地时区）。 */
+  function shiftYmd(dateStr, days) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+    if (!m) return '';
+    var t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - Number(days) * 86400000;
+    var d = new Date(t);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0')
+      + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
+
+  /**
+   * 本机「已完整保存、尚未云端确认」的往日轮次。
+   * 数据源是本机 attempt 历史（四科统一），只接受逐题题号 0..n-1 连续、
+   * 逐题正确数与摘要一致、at 可解析的完整轮次；任何一项不符整轮丢弃。
+   */
+  function pendingHistoryRounds(todayStr, todaySh) {
+    var data = readAttemptHistory();
+    var floor = shiftYmd(todaySh || todayStr, BACKFILL_MAX_DAYS);
+    var picked = {};
+    Object.keys(data).forEach(function (group) {
+      var list = Array.isArray(data[group]) ? data[group] : [];
+      list.forEach(function (it) {
+        if (!it || typeof it !== 'object') return;
+        if (!CFG.subjectKey[it.subject]) return;
+        var day = Number(it.learningDay);
+        if (!Number.isInteger(day) || day < 1 || day > CFG.maxDay) return;
+        var total = Number(it.total), correct = Number(it.correct);
+        if (!Number.isInteger(total) || total < 5) return;
+        if (!Number.isInteger(correct) || correct < 0 || correct > total) return;
+        if (!Array.isArray(it.answers) || it.answers.length !== total) return;
+        var at = String(it.at || '');
+        var date = ymdSH(at);
+        if (!date) return;
+        if (date >= todayStr) return;        // 今天 / 未来交给今日通道，避免重复
+        if (date < floor) return;            // 服务端只接收最近 7 天
+        var id = typeof it.id === 'string' && /^[A-Za-z0-9-]{8,100}$/.test(it.id) ? it.id : '';
+        if (!id) return;
+        var st = attemptStateOf(id);
+        if (st === 'cloud_confirmed' || st === 'skipped_not_higher') return;
+        var marks = [], strict = true;
+        it.answers.forEach(function (a, i) {
+          if (!a || Number(a.index) !== i) strict = false;
+          marks.push(!!(a && a.correct === true));
+        });
+        if (!strict) return;
+        if (marks.filter(Boolean).length !== correct) return;
+        var key = day + '|' + it.subject;
+        var prev = picked[key];
+        if (!prev || correct * prev.marks.length > prev.correct * marks.length) {
+          picked[key] = { subject: it.subject, day: day, marks: marks, at: at, attemptId: id, correct: correct };
+        }
+      });
+    });
+    var out = [];
+    Object.keys(picked).forEach(function (k) {
+      var h = picked[k];
+      /* 关键：日期与学习日都取轮次自己的，不取今天。 */
+      out.push(buildRound(h.subject, h.day, ymdSH(h.at), h.marks, h.at,
+        'attempt-history-backfill', 'attempt-history', h.attemptId));
     });
     return out;
   }
@@ -1112,7 +1393,7 @@
   }
 
   /** 用「逐题对错序列」造一整轮（摘要 + 同一 attempt_id 的逐题答案） */
-  function buildRound(subj, day, todayStr, marks, at, sourceTag, track) {
+  function buildRound(subj, day, todayStr, marks, at, sourceTag, track, storedAttemptId) {
     var total = marks.length;
     var correct = marks.filter(Boolean).length;
     var vector = marks.map(function (b) { return b ? '1' : '0'; }).join('');
@@ -1120,13 +1401,13 @@
     var token = deviceToken() || deviceId();
     /* attempt_id 公式与 v6.1.0 完全一致：同一天同一结果重复同步得到同一个 id
        （PWA 重开、断网重试都幂等）；结果不同才得到新 id，由 rc3 云端规则接受。 */
-    var aid = 'r5r-' + hash8('v1|' + code + '|' + day + '|' + todayStr + '|' + vector);
+    var aid = storedAttemptId || ('r5r-' + hash8('v1|' + code + '|' + day + '|' + todayStr + '|' + vector));
 
     var answers = marks.map(function (ok, i) {
       return {
         record_id: 'v6-' + token + '-a-' + code + '-' + day + '-' + aid + '-' + ('00' + i).slice(-2),
         record_type: 'answer',
-        subject: CFG.subjectName[subj],
+        subject: CFG.subjectName[code] || CFG.subjectName[subj] || subj,
         learning_day: day,
         record_data: {
           version: 1,
@@ -1148,7 +1429,7 @@
     });
 
     return {
-      subject: CFG.subjectName[subj],
+      subject: CFG.subjectName[code] || CFG.subjectName[subj] || subj,
       code: code,
       day: day,
       attempt_id: aid,
@@ -1174,8 +1455,10 @@
   }
 
   function collectRounds(state, day, todayStr) {
+    /* 只把真实逐题结果拼成上传轮次。「答对 X/Y」折算出来的题号是展示摘要，
+       不是孩子实际作答证据，绝不进入 course-attempt + answer 整轮。 */
     var items = collectItems(state, day, todayStr)
-      .filter(function (it) { return it.day === day; });
+      .filter(function (it) { return it.day === day && it.derived !== 'quiz-aggregate'; });
     var rounds = [];
     var covered = {};      // 已有整轮证据的学科，逐题记录不再重复计分
 
@@ -1193,7 +1476,7 @@
       var hit = picked[subj];
       if (hit.marks.length < 5) return;
       covered[subj] = true;
-      rounds.push(buildRound(subj, day, todayStr, hit.marks, hit.at, 'attempt-history', 'attempt-history'));
+      rounds.push(buildRound(subj, day, todayStr, hit.marks, hit.at, 'attempt-history', 'attempt-history', hit.attemptId));
     });
 
     /* 2) 历史里没有可核验轮次的学科，退回逐题记录。
@@ -1639,13 +1922,26 @@
               + (deviceRead.subjects && deviceRead.subjects.length ? '（' + deviceRead.subjects.join('＋') + '）' : '')
               + '，首页与课程已对齐。'
               + (devUp
-                ? (devUp.uploaded > 0
-                  ? '今天有 ' + devUp.uploaded + ' 轮成绩已由这台设备直接送到云端'
-                    + (devUp.after && devUp.after.study_passed ? '，两科已达标，赛车闸门已解锁' : '')
-                    + (devUp.errors.length ? '（另有 ' + devUp.errors.length + ' 项待重试）' : '') + '。'
-                  : (devUp.errors.length
-                    ? '云端暂未接收今天的成绩：' + devUp.errors.join('；')
-                    : '今天的成绩云端已有，没有重复上传。'))
+                ? (function () {
+                  var todayUp = Math.max(0, Number(devUp.uploaded || 0) - Number(devUp.backfill_uploaded || 0));
+                  var bits = [];
+                  if (todayUp > 0) {
+                    bits.push('今天有 ' + todayUp + ' 轮成绩已由这台设备直接送到云端'
+                      + (devUp.after && devUp.after.study_passed ? '，两科已达标，赛车闸门已解锁' : ''));
+                  }
+                  if (Number(devUp.backfill_uploaded || 0) > 0) {
+                    bits.push('另有 ' + devUp.backfill_uploaded + ' 轮往日成绩已按原日期、原学习日补传'
+                      + '（不补发往日碎片，不占今天次数）');
+                  }
+                  if (!bits.length) {
+                    bits.push(devUp.errors.length
+                      ? '云端暂未接收今天的成绩：' + devUp.errors.join('；')
+                      : '今天的成绩云端已有，没有重复上传。');
+                  } else if (devUp.errors.length) {
+                    bits.push('另有 ' + devUp.errors.length + ' 项待重试');
+                  }
+                  return bits.join('；') + '。';
+                })()
                 : '本机成绩仍安全保存在本机，稍后会自动重试；')
               + '云端每日结算由服务器独立完成。'
             : (deviceError === 'R5_DEVICE_REQUIRED'
@@ -1870,9 +2166,18 @@
       }
 
       /* learning_day 恒为 cloudDay（= 本机 day），item 自己的学习日不会被改写。
-       * v6.1.0：只上传「整轮」（摘要 + 逐题），不再由客户端写 course-complete。 */
+       * v6.1.0：只上传「整轮」（摘要 + 逐题），不再由客户端写 course-complete。
+       * rc8：另外把本机未确认的往日轮次按原日期/原学习日补传；补传轮次
+       * 不参与今天的完成态派生，也不触发碎片奖励。 */
+      var todaySh = ymdSH(new Date());
       var roundsForSession = collectRounds(state, cloudDay, todayStr);
-      rows = roundRows(roundsForSession);
+      var todayRows = roundRows(roundsForSession);
+      var seenSessionAid = {};
+      roundsForSession.forEach(function (rd) { if (rd && rd.attempt_id) seenSessionAid[String(rd.attempt_id)] = true; });
+      var backfillForSession = filterImprovedRounds(pendingHistoryRounds(todayStr, todaySh)).send
+        .filter(function (rd) { return rd && rd.attempt_id && !seenSessionAid[String(rd.attempt_id)]; });
+      var backfillRows = roundRows(backfillForSession);
+      rows = todayRows.concat(backfillRows);
 
       if (diagnostic && !rows.length) {
         return saveStatus({ state: 'no_local_records', cloud_day: cloudDay,
@@ -1883,7 +2188,8 @@
 
       var up = await upload(rows, who);
 
-      /* 完成态仍由服务端派生（家长会话也是家庭成员，可直接调用同一函数）。 */
+      /* 完成态仍由服务端派生（家长会话也是家庭成员，可直接调用同一函数）。
+       * 只对「今天」的轮次派生；往日补传不补发完成态 / 碎片奖励。 */
       for (var ri = 0; ri < roundsForSession.length; ri++) {
         try {
           var comp = await rpc('r5_child_complete_course', {
@@ -1919,10 +2225,33 @@
         });
       }
 
-      var vf = await verifyWithRetry(rows, who, cloudDay);
+      var vf = await verifyWithRetry(todayRows, who, cloudDay);
       var pending = vf.known ? vf.missing.length : null;
-      var noRows = rows.length === 0;
+      var noRows = todayRows.length === 0;
       var allThere = vf.known && vf.missing.length === 0 && !noRows;
+      /* 往日补传：用精确 record_id 回读确认，只有确实落库的才标记「云端已确认」。
+         读不到就保持等待，绝不用上传返回值直接冒充。 */
+      var backfillConfirmed = 0;
+      if (backfillForSession.length) {
+        try {
+          var bvf = await verifyWithRetry(backfillRows, who, cloudDay);
+          if (bvf.known) {
+            var missingIds = {};
+            bvf.missing.forEach(function (id) { missingIds[id] = true; });
+            backfillForSession.forEach(function (rd) {
+              if (!rd || !rd.attempt || !rd.attempt.record_id) return;
+              if (missingIds[rd.attempt.record_id]) return;
+              var marked = markAttemptCloud(rd.attempt_id, 'cloud_confirmed', {
+                source: 'parent-session-exact-readback', subject: rd.subject,
+                day: Number(rd.day) || null, correct: Number(rd.correct), total: Number(rd.total)
+              });
+              if (marked) backfillConfirmed++;
+            });
+          }
+        } catch (bvfErr) {
+          log('往日补传回读确认失败，保持等待', String(bvfErr && (bvfErr.code || bvfErr.message) || 'UNKNOWN'));
+        }
+      }
       if (allThere && up.uploaded > 0) {
         r5LoadFragmentModules().then(function (m) {
           if (!m) return null;
@@ -1939,11 +2268,17 @@
       var pendingSync = pendingScoreSyncOf(st);
       var pendingVerify = pendingVerifyOf(st);
       var msg;
-      if (noRows) {
+      var backfillNote = backfillForSession.length
+        ? '；另补传往日成绩 ' + backfillForSession.length + ' 轮（按原日期原学习日，已确认 '
+          + backfillConfirmed + ' 轮，不补发往日碎片）'
+        : '';
+      if (noRows && !backfillForSession.length) {
         msg = '第 ' + cloudDay + ' 天 · 本机还没有需要上传的成绩';
+      } else if (noRows) {
+        msg = '第 ' + cloudDay + ' 天 · 本机没有今天的新成绩' + backfillNote;
       } else if (stateName === 'ok') {
-        msg = '第 ' + cloudDay + ' 天 · 云端已确认落库 ' + rows.length + ' 条'
-          + '（本次新增 ' + up.uploaded + ' 条，云端已有 ' + up.already + ' 条）';
+        msg = '第 ' + cloudDay + ' 天 · 云端已确认落库 ' + todayRows.length + ' 条'
+          + '（本次新增 ' + up.uploaded + ' 条，云端已有 ' + up.already + ' 条）' + backfillNote;
       } else if (stateName === 'partial') {
         msg = '第 ' + cloudDay + ' 天 · 还有 ' + vf.missing.length + ' 条没确认落库'
           + '（已确认 ' + vf.confirmed + ' 条），本机成绩已保留，下次同步会自动重试';
@@ -1960,7 +2295,7 @@
        * 权威学习日的推进只发生在家长发布下一学习日的计划那一刻（见文件头注释）。 */
       var adv = null;
       var cloudTotalRows = await cloudTotal(who);
-      var batchConfirmed = vf.known ? rows.length - vf.missing.length : null;
+      var batchConfirmed = vf.known ? todayRows.length - vf.missing.length : null;
 
       saveStatus({
         state: stateName,
@@ -1989,14 +2324,16 @@
         skipped_duplicates: up.already + up.duplicates,
         reclaimed: up.reclaimed,
         synced_total: batchConfirmed,
-        batch_total: rows.length,
+        batch_total: todayRows.length,
         batch_confirmed: batchConfirmed,
+        backfill_total: backfillForSession.length,
+        backfill_confirmed: backfillConfirmed,
         cloud_total: cloudTotalRows,
         cloud_verified: allThere,
         cloud_verified_reason: noRows ? 'NO_LOCAL_ROWS'
           : (!vf.known ? 'VERIFY_UNAVAILABLE' : (vf.missing.length ? 'MISSING_RECORDS' : 'ALL_RECORDS_PRESENT')),
         cloud_checked: {
-          expected: rows.length,
+          expected: todayRows.length,
           confirmed: vf.confirmed,
           missing_sample: vf.missing.slice(0, 5),
           scanned: vf.scanned,
@@ -2121,6 +2458,9 @@
 
   window.addEventListener('message', function (e) {
     if (!e.data || e.data.type !== 'v6-cn-quiz-score') return;
+    /* 带逐题证据的完整交卷由 chinese-classroom.js 的专用入口保存；
+       DOM 文本观察器不得把这份证据再折算成一条只有分数的摘要。 */
+    if (Array.isArray(e.data.answers) || e.data.attemptId || e.data.source) return;
     try { if (e.origin !== location.origin) return; } catch (x) { return; }
     var frame = document.getElementById('lionLessonFrame');
     if (!frame || e.source !== frame.contentWindow) return;
@@ -2155,6 +2495,14 @@
     current.dailyChinese[day] = pack;
     if (typeof save === 'function') { try { save(); } catch (x) { /* ignore */ } }
     try { localStorage.setItem(CFG.stateKey, JSON.stringify(current)); } catch (x) { /* ignore */ }
+  });
+
+  /* 完整交卷落盘后立即走既有设备身份上传流程；断网时 run() 会安全返回，
+     本机记录保持原样，联网/回到前台会由既有定时器继续补传。 */
+  window.addEventListener('message', function (e) {
+    if (!e.data || (e.data.type !== 'v6-cn-attempt-saved' && e.data.type !== 'v6-course-attempt-saved')) return;
+    try { if (e.origin !== location.origin) return; } catch (x) { return; }
+    setTimeout(function () { try { run(true); } catch (x) { /* 本机记录不受影响 */ } }, 600);
   });
 
   /* ------------------------------------------------------ 对外接口 & 触发器 */

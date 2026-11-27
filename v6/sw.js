@@ -1,12 +1,12 @@
 /* V6-only service worker. Does NOT read or mutate localStorage or other project versions. */
-const VERSION='20261124-v6chinese-voice-d1';
+const VERSION='20261127-v6four-backfill-score-v2';
 const PREFIX='little-growth-v6-pwa-';
 const CORE=PREFIX+'core-'+VERSION;
 const RUNTIME=PREFIX+'runtime-'+VERSION;
 const ROOT=new URL(self.registration.scope);
 const CORE_FILES=[
 './','./index.html','./manifest.webmanifest','./app-icon.svg',
-'./weekly-exam.js','./clean-art.js','./chinese-classroom.js','./family-auto-sync.js','./pwa.js',
+'./weekly-exam.js','./clean-art.js','./chinese-attempt.js','./course-attempt.js','./chinese-classroom.js','./family-auto-sync.js','./pwa.js',
 './chinese-classroom.css','./v6-home-clean.jpg','./v6-assessment-clean.jpg','./family-grades.html',
 './growth_background.png','./english-classroom-fixed.html',
 './science-classroom.html','./math-calendar-preview.html','./attempt-history.js','./science-course-quiz.js','./science-labs.js',
@@ -85,6 +85,10 @@ self.addEventListener('fetch',event=>{
    || url.pathname.endsWith('/chinese-day2-day3-preview.html')
    || url.pathname.endsWith('/chinese-daily-questions.js')
    || url.pathname.endsWith('/chinese-classroom.js')
+   || url.pathname.endsWith('/chinese-attempt.js')
+   || url.pathname.endsWith('/course-attempt.js')
+   || url.pathname.endsWith('/english-classroom.html')
+   || url.pathname.endsWith('/english-monthly-assessment.html')
    || url.pathname.endsWith('/v6-voice.js')
    || url.pathname.endsWith('/poem-audio.js')
    || url.pathname.endsWith('/poem-speech-check.js');
